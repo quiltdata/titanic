@@ -26,10 +26,19 @@ export async function handler(event: any, context: Context) {
     }
 
     // Filter for source tables (excluding the merged table)
-    const sourceTables = tablesResponse.TableList?.filter(table => 
-      table.Name !== 'titanic_merged' && 
-      table.StorageDescriptor?.Location?.startsWith('s3://')
-    ) || [];
+    const sourceTables = tablesResponse.TableList?.filter(table => {
+      if (!table.Name) return false;
+      
+      const isSourceTable = table.Name !== 'titanic_merged' && 
+                          table.StorageDescriptor?.Location?.startsWith('s3://');
+      
+      // If DEBUG_BUCKET is set, only include tables from that source bucket
+      if (process.env.DEBUG_BUCKET) {
+        return isSourceTable && table.Name.includes(process.env.DEBUG_BUCKET);
+      }
+      
+      return isSourceTable;
+    }) || [];
 
     // First check if merged table exists
     const createIfNotExistsQuery = `

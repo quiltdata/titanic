@@ -9,6 +9,7 @@ import * as path from 'path';
 
 export interface TitanicStackProps extends cdk.StackProps {
   quiltDatabaseName: string;
+  debugBucket?: string;
 }
 
 export class TitanicStack extends cdk.Stack {
@@ -35,6 +36,7 @@ export class TitanicStack extends cdk.Stack {
       environment: {
         DATABASE_NAME: props.quiltDatabaseName,
         TARGET_BUCKET: titanicBucket.bucketName,
+        ...(props.debugBucket && { DEBUG_BUCKET: props.debugBucket })
       },
     });
 

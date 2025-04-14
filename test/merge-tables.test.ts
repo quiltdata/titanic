@@ -53,8 +53,7 @@ describe('merge-tables lambda', () => {
     const result = await handler({}, {} as Context);
 
     expect(result).toEqual({
-      queryExecutionId: 'test-execution-id',
-      message: 'Merge query started successfully',
+      message: 'Merge queries started successfully',
       numTables: 2
     });
   });
