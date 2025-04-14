@@ -47,7 +47,7 @@ export class TitanicStack extends cdk.Stack {
 
     // Create Glue table for Athena
     new glue.CfnTable(this, 'MergedTable', {
-      databaseName: 'default',
+      databaseName: props.quiltDatabaseName,
       catalogId: this.account,
       tableInput: {
         name: 'titanic_merged',
@@ -59,11 +59,72 @@ export class TitanicStack extends cdk.Stack {
             serializationLibrary: 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe',
           },
           columns: [
-            // Add your columns here based on the schema of your merged data
-            // Example:
-            // { name: 'column_name', type: 'string' },
+            { name: 'pkg_name', type: 'string' },
+            { name: 'top_hash', type: 'string' },
+            { name: 'timestamp', type: 'string' },
+            { name: 'message', type: 'string' },
+            { name: 'user_meta', type: 'string' },
+            { name: 'source_bucket', type: 'string' }
           ],
         },
+        partitionKeys: [
+          { name: 'source_bucket', type: 'string' }
+        ]
+      },
+    });
+
+    // Create Glue table for packages_all
+    new glue.CfnTable(this, 'PackagesAllTable', {
+      databaseName: props.quiltDatabaseName,
+      catalogId: this.account,
+      tableInput: {
+        name: 'packages_all',
+        storageDescriptor: {
+          location: `s3://${titanicBucket.bucketName}/packages_all/`,
+          inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
+          outputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
+          serdeInfo: {
+            serializationLibrary: 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe',
+          },
+          columns: [
+            { name: 'pkg_name', type: 'string' },
+            { name: 'top_hash', type: 'string' },
+            { name: 'timestamp', type: 'string' },
+            { name: 'message', type: 'string' },
+            { name: 'user_meta', type: 'string' }
+          ],
+        },
+      },
+    });
+
+    // Create Glue table for objects_all
+    new glue.CfnTable(this, 'ObjectsAllTable', {
+      databaseName: props.quiltDatabaseName,
+      catalogId: this.account,
+      tableInput: {
+        name: 'objects_all',
+        storageDescriptor: {
+          location: `s3://${titanicBucket.bucketName}/objects_all/`,
+          inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
+          outputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
+          serdeInfo: {
+            serializationLibrary: 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe',
+          },
+          columns: [
+            { name: 'pkg_name', type: 'string' },
+            { name: 'top_hash', type: 'string' },
+            { name: 'timestamp', type: 'string' },
+            { name: 'logical_key', type: 'string' },
+            { name: 'physical_key', type: 'string' },
+            { name: 'size', type: 'bigint' },
+            { name: 'hash', type: 'struct<type:string,value:string>' },
+            { name: 'meta', type: 'string' },
+            { name: 'source_bucket', type: 'string' }
+          ],
+        },
+        partitionKeys: [
+          { name: 'source_bucket', type: 'string' }
+        ]
       },
     });
   }
