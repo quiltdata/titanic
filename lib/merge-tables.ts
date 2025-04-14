@@ -33,12 +33,21 @@ export async function handler(event: any, context: Context) {
   const unionQuery = tableQueries.join(' UNION ALL ');
   
   const createTableQuery = `
-    CREATE TABLE default.titanic_merged
+    CREATE TABLE ${databaseName}.titanic_merged
     WITH (
       external_location = 's3://${targetBucket}/merged/',
-      format = 'PARQUET'
+      format = 'PARQUET',
+      partitioned_by = ARRAY['source_bucket']
     )
-    AS ${unionQuery}
+    AS 
+    SELECT 
+      pkg_name,
+      top_hash,
+      timestamp,
+      message,
+      user_meta,
+      source_bucket
+    FROM (${unionQuery})
   `;
 
     // Execute the query

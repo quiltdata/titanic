@@ -44,9 +44,42 @@ describe('TitanicStack', () => {
 
   it('creates Glue table', () => {
     template.hasResourceProperties('AWS::Glue::Table', {
-      DatabaseName: 'default',
+      DatabaseName: 'test-database',
+      CatalogId: {
+        Ref: 'AWS::AccountId'
+      },
       TableInput: {
-        Name: 'titanic_merged'
+        Name: 'titanic_merged',
+        StorageDescriptor: {
+          Location: {
+            'Fn::Join': [
+              '',
+              [
+                's3://',
+                {
+                  Ref: 'TitanicBucketBD9D9364'
+                },
+                '/merged/'
+              ]
+            ]
+          },
+          InputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
+          OutputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
+          SerdeInfo: {
+            SerializationLibrary: 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+          },
+          Columns: [
+            { Name: 'pkg_name', Type: 'string' },
+            { Name: 'top_hash', Type: 'string' },
+            { Name: 'timestamp', Type: 'string' },
+            { Name: 'message', Type: 'string' },
+            { Name: 'user_meta', Type: 'string' },
+            { Name: 'source_bucket', Type: 'string' }
+          ]
+        },
+        PartitionKeys: [
+          { Name: 'source_bucket', Type: 'string' }
+        ]
       }
     });
   });
