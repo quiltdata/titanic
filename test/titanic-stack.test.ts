@@ -67,7 +67,7 @@ describe('TitanicStack', () => {
         Ref: 'AWS::AccountId'
       },
       TableInput: {
-        Name: 'titanic_merged',
+        Name: 'titanic_merged_table',
         StorageDescriptor: {
           Location: {
             'Fn::Join': [

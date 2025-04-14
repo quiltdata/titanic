@@ -49,7 +49,7 @@ export class TitanicStack extends cdk.Stack {
     }));
 
     mergeLambda.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['athena:StartQueryExecution'],
+      actions: ['athena:StartQueryExecution', 'athena:GetQueryExecution'],
       resources: [`arn:aws:athena:${this.region}:${this.account}:workgroup/primary`]
     }));
 

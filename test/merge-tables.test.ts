@@ -1,7 +1,7 @@
 import { Context } from 'aws-lambda';
 import { mockClient } from 'aws-sdk-client-mock';
 import { GlueClient, GetTablesCommand } from '@aws-sdk/client-glue';
-import { AthenaClient, StartQueryExecutionCommand } from '@aws-sdk/client-athena';
+import { AthenaClient, StartQueryExecutionCommand, GetQueryExecutionCommand, QueryExecutionState } from '@aws-sdk/client-athena';
 import { handler } from '../lib/merge-tables';
 
 const glueMock = mockClient(GlueClient);
@@ -25,6 +25,18 @@ describe('merge-tables lambda', () => {
   it('should handle empty table list gracefully', async () => {
     glueMock.on(GetTablesCommand).resolves({
       TableList: []
+    });
+
+    athenaMock.on(StartQueryExecutionCommand).resolves({
+      QueryExecutionId: 'test-query-id'
+    });
+
+    athenaMock.on(GetQueryExecutionCommand).resolves({
+      QueryExecution: {
+        Status: {
+          State: QueryExecutionState.SUCCEEDED
+        }
+      }
     });
 
     const result = await handler({}, {} as Context);
@@ -52,6 +64,14 @@ describe('merge-tables lambda', () => {
       QueryExecutionId: 'test-execution-id'
     });
 
+    athenaMock.on(GetQueryExecutionCommand).resolves({
+      QueryExecution: {
+        Status: {
+          State: QueryExecutionState.SUCCEEDED
+        }
+      }
+    });
+
     const result = await handler({}, {} as Context);
 
     expect(result).toEqual({
@@ -75,6 +95,18 @@ describe('merge-tables lambda', () => {
       ]
     });
 
+    athenaMock.on(StartQueryExecutionCommand).resolves({
+      QueryExecutionId: 'test-query-id'
+    });
+
+    athenaMock.on(GetQueryExecutionCommand).resolves({
+      QueryExecution: {
+        Status: {
+          State: QueryExecutionState.SUCCEEDED
+        }
+      }
+    });
+
     const result = await handler({}, {} as Context);
     expect(result.numTables).toBe(1);
   });
@@ -91,7 +123,18 @@ describe('merge-tables lambda', () => {
     });
 
     // Mock Athena error
-    athenaMock.on(StartQueryExecutionCommand).rejects(new Error('Athena error'));
+    athenaMock.on(StartQueryExecutionCommand).resolves({
+      QueryExecutionId: 'test-execution-id'
+    });
+    
+    athenaMock.on(GetQueryExecutionCommand).resolves({
+      QueryExecution: {
+        Status: {
+          State: QueryExecutionState.FAILED,
+          StateChangeReason: 'Athena error'
+        }
+      }
+    });
 
     // Test that the Athena error is propagated
     await expect(handler({}, {} as Context)).rejects.toThrow('Athena error');

@@ -2,10 +2,36 @@ import { Context } from 'aws-lambda';
 import { GlueClient } from '@aws-sdk/client-glue';
 import { GetTablesCommand, GetTableCommand } from '@aws-sdk/client-glue';
 import { AthenaClient } from '@aws-sdk/client-athena';
-import { StartQueryExecutionCommand } from '@aws-sdk/client-athena';
+import { 
+  StartQueryExecutionCommand,
+  GetQueryExecutionCommand,
+  QueryExecutionState
+} from '@aws-sdk/client-athena';
 
 const glueClient = new GlueClient({});
 const athenaClient = new AthenaClient({});
+
+async function waitForQueryCompletion(queryExecutionId: string): Promise<void> {
+  while (true) {
+    const queryExecution = await athenaClient.send(new GetQueryExecutionCommand({
+      QueryExecutionId: queryExecutionId
+    }));
+    
+    const state = queryExecution.QueryExecution?.Status?.State;
+    
+    if (state === QueryExecutionState.SUCCEEDED) {
+      return;
+    }
+    
+    if (state === QueryExecutionState.FAILED || 
+        state === QueryExecutionState.CANCELLED) {
+      throw new Error(`Query failed: ${queryExecution.QueryExecution?.Status?.StateChangeReason}`);
+    }
+    
+    // Wait 2 seconds before checking again
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+}
 
 export async function handler(event: any, context: Context) {
   const databaseName = process.env.DATABASE_NAME;
@@ -57,12 +83,18 @@ export async function handler(event: any, context: Context) {
       WHERE 1=0
     `;
 
-    await athenaClient.send(new StartQueryExecutionCommand({
+    const createTableResponse = await athenaClient.send(new StartQueryExecutionCommand({
       QueryString: createIfNotExistsQuery,
       ResultConfiguration: {
         OutputLocation: `s3://${targetBucket}/athena-results/`
       }
     }));
+    
+    if (!createTableResponse.QueryExecutionId) {
+      throw new Error('Failed to get QueryExecutionId for create table query');
+    }
+    
+    await waitForQueryCompletion(createTableResponse.QueryExecutionId);
 
     // Build MERGE query for each source table
     const mergeQueries = sourceTables.map(table => `
@@ -82,14 +114,6 @@ export async function handler(event: any, context: Context) {
       WHERE t.pkg_name IS NULL
     `);
 
-    // Create merged table even if no source tables found
-    await athenaClient.send(new StartQueryExecutionCommand({
-      QueryString: createIfNotExistsQuery,
-      ResultConfiguration: {
-        OutputLocation: `s3://${targetBucket}/athena-results/`
-      }
-    }));
-
     if (sourceTables.length > 0) {
       // Execute each merge query sequentially
       for (const query of mergeQueries) {
@@ -100,8 +124,11 @@ export async function handler(event: any, context: Context) {
           }
         }));
         
-        // In production, you might want to wait for each query to complete
-        // before starting the next one
+        if (!queryResponse.QueryExecutionId) {
+          throw new Error('Failed to get QueryExecutionId for merge query');
+        }
+        
+        await waitForQueryCompletion(queryResponse.QueryExecutionId);
       }
     }
 
