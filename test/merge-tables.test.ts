@@ -36,12 +36,12 @@ describe('merge-tables lambda', () => {
     glueMock.on(GetTablesCommand).resolves({
       TableList: [
         {
-          Name: 'table1',
-          StorageDescriptor: { Location: 's3://bucket/table1' }
+          Name: 'packages_all',
+          StorageDescriptor: { Location: 's3://bucket/packages_all' }
         },
         {
-          Name: 'table2',
-          StorageDescriptor: { Location: 's3://bucket/table2' }
+          Name: 'objects_all',
+          StorageDescriptor: { Location: 's3://bucket/objects_all' }
         }
       ]
     });

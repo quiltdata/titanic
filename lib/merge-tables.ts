@@ -29,15 +29,8 @@ export async function handler(event: any, context: Context) {
     const sourceTables = tablesResponse.TableList?.filter(table => {
       if (!table.Name) return false;
       
-      const isSourceTable = table.Name !== 'titanic_merged' && 
-                          table.StorageDescriptor?.Location?.startsWith('s3://');
-      
-      // If DEBUG_BUCKET is set, only include tables from that source bucket
-      if (process.env.DEBUG_BUCKET) {
-        return isSourceTable && table.Name.includes(process.env.DEBUG_BUCKET);
-      }
-      
-      return isSourceTable;
+      // Only include packages_all and objects_all tables
+      return ['packages_all', 'objects_all'].includes(table.Name);
     }) || [];
 
     // First check if merged table exists
