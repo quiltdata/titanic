@@ -21,8 +21,8 @@ export async function handler(event: any, context: Context) {
       DatabaseName: databaseName,
     }));
 
-    if (!tablesResponse.TableList || tablesResponse.TableList.length === 0) {
-      throw new Error(`No tables found in database ${databaseName}`);
+    if (!tablesResponse.TableList) {
+      throw new Error(`Unable to list tables in database ${databaseName}`);
     }
 
     // Filter for source tables (excluding the merged table)
@@ -82,21 +82,31 @@ export async function handler(event: any, context: Context) {
       WHERE t.pkg_name IS NULL
     `);
 
-    // Execute each merge query sequentially
-    for (const query of mergeQueries) {
-      const queryResponse = await athenaClient.send(new StartQueryExecutionCommand({
-        QueryString: query,
-        ResultConfiguration: {
-          OutputLocation: `s3://${targetBucket}/athena-results/`
-        }
-      }));
-      
-      // In production, you might want to wait for each query to complete
-      // before starting the next one
+    // Create merged table even if no source tables found
+    await athenaClient.send(new StartQueryExecutionCommand({
+      QueryString: createIfNotExistsQuery,
+      ResultConfiguration: {
+        OutputLocation: `s3://${targetBucket}/athena-results/`
+      }
+    }));
+
+    if (sourceTables.length > 0) {
+      // Execute each merge query sequentially
+      for (const query of mergeQueries) {
+        const queryResponse = await athenaClient.send(new StartQueryExecutionCommand({
+          QueryString: query,
+          ResultConfiguration: {
+            OutputLocation: `s3://${targetBucket}/athena-results/`
+          }
+        }));
+        
+        // In production, you might want to wait for each query to complete
+        // before starting the next one
+      }
     }
 
     return {
-      message: 'Merge queries started successfully',
+      message: sourceTables.length > 0 ? 'Merge queries started successfully' : 'Created merged table (no source tables found)',
       numTables: sourceTables.length
     };
   } catch (error) {

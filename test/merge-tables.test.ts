@@ -22,14 +22,16 @@ describe('merge-tables lambda', () => {
     );
   });
 
-  it('should throw error if no tables found', async () => {
+  it('should handle empty table list gracefully', async () => {
     glueMock.on(GetTablesCommand).resolves({
       TableList: []
     });
 
-    await expect(handler({}, {} as Context)).rejects.toThrow(
-      'No tables found in database'
-    );
+    const result = await handler({}, {} as Context);
+    expect(result).toEqual({
+      message: 'Created merged table (no source tables found)',
+      numTables: 0
+    });
   });
 
   it('should successfully merge S3-backed tables', async () => {
