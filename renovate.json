@@ -4,11 +4,12 @@
     "config:recommended"
   ],
   "prConcurrentLimit": 1,
-  "group": {
-    "allNonMajor": {
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["minor", "patch"],
       "groupName": "All non-major updates",
       "groupSlug": "all-non-major",
       "prPriority": 10
     }
-  }
+  ]
 }
