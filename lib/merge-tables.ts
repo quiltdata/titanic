@@ -29,8 +29,12 @@ export async function handler(event: any, context: Context) {
     const sourceTables = tablesResponse.TableList?.filter(table => {
       if (!table.Name) return false;
       
-      // Only include packages_all and objects_all tables
-      return ['packages_all', 'objects_all'].includes(table.Name);
+      // Check if table name starts with our source table prefixes and matches debug bucket if set
+      const isPackagesTable = table.Name.startsWith('packages_all');
+      const isObjectsTable = table.Name.startsWith('objects_all');
+      const matchesDebugBucket = !process.env.DEBUG_BUCKET || table.Name.includes(process.env.DEBUG_BUCKET);
+      
+      return (isPackagesTable || isObjectsTable) && matchesDebugBucket;
     }) || [];
 
     // First check if merged table exists

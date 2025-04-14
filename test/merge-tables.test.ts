@@ -36,11 +36,11 @@ describe('merge-tables lambda', () => {
     glueMock.on(GetTablesCommand).resolves({
       TableList: [
         {
-          Name: 'packages_all',
+          Name: 'packages_all_quilt-bake',
           StorageDescriptor: { Location: 's3://bucket/packages_all' }
         },
         {
-          Name: 'objects_all',
+          Name: 'objects_all_quilt-bake',
           StorageDescriptor: { Location: 's3://bucket/objects_all' }
         }
       ]
@@ -63,12 +63,12 @@ describe('merge-tables lambda', () => {
     glueMock.on(GetTablesCommand).resolves({
       TableList: [
         {
-          Name: 'quilt-bake-table',
-          StorageDescriptor: { Location: 's3://bucket/table1' }
+          Name: 'packages_all_quilt-bake',
+          StorageDescriptor: { Location: 's3://bucket/packages_all' }
         },
         {
-          Name: 'other-table',
-          StorageDescriptor: { Location: 's3://bucket/table2' }
+          Name: 'objects_all',
+          StorageDescriptor: { Location: 's3://bucket/objects_all' }
         }
       ]
     });
