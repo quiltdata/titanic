@@ -25,45 +25,73 @@ export async function handler(event: any, context: Context) {
       throw new Error(`No tables found in database ${databaseName}`);
     }
 
-  // Filter for S3-backed tables
-  const s3Tables = tablesResponse.TableList?.filter(table => 
-    table.StorageDescriptor?.Location?.startsWith('s3://')
-  ) || [];
+    // Filter for source tables (excluding the merged table)
+    const sourceTables = tablesResponse.TableList?.filter(table => 
+      table.Name !== 'titanic_merged' && 
+      table.StorageDescriptor?.Location?.startsWith('s3://')
+    ) || [];
 
-  // Create CTAS query to merge tables
-  const tableQueries = s3Tables.map(table => `SELECT * FROM ${databaseName}.${table.Name}`);
-  const unionQuery = tableQueries.join(' UNION ALL ');
-  
-  const createTableQuery = `
-    CREATE TABLE ${databaseName}.titanic_merged
-    WITH (
-      external_location = 's3://${targetBucket}/merged/',
-      format = 'PARQUET',
-      partitioned_by = ARRAY['source_bucket']
-    )
-    AS 
-    SELECT 
-      pkg_name,
-      top_hash,
-      timestamp,
-      message,
-      user_meta,
-      source_bucket
-    FROM (${unionQuery})
-  `;
+    // First check if merged table exists
+    const createIfNotExistsQuery = `
+      CREATE TABLE IF NOT EXISTS ${databaseName}.titanic_merged
+      WITH (
+        external_location = 's3://${targetBucket}/merged/',
+        format = 'PARQUET',
+        partitioned_by = ARRAY['source_bucket']
+      )
+      AS 
+      SELECT 
+        pkg_name,
+        top_hash,
+        timestamp,
+        message,
+        user_meta,
+        source_bucket
+      FROM ${databaseName}.${sourceTables[0].Name}
+      WHERE 1=0
+    `;
 
-    // Execute the query
-    const queryResponse = await athenaClient.send(new StartQueryExecutionCommand({
-      QueryString: createTableQuery,
+    await athenaClient.send(new StartQueryExecutionCommand({
+      QueryString: createIfNotExistsQuery,
       ResultConfiguration: {
         OutputLocation: `s3://${targetBucket}/athena-results/`
       }
     }));
 
+    // Build MERGE query for each source table
+    const mergeQueries = sourceTables.map(table => `
+      INSERT INTO ${databaseName}.titanic_merged
+      SELECT DISTINCT
+        s.pkg_name,
+        s.top_hash,
+        s.timestamp,
+        s.message,
+        s.user_meta,
+        s.source_bucket
+      FROM ${databaseName}.${table.Name} s
+      LEFT JOIN ${databaseName}.titanic_merged t
+      ON s.pkg_name = t.pkg_name 
+      AND s.top_hash = t.top_hash
+      AND s.source_bucket = t.source_bucket
+      WHERE t.pkg_name IS NULL
+    `);
+
+    // Execute each merge query sequentially
+    for (const query of mergeQueries) {
+      const queryResponse = await athenaClient.send(new StartQueryExecutionCommand({
+        QueryString: query,
+        ResultConfiguration: {
+          OutputLocation: `s3://${targetBucket}/athena-results/`
+        }
+      }));
+      
+      // In production, you might want to wait for each query to complete
+      // before starting the next one
+    }
+
     return {
-      queryExecutionId: queryResponse.QueryExecutionId,
-      message: 'Merge query started successfully',
-      numTables: s3Tables.length
+      message: 'Merge queries started successfully',
+      numTables: sourceTables.length
     };
   } catch (error) {
     console.error('Error merging tables:', error);
