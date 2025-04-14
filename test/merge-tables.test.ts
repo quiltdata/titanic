@@ -57,4 +57,41 @@ describe('merge-tables lambda', () => {
       numTables: 2
     });
   });
+
+  it('should filter tables by DEBUG_BUCKET when set', async () => {
+    process.env.DEBUG_BUCKET = 'quilt-bake';
+    glueMock.on(GetTablesCommand).resolves({
+      TableList: [
+        {
+          Name: 'quilt-bake-table',
+          StorageDescriptor: { Location: 's3://bucket/table1' }
+        },
+        {
+          Name: 'other-table',
+          StorageDescriptor: { Location: 's3://bucket/table2' }
+        }
+      ]
+    });
+
+    const result = await handler({}, {} as Context);
+    expect(result.numTables).toBe(1);
+  });
+
+  it('should handle Athena query failures', async () => {
+    // Mock tables response
+    glueMock.on(GetTablesCommand).resolves({
+      TableList: [
+        {
+          Name: 'table1',
+          StorageDescriptor: { Location: 's3://bucket/table1' }
+        }
+      ]
+    });
+
+    // Mock Athena error
+    athenaMock.on(StartQueryExecutionCommand).rejects(new Error('Athena error'));
+
+    // Test that the Athena error is propagated
+    await expect(handler({}, {} as Context)).rejects.toThrow('Athena error');
+  });
 });

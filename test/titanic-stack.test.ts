@@ -42,6 +42,24 @@ describe('TitanicStack', () => {
     });
   });
 
+  it('should pass DEBUG_BUCKET to Lambda when provided', () => {
+    const debugApp = new cdk.App();
+    const debugStack = new TitanicStack(debugApp, 'DebugStack', {
+      quiltDatabaseName: 'test-database',
+      debugBucket: 'quilt-bake'
+    });
+    const debugTemplate = Template.fromStack(debugStack);
+
+    debugTemplate.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: {
+          DATABASE_NAME: 'test-database',
+          DEBUG_BUCKET: 'quilt-bake'
+        }
+      }
+    });
+  });
+
   it('creates Glue table', () => {
     template.hasResourceProperties('AWS::Glue::Table', {
       DatabaseName: 'test-database',

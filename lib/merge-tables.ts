@@ -56,7 +56,7 @@ export async function handler(event: any, context: Context) {
         message,
         user_meta,
         source_bucket
-      FROM ${databaseName}.${sourceTables[0].Name}
+      FROM ${databaseName}.${sourceTables.length > 0 ? sourceTables[0].Name : 'packages_all'}
       WHERE 1=0
     `;
 
