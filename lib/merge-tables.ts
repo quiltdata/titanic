@@ -1,6 +1,8 @@
 import { Context } from 'aws-lambda';
-import { GlueClient, GetTablesCommand, GetTableCommand } from '@aws-sdk/client-glue';
-import { AthenaClient, StartQueryExecutionCommand } from '@aws-sdk/client-athena';
+import { GlueClient } from '@aws-sdk/client-glue';
+import { GetTablesCommand, GetTableCommand } from '@aws-sdk/client-glue';
+import { AthenaClient } from '@aws-sdk/client-athena';
+import { StartQueryExecutionCommand } from '@aws-sdk/client-athena';
 
 const glueClient = new GlueClient({});
 const athenaClient = new AthenaClient({});
