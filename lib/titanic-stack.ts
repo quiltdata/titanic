@@ -4,6 +4,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as glue from 'aws-cdk-lib/aws-glue';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda-nodejs';
+import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import * as path from 'path';
 
 export interface TitanicStackProps extends cdk.StackProps {
@@ -24,6 +25,13 @@ export class TitanicStack extends cdk.Stack {
     const mergeLambda = new lambda.NodejsFunction(this, 'MergeTables', {
       entry: path.join(__dirname, 'merge-tables.ts'),
       handler: 'handler',
+      runtime: Runtime.NODEJS_18_X,
+      bundling: {
+        externalModules: [
+          '@aws-sdk/client-glue',
+          '@aws-sdk/client-athena'
+        ]
+      },
       environment: {
         DATABASE_NAME: props.quiltDatabaseName,
         TARGET_BUCKET: titanicBucket.bucketName,
