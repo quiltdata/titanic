@@ -19,18 +19,21 @@ This project creates and manages merged Iceberg/Parquet tables in AWS using CDK.
 ## Setup
 
 1. Install dependencies:
+
 ```bash
 npm install
 ```
 
-2. Configure environment variables:
+1. Configure environment variables:
+
 ```bash
 export QUILT_DATABASE_NAME=your_database_name  # Default: userathenadatabase
 export CDK_DEFAULT_ACCOUNT=your_aws_account_id
 export CDK_DEFAULT_REGION=your_aws_region
 ```
 
-3. Deploy the stack:
+1. Deploy the stack:
+
 ```bash
 npm run cdk
 ```
@@ -38,6 +41,7 @@ npm run cdk
 ## Table Schema
 
 ### Merged Table (`titanic_merged`)
+
 ```sql
 CREATE TABLE titanic_merged (
   pkg_name STRING,
@@ -70,6 +74,7 @@ DEBUG_BUCKET=quilt-bake npm run cdk
 ## Testing
 
 Tests are written using Jest and the AWS CDK Assertions library:
+
 ```bash
 npm run test
 ```
@@ -77,6 +82,7 @@ npm run test
 ## Cleanup
 
 To remove all resources:
+
 ```bash
 npx cdk destroy
 ```
@@ -84,6 +90,7 @@ npx cdk destroy
 ## Security
 
 The Lambda function has minimal IAM permissions:
+
 - Glue: GetTables, GetTable
 - Athena: StartQueryExecution
 - S3: Read/Write to specified bucket
