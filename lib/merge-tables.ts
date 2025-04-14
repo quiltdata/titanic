@@ -39,7 +39,7 @@ export async function handler(event: any, context: Context) {
 
     // First check if merged table exists
     const createIfNotExistsQuery = `
-      CREATE TABLE IF NOT EXISTS ${databaseName}.titanic_merged
+      CREATE TABLE IF NOT EXISTS ${databaseName}.titanic_merged_table
       WITH (
         external_location = 's3://${targetBucket}/merged/',
         format = 'PARQUET',
@@ -66,7 +66,7 @@ export async function handler(event: any, context: Context) {
 
     // Build MERGE query for each source table
     const mergeQueries = sourceTables.map(table => `
-      INSERT INTO ${databaseName}.titanic_merged
+      INSERT INTO ${databaseName}.titanic_merged_table
       SELECT DISTINCT
         s.pkg_name,
         s.top_hash,
@@ -75,7 +75,7 @@ export async function handler(event: any, context: Context) {
         s.user_meta,
         s.source_bucket
       FROM ${databaseName}.${table.Name} s
-      LEFT JOIN ${databaseName}.titanic_merged t
+      LEFT JOIN ${databaseName}.titanic_merged_table t
       ON s.pkg_name = t.pkg_name 
       AND s.top_hash = t.top_hash
       AND s.source_bucket = t.source_bucket

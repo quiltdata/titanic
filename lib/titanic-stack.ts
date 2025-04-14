@@ -66,7 +66,7 @@ export class TitanicStack extends cdk.Stack {
       databaseName: props.quiltDatabaseName,
       catalogId: this.account,
       tableInput: {
-        name: 'titanic_merged',
+        name: 'titanic_merged_table',
         storageDescriptor: {
           location: `s3://${titanicBucket.bucketName}/merged/`,
           inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
