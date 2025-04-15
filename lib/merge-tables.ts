@@ -118,80 +118,6 @@ export async function handler(
             return isView && matchesPrefix;
         }) || [];
 
-        // First check if merged table exists
-        // Create packages table
-        const createPackagesTableQuery = `
-      CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_packages" (
-        pkg_name STRING,
-        top_hash STRING,
-        timestamp STRING,
-        message STRING,
-        user_meta STRING,
-        source_bucket STRING
-      )
-      WITH (
-        location = 's3://${targetBucket}/merged/packages/',
-        table_type = 'ICEBERG',
-        format = 'PARQUET',
-        partitioning = ARRAY['source_bucket']
-      )`;
-
-        // Create objects table
-        const createObjectsTableQuery = `
-      CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_objects" (
-        pkg_name STRING,
-        top_hash STRING,
-        timestamp STRING,
-        logical_key STRING,
-        physical_key STRING,
-        size BIGINT,
-        hash STRUCT<type:STRING,value:STRING>,
-        meta STRING,
-        source_bucket STRING
-      )
-      WITH (
-        location = 's3://${targetBucket}/merged/objects/',
-        table_type = 'ICEBERG',
-        format = 'PARQUET',
-        partitioning = ARRAY['source_bucket']
-      )
-    `;
-
-        // Create packages table
-        const createPackagesResponse = await athenaClient.send(
-            new StartQueryExecutionCommand({
-                QueryString: createPackagesTableQuery,
-                ResultConfiguration: {
-                    OutputLocation: `s3://${targetBucket}/athena-results/`,
-                },
-            }),
-        );
-
-        if (!createPackagesResponse.QueryExecutionId) {
-            throw new Error(
-                "Failed to get QueryExecutionId for create packages table query",
-            );
-        }
-
-        await waitForQueryCompletion(createPackagesResponse.QueryExecutionId);
-
-        // Create objects table
-        const createObjectsResponse = await athenaClient.send(
-            new StartQueryExecutionCommand({
-                QueryString: createObjectsTableQuery,
-                ResultConfiguration: {
-                    OutputLocation: `s3://${targetBucket}/athena-results/`,
-                },
-            }),
-        );
-
-        if (!createObjectsResponse.QueryExecutionId) {
-            throw new Error(
-                "Failed to get QueryExecutionId for create objects table query",
-            );
-        }
-
-        await waitForQueryCompletion(createObjectsResponse.QueryExecutionId);
 
         console.log("Source tables found:", sourceTables.map((t) => t.Name));
 
@@ -232,48 +158,51 @@ export async function handler(
             return query;
         });
 
-        if (sourceTables.length > 0) {
-            console.log(
-                "Starting merge operations for",
-                sourceTables.length,
-                "tables",
-            );
-            // Execute each merge query sequentially
-            for (const query of mergeQueries) {
-                console.log("Executing query:", query);
-                const queryResponse = await athenaClient.send(
-                    new StartQueryExecutionCommand({
-                        QueryString: query,
-                        ResultConfiguration: {
-                            OutputLocation:
-                                `s3://${targetBucket}/athena-results/`,
-                        },
-                    }),
-                );
-
-                if (!queryResponse.QueryExecutionId) {
-                    throw new Error(
-                        "Failed to get QueryExecutionId for merge query",
-                    );
-                }
-
-                console.log(
-                    "Query started with execution ID:",
-                    queryResponse.QueryExecutionId,
-                );
-                await waitForQueryCompletion(queryResponse.QueryExecutionId);
-                console.log("Query completed successfully");
-            }
+        // Check for empty source tables first
+        if (sourceTables.length === 0) {
+            return {
+                message: "Created merged table (no source tables found)",
+                numTables: 0,
+            };
         }
 
-        const response = {
-            message: sourceTables.length > 0
-                ? "Merge queries started successfully"
-                : "Created merged table (no source tables found)",
+        // Execute merge queries
+        console.log(
+            "Starting merge operations for",
+            sourceTables.length,
+            "tables",
+        );
+        
+        // Execute each merge query sequentially
+        for (const query of mergeQueries) {
+            console.log("Executing query:", query);
+            const queryResponse = await athenaClient.send(
+                new StartQueryExecutionCommand({
+                    QueryString: query,
+                    ResultConfiguration: {
+                        OutputLocation: `s3://${targetBucket}/athena-results/`,
+                    },
+                }),
+            );
+
+            if (!queryResponse.QueryExecutionId) {
+                throw new Error(
+                    "Failed to get QueryExecutionId for merge query",
+                );
+            }
+
+            console.log(
+                "Query started with execution ID:",
+                queryResponse.QueryExecutionId,
+            );
+            await waitForQueryCompletion(queryResponse.QueryExecutionId);
+            console.log("Query completed successfully");
+        }
+
+        return {
+            message: "Merge queries started successfully",
             numTables: sourceTables.length,
         };
-
-        return response;
     } catch (error) {
         const err = error as Error;
         console.error("Error merging tables:", {

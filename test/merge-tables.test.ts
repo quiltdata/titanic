@@ -292,39 +292,29 @@ describe("merge-tables lambda", () => {
     });
 
     it("should handle Athena query failures", async () => {
-        // Mock tables response
+        // Mock tables response with a view table to ensure merge is attempted
         glueMock.on(GetTablesCommand).resolves({
             TableList: [
                 {
-                    Name: "table1",
+                    Name: "table1-view",
                     StorageDescriptor: { Location: "s3://bucket/table1" },
                 },
             ],
         });
 
-        // Mock Athena responses
+        // Mock Athena failure response
         athenaMock.on(StartQueryExecutionCommand).resolves({
             QueryExecutionId: "test-execution-id",
         });
 
-        // First mock the create table query success
-        athenaMock.on(GetQueryExecutionCommand)
-            .resolvesOnce({
-                QueryExecution: {
-                    Status: {
-                        State: QueryExecutionState.SUCCEEDED,
-                    },
+        athenaMock.on(GetQueryExecutionCommand).resolves({
+            QueryExecution: {
+                Status: {
+                    State: QueryExecutionState.FAILED,
+                    StateChangeReason: "Athena error",
                 },
-            })
-            // Then mock the merge query failure
-            .resolves({
-                QueryExecution: {
-                    Status: {
-                        State: QueryExecutionState.FAILED,
-                        StateChangeReason: "Athena error",
-                    },
-                },
-            });
+            },
+        });
 
         athenaMock.on(GetQueryExecutionCommand).resolves({
             QueryExecution: {
