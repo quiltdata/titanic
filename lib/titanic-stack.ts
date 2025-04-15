@@ -26,7 +26,7 @@ export class TitanicStack extends cdk.Stack {
 
     // Create SQS queue
     const mergeQueue = new sqs.Queue(this, 'MergeQueue', {
-      visibilityTimeout: cdk.Duration.seconds(300),
+      visibilityTimeout: cdk.Duration.seconds(900),
       retentionPeriod: cdk.Duration.days(14)
     });
 
@@ -40,6 +40,7 @@ export class TitanicStack extends cdk.Stack {
       entry: path.join(__dirname, 'merge-tables.ts'),
       handler: 'handler',
       runtime: Runtime.NODEJS_18_X,
+      timeout: cdk.Duration.seconds(900),
       bundling: {
         externalModules: [
           '@aws-sdk/client-glue',

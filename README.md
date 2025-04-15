@@ -38,13 +38,13 @@ Send a message to the SQS queue to trigger a merge:
 
 ```bash
 # Get queue URL
-QUEUE_URL=$(aws sqs get-queue-url --queue-name TitanicStack-MergeQueue --query 'QueueUrl' --output text)
+source .env
 
 # Merge all tables
 aws sqs send-message --queue-url $QUEUE_URL --message-body '{}'
 
 # Merge specific tables
-aws sqs send-message --queue-url $QUEUE_URL --message-body '{"table_prefix": "myprefix"}'
+aws sqs send-message --queue-url $QUEUE_URL --message-body '{"table_prefix": "quilt-bake"}'
 ```
 
 ## Development
