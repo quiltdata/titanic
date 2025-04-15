@@ -9,7 +9,6 @@ import * as path from 'path';
 
 export interface TitanicStackProps extends cdk.StackProps {
   quiltDatabaseName: string;
-  debugBucket?: string;
   lambdaTimeout?: number;
 }
 
@@ -37,8 +36,7 @@ export class TitanicStack extends cdk.Stack {
       environment: {
         DATABASE_NAME: props.quiltDatabaseName,
         TARGET_BUCKET: titanicBucket.bucketName,
-        LAMBDA_TIMEOUT: (props.lambdaTimeout || 5000).toString(),
-        ...(props.debugBucket && { DEBUG_BUCKET: props.debugBucket })
+        LAMBDA_TIMEOUT: (props.lambdaTimeout || 5000).toString()
       },
     });
 

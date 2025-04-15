@@ -146,16 +146,32 @@ export async function handler(event: CloudFormationEvent & Record<string, any>, 
       throw new Error(`Unable to list tables in database ${databaseName}`);
     }
 
+    // Get table_prefix from SQS message if present
+    const messageBody = event.Records?.[0]?.body;
+    let tablePrefix: string | undefined;
+    try {
+      if (messageBody) {
+        const parsedBody = JSON.parse(messageBody) as { table_prefix?: string };
+        tablePrefix = parsedBody.table_prefix;
+      }
+    } catch (e) {
+      console.warn('Failed to parse message body:', e);
+    }
+
     // Filter for source tables (excluding the merged table)
     const sourceTables = tablesResponse.TableList?.filter(table => {
       if (!table.Name) return false;
-      
-      // Check if table name starts with our source table prefixes and matches debug bucket if set
+        
+      // Check if table name starts with our source table prefixes
       const isPackagesTable = table.Name.startsWith('packages_all');
       const isObjectsTable = table.Name.startsWith('objects_all');
-      const matchesDebugBucket = !process.env.DEBUG_BUCKET || table.Name.includes(process.env.DEBUG_BUCKET);
-      
-      return (isPackagesTable || isObjectsTable) && matchesDebugBucket;
+        
+      // If tablePrefix is specified, only include matching tables
+      if (tablePrefix) {
+        return (isPackagesTable || isObjectsTable) && table.Name.includes(tablePrefix);
+      }
+        
+      return isPackagesTable || isObjectsTable;
     }) || [];
 
     // First check if merged table exists

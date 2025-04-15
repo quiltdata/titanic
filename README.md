@@ -89,8 +89,11 @@ To trigger a merge operation manually:
 # Get the queue URL
 QUEUE_URL=$(aws sqs get-queue-url --queue-name TitanicStack-MergeQueue --query 'QueueUrl' --output text)
 
-# Send a message to trigger merge
+# Send a message to trigger merge (all tables)
 aws sqs send-message --queue-url $QUEUE_URL --message-body '{"action": "merge"}'
+
+# Or merge tables with specific prefix
+aws sqs send-message --queue-url $QUEUE_URL --message-body '{"action": "merge", "table_prefix": "myprefix"}'
 ```
 
 ## Cleanup

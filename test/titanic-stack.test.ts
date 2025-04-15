@@ -46,7 +46,6 @@ describe('TitanicStack', () => {
     const debugApp = new cdk.App();
     const debugStack = new TitanicStack(debugApp, 'DebugStack', {
       quiltDatabaseName: 'test-database',
-      debugBucket: 'quilt-bake',
       lambdaTimeout: 10000
     });
     const debugTemplate = Template.fromStack(debugStack);
@@ -55,7 +54,6 @@ describe('TitanicStack', () => {
       Environment: {
         Variables: {
           DATABASE_NAME: 'test-database',
-          DEBUG_BUCKET: 'quilt-bake',
           LAMBDA_TIMEOUT: '10000'
         }
       }

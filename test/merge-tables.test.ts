@@ -131,43 +131,6 @@ describe('merge-tables lambda', () => {
     });
   });
 
-  it('should filter tables by DEBUG_BUCKET when set', async () => {
-    process.env.DEBUG_BUCKET = 'quilt-bake';
-    glueMock.on(GetTablesCommand).resolves({
-      TableList: [
-        {
-          Name: 'packages_all_quilt-bake',
-          StorageDescriptor: { Location: 's3://bucket/packages_all' }
-        },
-        {
-          Name: 'objects_all',
-          StorageDescriptor: { Location: 's3://bucket/objects_all' }
-        }
-      ]
-    });
-
-    athenaMock.on(StartQueryExecutionCommand).resolves({
-      QueryExecutionId: 'test-query-id'
-    });
-
-    athenaMock.on(GetQueryExecutionCommand).resolves({
-      QueryExecution: {
-        Status: {
-          State: QueryExecutionState.SUCCEEDED
-        }
-      }
-    });
-
-    const mockEvent = {
-      RequestType: 'Create' as const,
-      ResponseURL: 'https://test.com',
-      StackId: 'test-stack',
-      RequestId: 'test-request',
-      LogicalResourceId: 'test-resource'
-    };
-    const result = await handler(mockEvent, {} as Context);
-    expect(result!.numTables).toBe(1);  // We know this is a CREATE event so result won't be undefined
-  });
 
   it('should handle CloudFormation DELETE events', async () => {
     const event = {
