@@ -82,51 +82,28 @@ export class TitanicStack extends cdk.Stack {
         titanicBucket.grantReadWrite(mergeLambda);
         mergeQueue.grantConsumeMessages(mergeLambda);
 
-        // Create Glue table for Athena
-        new glue.CfnTable(this, "MergedTable", {
+        // Create Glue table for packages
+        new glue.CfnTable(this, "MergedPackagesTable", {
             databaseName: props.quiltDatabaseName,
             catalogId: this.account,
             tableInput: {
-                name: "titanic_merged_table",
-                storageDescriptor: {
-                    location: `s3://${titanicBucket.bucketName}/merged/`,
-                    inputFormat:
-                        "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat",
-                    outputFormat:
-                        "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat",
-                    serdeInfo: {
-                        serializationLibrary:
-                            "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe",
-                    },
-                    columns: [
-                        { name: "pkg_name", type: "string" },
-                        { name: "top_hash", type: "string" },
-                        { name: "timestamp", type: "string" },
-                        { name: "message", type: "string" },
-                        { name: "user_meta", type: "string" },
-                    ],
+                name: "titanic_merged_packages",
+                tableType: "ICEBERG",
+                parameters: {
+                    "table_type": "ICEBERG",
+                    "format": "parquet",
+                    "write_target_data_file_size_bytes": "536870912",
+                    "write_compression": "SNAPPY"
                 },
                 partitionKeys: [
-                    { name: "source_bucket", type: "string" },
+                    { name: "source_bucket", type: "string" }
                 ],
-            },
-        });
-
-        // Create Glue table for packages_all
-        new glue.CfnTable(this, "PackagesAllTable", {
-            databaseName: props.quiltDatabaseName,
-            catalogId: this.account,
-            tableInput: {
-                name: "packages_all",
                 storageDescriptor: {
-                    location: `s3://${titanicBucket.bucketName}/packages_all/`,
-                    inputFormat:
-                        "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat",
-                    outputFormat:
-                        "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat",
+                    location: `s3://${titanicBucket.bucketName}/merged/packages/`,
+                    inputFormat: "org.apache.iceberg.mr.hive.HiveIcebergInputFormat",
+                    outputFormat: "org.apache.iceberg.mr.hive.HiveIcebergOutputFormat",
                     serdeInfo: {
-                        serializationLibrary:
-                            "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe",
+                        serializationLibrary: "org.apache.iceberg.mr.hive.HiveIcebergSerDe"
                     },
                     columns: [
                         { name: "pkg_name", type: "string" },
@@ -134,26 +111,34 @@ export class TitanicStack extends cdk.Stack {
                         { name: "timestamp", type: "string" },
                         { name: "message", type: "string" },
                         { name: "user_meta", type: "string" },
-                    ],
-                },
+                        { name: "source_bucket", type: "string" }
+                    ]
+                }
             },
         });
 
-        // Create Glue table for objects_all
-        new glue.CfnTable(this, "ObjectsAllTable", {
+        // Create Glue table for objects
+        new glue.CfnTable(this, "MergedObjectsTable", {
             databaseName: props.quiltDatabaseName,
             catalogId: this.account,
             tableInput: {
-                name: "objects_all",
+                name: "titanic_merged_objects",
+                tableType: "ICEBERG",
+                parameters: {
+                    "table_type": "ICEBERG",
+                    "format": "parquet",
+                    "write_target_data_file_size_bytes": "536870912",
+                    "write_compression": "SNAPPY"
+                },
+                partitionKeys: [
+                    { name: "source_bucket", type: "string" }
+                ],
                 storageDescriptor: {
-                    location: `s3://${titanicBucket.bucketName}/objects_all/`,
-                    inputFormat:
-                        "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat",
-                    outputFormat:
-                        "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat",
+                    location: `s3://${titanicBucket.bucketName}/merged/objects/`,
+                    inputFormat: "org.apache.iceberg.mr.hive.HiveIcebergInputFormat",
+                    outputFormat: "org.apache.iceberg.mr.hive.HiveIcebergOutputFormat",
                     serdeInfo: {
-                        serializationLibrary:
-                            "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe",
+                        serializationLibrary: "org.apache.iceberg.mr.hive.HiveIcebergSerDe"
                     },
                     columns: [
                         { name: "pkg_name", type: "string" },
@@ -162,18 +147,13 @@ export class TitanicStack extends cdk.Stack {
                         { name: "logical_key", type: "string" },
                         { name: "physical_key", type: "string" },
                         { name: "size", type: "bigint" },
-                        {
-                            name: "hash",
-                            type: "struct<type:string,value:string>",
-                        },
+                        { name: "hash", type: "struct<type:string,value:string>" },
                         { name: "meta", type: "string" },
-                        { name: "source_bucket", type: "string" },
-                    ],
-                },
-                partitionKeys: [
-                    { name: "source_bucket", type: "string" },
-                ],
+                        { name: "source_bucket", type: "string" }
+                    ]
+                }
             },
         });
+
     }
 }

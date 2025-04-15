@@ -119,59 +119,105 @@ export async function handler(
         }) || [];
 
         // First check if merged table exists
-        const createIfNotExistsQuery = `
-      CREATE EXTERNAL TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_table"
-      WITH (
-        external_location = 's3://${targetBucket}/merged/',
-        format = 'PARQUET',
-        partitioned_by = ARRAY['source_bucket']
+        // Create packages table
+        const createPackagesTableQuery = `
+      CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_packages" (
+        pkg_name STRING,
+        top_hash STRING,
+        timestamp STRING,
+        message STRING,
+        user_meta STRING,
+        source_bucket STRING
       )
-      AS 
-      SELECT 
-        "pkg_name",
-        "top_hash",
-        "timestamp",
-        "message",
-        "user_meta",
-        "source_bucket"
-      FROM "${databaseName}"."${
-            sourceTables.length > 0 ? sourceTables[0].Name : "packages_all"
-        }"
-      WHERE 1=0
+      PARTITIONED BY (source_bucket)
+      WITH (
+        location = 's3://${targetBucket}/merged/packages/',
+        table_type = 'ICEBERG',
+        format = 'PARQUET'
+      )`;
+
+        // Create objects table
+        const createObjectsTableQuery = `
+      CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_objects" (
+        pkg_name STRING,
+        top_hash STRING,
+        timestamp STRING,
+        logical_key STRING,
+        physical_key STRING,
+        size BIGINT,
+        hash STRUCT<type:STRING,value:STRING>,
+        meta STRING,
+        source_bucket STRING
+      )
+      PARTITIONED BY (source_bucket)
+      WITH (
+        location = 's3://${targetBucket}/merged/objects/',
+        table_type = 'ICEBERG',
+        format = 'PARQUET'
+      )
     `;
 
-        const createTableResponse = await athenaClient.send(
+        // Create packages table
+        const createPackagesResponse = await athenaClient.send(
             new StartQueryExecutionCommand({
-                QueryString: createIfNotExistsQuery,
+                QueryString: createPackagesTableQuery,
                 ResultConfiguration: {
                     OutputLocation: `s3://${targetBucket}/athena-results/`,
                 },
             }),
         );
 
-        if (!createTableResponse.QueryExecutionId) {
+        if (!createPackagesResponse.QueryExecutionId) {
             throw new Error(
-                "Failed to get QueryExecutionId for create table query",
+                "Failed to get QueryExecutionId for create packages table query",
             );
         }
 
-        await waitForQueryCompletion(createTableResponse.QueryExecutionId);
+        await waitForQueryCompletion(createPackagesResponse.QueryExecutionId);
+
+        // Create objects table
+        const createObjectsResponse = await athenaClient.send(
+            new StartQueryExecutionCommand({
+                QueryString: createObjectsTableQuery,
+                ResultConfiguration: {
+                    OutputLocation: `s3://${targetBucket}/athena-results/`,
+                },
+            }),
+        );
+
+        if (!createObjectsResponse.QueryExecutionId) {
+            throw new Error(
+                "Failed to get QueryExecutionId for create objects table query",
+            );
+        }
+
+        await waitForQueryCompletion(createObjectsResponse.QueryExecutionId);
 
         console.log("Source tables found:", sourceTables.map((t) => t.Name));
 
         // Build MERGE query for each source table
         const mergeQueries = sourceTables.map((table) => {
             const query = `
-      INSERT INTO "${databaseName}"."titanic_merged_table"
+      INSERT INTO "${databaseName}"."${table.Name?.includes('packages') ? 'titanic_merged_packages' : 'titanic_merged_objects'}"
       SELECT DISTINCT
+        ${table.Name?.includes('packages') ? `
         s."pkg_name",
         s."top_hash",
         s."timestamp",
         s."message",
         s."user_meta",
-        s."source_bucket"
+        s."source_bucket"` : `
+        s."pkg_name",
+        s."top_hash",
+        s."timestamp",
+        s."logical_key",
+        s."physical_key",
+        s."size",
+        s."hash",
+        s."meta",
+        s."source_bucket"`}
       FROM "${databaseName}"."${table.Name}" s
-      LEFT JOIN "${databaseName}"."titanic_merged_table" t
+      LEFT JOIN "${databaseName}"."${table.Name?.includes('packages') ? 'titanic_merged_packages' : 'titanic_merged_objects'}" t
       ON s."pkg_name" = t."pkg_name" 
       AND s."top_hash" = t."top_hash"
       AND s."source_bucket" = t."source_bucket"

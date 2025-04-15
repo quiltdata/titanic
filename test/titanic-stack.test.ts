@@ -60,14 +60,25 @@ describe("TitanicStack", () => {
         });
     });
 
-    it("creates Glue table", () => {
+    it("creates Iceberg tables", () => {
+        // Test packages table
         template.hasResourceProperties("AWS::Glue::Table", {
             DatabaseName: "test-database",
             CatalogId: {
                 Ref: "AWS::AccountId",
             },
             TableInput: {
-                Name: "titanic_merged_table",
+                Name: "titanic_merged_packages",
+                TableType: "ICEBERG",
+                Parameters: {
+                    "table_type": "ICEBERG",
+                    "format": "parquet",
+                    "write_target_data_file_size_bytes": "536870912",
+                    "write_compression": "SNAPPY"
+                },
+                PartitionKeys: [
+                    { Name: "source_bucket", Type: "string" }
+                ],
                 StorageDescriptor: {
                     Location: {
                         "Fn::Join": [
@@ -77,17 +88,14 @@ describe("TitanicStack", () => {
                                 {
                                     Ref: "TitanicBucketBD9D9364",
                                 },
-                                "/merged/",
+                                "/merged/packages/",
                             ],
                         ],
                     },
-                    InputFormat:
-                        "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat",
-                    OutputFormat:
-                        "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat",
+                    InputFormat: "org.apache.iceberg.mr.hive.HiveIcebergInputFormat",
+                    OutputFormat: "org.apache.iceberg.mr.hive.HiveIcebergOutputFormat",
                     SerdeInfo: {
-                        SerializationLibrary:
-                            "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe",
+                        SerializationLibrary: "org.apache.iceberg.mr.hive.HiveIcebergSerDe"
                     },
                     Columns: [
                         { Name: "pkg_name", Type: "string" },
@@ -95,12 +103,58 @@ describe("TitanicStack", () => {
                         { Name: "timestamp", Type: "string" },
                         { Name: "message", Type: "string" },
                         { Name: "user_meta", Type: "string" },
-                    ],
-                },
-                PartitionKeys: [
-                    { Name: "source_bucket", Type: "string" },
-                ],
+                        { Name: "source_bucket", Type: "string" }
+                    ]
+                }
+            }
+        });
+
+        // Test objects table
+        template.hasResourceProperties("AWS::Glue::Table", {
+            DatabaseName: "test-database",
+            CatalogId: {
+                Ref: "AWS::AccountId",
             },
+            TableInput: {
+                Name: "titanic_merged_objects",
+                TableType: "ICEBERG",
+                Parameters: {
+                    "table_type": "ICEBERG",
+                    "format": "parquet",
+                    "write_target_data_file_size_bytes": "536870912",
+                    "write_compression": "SNAPPY"
+                },
+                StorageDescriptor: {
+                    Location: {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "s3://",
+                                {
+                                    Ref: "TitanicBucketBD9D9364",
+                                },
+                                "/merged/objects/",
+                            ],
+                        ],
+                    },
+                    InputFormat: "org.apache.iceberg.mr.hive.HiveIcebergInputFormat",
+                    OutputFormat: "org.apache.iceberg.mr.hive.HiveIcebergOutputFormat",
+                    SerdeInfo: {
+                        SerializationLibrary: "org.apache.iceberg.mr.hive.HiveIcebergSerDe"
+                    },
+                    Columns: [
+                        { Name: "pkg_name", Type: "string" },
+                        { Name: "top_hash", Type: "string" },
+                        { Name: "timestamp", Type: "string" },
+                        { Name: "logical_key", Type: "string" },
+                        { Name: "physical_key", Type: "string" },
+                        { Name: "size", Type: "bigint" },
+                        { Name: "hash", Type: "struct<type:string,value:string>" },
+                        { Name: "meta", Type: "string" },
+                        { Name: "source_bucket", Type: "string" }
+                    ]
+                }
+            }
         });
     });
 });
