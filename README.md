@@ -7,6 +7,7 @@ This project creates and manages merged Iceberg/Parquet tables in AWS using CDK.
 - **AWS CDK Infrastructure** written in TypeScript
 - Uses **AWS Glue** for table definitions
 - **AWS Lambda** function to perform table merges
+- **Amazon SQS** for triggering merges
 - **Amazon Athena** for querying and merging data
 - **Amazon S3** for data storage
 
@@ -80,6 +81,18 @@ Tests are written using Jest and the AWS CDK Assertions library:
 npm run test
 ```
 
+## Triggering Table Merges
+
+To trigger a merge operation manually:
+
+```bash
+# Get the queue URL
+QUEUE_URL=$(aws sqs get-queue-url --queue-name TitanicStack-MergeQueue --query 'QueueUrl' --output text)
+
+# Send a message to trigger merge
+aws sqs send-message --queue-url $QUEUE_URL --message-body '{"action": "merge"}'
+```
+
 ## Cleanup
 
 To remove all resources:
@@ -95,6 +108,7 @@ The Lambda function has minimal IAM permissions:
 - Glue: GetTables, GetTable
 - Athena: StartQueryExecution
 - S3: Read/Write to specified bucket
+- SQS: Receive and delete messages
 
 ## Limitations
 
