@@ -127,8 +127,11 @@ export async function handler(event: SQSEvent, context: Context): Promise<Handle
     
     await waitForQueryCompletion(createTableResponse.QueryExecutionId);
 
+    console.log('Source tables found:', sourceTables.map(t => t.Name));
+
     // Build MERGE query for each source table
-    const mergeQueries = sourceTables.map(table => `
+    const mergeQueries = sourceTables.map(table => {
+      const query = `
       INSERT INTO "${databaseName}"."titanic_merged_table"
       SELECT DISTINCT
         s."pkg_name",
@@ -142,12 +145,17 @@ export async function handler(event: SQSEvent, context: Context): Promise<Handle
       ON s."pkg_name" = t."pkg_name" 
       AND s."top_hash" = t."top_hash"
       AND s."source_bucket" = t."source_bucket"
-      WHERE t."pkg_name" IS NULL
-    `);
+      WHERE t."pkg_name" IS NULL`;
+      
+      console.log('Generated merge query for table', table.Name, ':', query);
+      return query;
+    });
 
     if (sourceTables.length > 0) {
+      console.log('Starting merge operations for', sourceTables.length, 'tables');
       // Execute each merge query sequentially
       for (const query of mergeQueries) {
+        console.log('Executing query:', query);
         const queryResponse = await athenaClient.send(new StartQueryExecutionCommand({
           QueryString: query,
           ResultConfiguration: {
@@ -159,7 +167,9 @@ export async function handler(event: SQSEvent, context: Context): Promise<Handle
           throw new Error('Failed to get QueryExecutionId for merge query');
         }
         
+        console.log('Query started with execution ID:', queryResponse.QueryExecutionId);
         await waitForQueryCompletion(queryResponse.QueryExecutionId);
+        console.log('Query completed successfully');
       }
     }
 
