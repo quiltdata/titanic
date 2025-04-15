@@ -6,20 +6,28 @@
   },
   "scripts": {
     "build": "tsc",
-    "watch": "tsc -w",
+    "clean": "rm -rf cdk.out */{*.js,*.d.ts}",
+    "cdk": "npm run test && npx cdk deploy --require-approval never && npm run sqs",
+    "lint": "eslint . --ext .ts --fix",
+    "sqs": "aws sqs send-message --queue-url https://sqs.us-east-2.amazonaws.com/712023778557/TitanicStack-MergeQueue67A32F45-BDM8VFbtEJtN --message-body '{\"table_prefix\": \"quilt-bake\"}'",
     "test": "jest",
-    "cdk": "cdk"
+    "watch": "tsc -w"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.149",
     "@types/jest": "^29.5.14",
     "@types/node": "22.14.1",
+    "aws-cdk": "2.1007.0",
+    "aws-sdk-client-mock": "^4.1.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.2.5",
-    "aws-cdk": "2.1007.0",
     "ts-node": "^10.9.2",
     "typescript": "~5.8.0"
   },
   "dependencies": {
+    "@aws-cdk/aws-lambda-event-sources": "^1.203.0",
+    "@aws-sdk/client-athena": "^3.787.0",
+    "@aws-sdk/client-glue": "^3.787.0",
     "aws-cdk-lib": "2.189.0",
     "constructs": "^10.0.0"
   }
