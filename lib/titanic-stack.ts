@@ -6,6 +6,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
+import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as path from 'path';
 
 export interface TitanicStackProps extends cdk.StackProps {
@@ -32,7 +33,7 @@ export class TitanicStack extends cdk.Stack {
     // Create merge tables Lambda
     const mergeLambda = new lambda.NodejsFunction(this, 'MergeTables', {
       events: [
-        new lambda.SqsEventSource(mergeQueue, {
+        new SqsEventSource(mergeQueue, {
           batchSize: 1
         })
       ],

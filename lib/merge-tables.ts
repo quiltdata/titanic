@@ -1,4 +1,4 @@
-import { Context } from 'aws-lambda';
+import { Context, SQSEvent } from 'aws-lambda';
 import { GlueClient } from '@aws-sdk/client-glue';
 import { GetTablesCommand, GetTableCommand } from '@aws-sdk/client-glue';
 import { AthenaClient } from '@aws-sdk/client-athena';
@@ -48,7 +48,7 @@ type HandlerResponse = {
   numTables: number;
 } | undefined;
 
-export async function handler(event: Record<string, any>, context: Context): Promise<HandlerResponse> {
+export async function handler(event: SQSEvent, context: Context): Promise<HandlerResponse> {
   const databaseName = process.env.DATABASE_NAME;
   const targetBucket = process.env.TARGET_BUCKET;
 
