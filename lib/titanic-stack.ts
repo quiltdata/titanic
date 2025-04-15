@@ -89,8 +89,7 @@ export class TitanicStack extends cdk.Stack {
             { name: 'top_hash', type: 'string' },
             { name: 'timestamp', type: 'string' },
             { name: 'message', type: 'string' },
-            { name: 'user_meta', type: 'string' },
-            { name: 'source_bucket', type: 'string' }
+            { name: 'user_meta', type: 'string' }
           ],
         },
         partitionKeys: [

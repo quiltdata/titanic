@@ -91,8 +91,7 @@ describe('TitanicStack', () => {
             { Name: 'top_hash', Type: 'string' },
             { Name: 'timestamp', Type: 'string' },
             { Name: 'message', Type: 'string' },
-            { Name: 'user_meta', Type: 'string' },
-            { Name: 'source_bucket', Type: 'string' }
+            { Name: 'user_meta', Type: 'string' }
           ]
         },
         PartitionKeys: [
