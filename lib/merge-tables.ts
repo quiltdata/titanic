@@ -111,7 +111,9 @@ export async function handler(
 
             // Check if table name ends with -view
             const isView = table.Name.endsWith("-view");
-            const matchesPrefix = tablePrefix ? table.Name.startsWith(tablePrefix) : true;
+            const matchesPrefix = tablePrefix
+                ? table.Name.startsWith(tablePrefix)
+                : true;
 
             return isView && matchesPrefix;
         }) || [];
