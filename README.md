@@ -13,18 +13,21 @@ Automatically merges multiple AWS Glue tables into a single queryable table whil
 ### Quick Start
 
 1. Install dependencies:
+
 ```bash
 npm install
 ```
 
-2. Set environment variables:
+1. Set environment variables:
+
 ```bash
 export QUILT_DATABASE_NAME=your_database_name  # Default: userathenadatabase
 export CDK_DEFAULT_ACCOUNT=your_aws_account_id
 export CDK_DEFAULT_REGION=your_aws_region
 ```
 
-3. Deploy:
+1. Deploy:
+
 ```bash
 npm run cdk
 ```
@@ -47,11 +50,13 @@ aws sqs send-message --queue-url $QUEUE_URL --message-body '{"table_prefix": "my
 ## Development
 
 ### Local Testing
+
 ```bash
 npm run test
 ```
 
 ### CDK Commands
+
 - `npm run build` - Compile TypeScript
 - `npx cdk diff` - Show pending changes
 - `npx cdk synth` - Generate CloudFormation template
@@ -69,6 +74,7 @@ npm run test
 ### Security
 
 Lambda has minimal IAM permissions for:
+
 - Glue: GetTables, GetTable
 - Athena: StartQueryExecution, GetQueryExecution
 - S3: Read/Write access to target bucket
