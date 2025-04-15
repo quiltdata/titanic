@@ -129,11 +129,11 @@ export async function handler(
         user_meta STRING,
         source_bucket STRING
       )
-      PARTITIONED BY (source_bucket)
       WITH (
         location = 's3://${targetBucket}/merged/packages/',
         table_type = 'ICEBERG',
-        format = 'PARQUET'
+        format = 'PARQUET',
+        partitioning = ARRAY['source_bucket']
       )`;
 
         // Create objects table
@@ -149,11 +149,11 @@ export async function handler(
         meta STRING,
         source_bucket STRING
       )
-      PARTITIONED BY (source_bucket)
       WITH (
         location = 's3://${targetBucket}/merged/objects/',
         table_type = 'ICEBERG',
-        format = 'PARQUET'
+        format = 'PARQUET',
+        partitioning = ARRAY['source_bucket']
       )
     `;
 
