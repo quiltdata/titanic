@@ -109,12 +109,23 @@ describe('merge-tables lambda', () => {
       }
     });
 
-    const mockEvent = {
-      RequestType: 'Create' as const,
-      ResponseURL: 'https://test.com',
-      StackId: 'test-stack',
-      RequestId: 'test-request',
-      LogicalResourceId: 'test-resource'
+    const mockEvent: SQSEvent = {
+      Records: [{
+        messageId: '1',
+        receiptHandle: 'handle',
+        body: '{}',
+        attributes: {
+          ApproximateReceiveCount: '1',
+          SentTimestamp: '1',
+          SenderId: 'sender',
+          ApproximateFirstReceiveTimestamp: '1'
+        },
+        messageAttributes: {},
+        md5OfBody: 'md5',
+        eventSource: 'aws:sqs',
+        eventSourceARN: 'arn:aws:sqs:region:account:queue',
+        awsRegion: 'region'
+      }]
     };
     const result = await handler(mockEvent, {} as Context);
 
@@ -192,12 +203,23 @@ describe('merge-tables lambda', () => {
       }
     });
 
-    const mockEvent = {
-      RequestType: 'Create' as const,
-      ResponseURL: 'https://test.com',
-      StackId: 'test-stack',
-      RequestId: 'test-request',
-      LogicalResourceId: 'test-resource'
+    const mockEvent: SQSEvent = {
+      Records: [{
+        messageId: '1',
+        receiptHandle: 'handle',
+        body: '{}',
+        attributes: {
+          ApproximateReceiveCount: '1',
+          SentTimestamp: '1',
+          SenderId: 'sender',
+          ApproximateFirstReceiveTimestamp: '1'
+        },
+        messageAttributes: {},
+        md5OfBody: 'md5',
+        eventSource: 'aws:sqs',
+        eventSourceARN: 'arn:aws:sqs:region:account:queue',
+        awsRegion: 'region'
+      }]
     };
     const result = await handler(mockEvent, {} as Context);
     expect(result).toBeDefined();
@@ -248,12 +270,23 @@ describe('merge-tables lambda', () => {
     });
 
     // Test that the Athena error is propagated
-    const mockEvent = {
-      RequestType: 'Create' as const,
-      ResponseURL: 'https://test.com',
-      StackId: 'test-stack',
-      RequestId: 'test-request',
-      LogicalResourceId: 'test-resource'
+    const mockEvent: SQSEvent = {
+      Records: [{
+        messageId: '1',
+        receiptHandle: 'handle',
+        body: '{}',
+        attributes: {
+          ApproximateReceiveCount: '1',
+          SentTimestamp: '1',
+          SenderId: 'sender',
+          ApproximateFirstReceiveTimestamp: '1'
+        },
+        messageAttributes: {},
+        md5OfBody: 'md5',
+        eventSource: 'aws:sqs',
+        eventSourceARN: 'arn:aws:sqs:region:account:queue',
+        awsRegion: 'region'
+      }]
     };
     await expect(handler(mockEvent, {} as Context)).rejects.toThrow('Athena error');
   });
