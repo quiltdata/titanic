@@ -39,29 +39,24 @@ describe("merge-tables lambda", () => {
             TableList: [],
         });
 
-        athenaMock.on(StartQueryExecutionCommand).resolves({
-            QueryExecutionId: "test-query-id",
-        });
+        // Mock successful table creation
+        athenaMock
+            .on(StartQueryExecutionCommand)
+            .resolvesOnce({ QueryExecutionId: "create-packages-id" })
+            .resolvesOnce({ QueryExecutionId: "create-objects-id" });
 
-        athenaMock.on(GetQueryExecutionCommand).resolves({
-            QueryExecution: {
-                Status: {
-                    State: QueryExecutionState.SUCCEEDED,
+        athenaMock
+            .on(GetQueryExecutionCommand)
+            .resolvesOnce({
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
                 },
-            },
-        });
-
-        athenaMock.on(StartQueryExecutionCommand).resolves({
-            QueryExecutionId: "test-query-id",
-        });
-
-        athenaMock.on(GetQueryExecutionCommand).resolves({
-            QueryExecution: {
-                Status: {
-                    State: QueryExecutionState.SUCCEEDED,
+            })
+            .resolvesOnce({
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
                 },
-            },
-        });
+            });
 
         const mockEvent: SQSEvent = {
             Records: [{

@@ -158,7 +158,81 @@ export async function handler(
             return query;
         });
 
-        // Check for empty source tables first
+        // Create tables if they don't exist
+        const createPackagesQuery = `
+            CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_packages"
+            WITH (
+                format = 'PARQUET',
+                write_compression = 'SNAPPY',
+                location = 's3://${targetBucket}/merged/packages/',
+                table_type = 'ICEBERG',
+                is_external = false
+            )
+            AS SELECT
+                CAST(NULL AS VARCHAR) as pkg_name,
+                CAST(NULL AS VARCHAR) as top_hash,
+                CAST(NULL AS VARCHAR) as timestamp,
+                CAST(NULL AS VARCHAR) as message,
+                CAST(NULL AS VARCHAR) as user_meta,
+                CAST(NULL AS VARCHAR) as source_bucket
+            WHERE false
+        `;
+
+        const createObjectsQuery = `
+            CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_objects"
+            WITH (
+                format = 'PARQUET',
+                write_compression = 'SNAPPY',
+                location = 's3://${targetBucket}/merged/objects/',
+                table_type = 'ICEBERG',
+                is_external = false
+            )
+            AS SELECT
+                CAST(NULL AS VARCHAR) as pkg_name,
+                CAST(NULL AS VARCHAR) as top_hash,
+                CAST(NULL AS VARCHAR) as timestamp,
+                CAST(NULL AS VARCHAR) as logical_key,
+                CAST(NULL AS VARCHAR) as physical_key,
+                CAST(NULL AS BIGINT) as size,
+                CAST(NULL AS STRUCT<type:VARCHAR,value:VARCHAR>) as hash,
+                CAST(NULL AS VARCHAR) as meta,
+                CAST(NULL AS VARCHAR) as source_bucket
+            WHERE false
+        `;
+
+        // Create packages table
+        const createPackagesResponse = await athenaClient.send(
+            new StartQueryExecutionCommand({
+                QueryString: createPackagesQuery,
+                ResultConfiguration: {
+                    OutputLocation: `s3://${targetBucket}/athena-results/`,
+                },
+            }),
+        );
+
+        if (!createPackagesResponse.QueryExecutionId) {
+            throw new Error("Failed to get QueryExecutionId for create packages table");
+        }
+
+        await waitForQueryCompletion(createPackagesResponse.QueryExecutionId);
+
+        // Create objects table
+        const createObjectsResponse = await athenaClient.send(
+            new StartQueryExecutionCommand({
+                QueryString: createObjectsQuery,
+                ResultConfiguration: {
+                    OutputLocation: `s3://${targetBucket}/athena-results/`,
+                },
+            }),
+        );
+
+        if (!createObjectsResponse.QueryExecutionId) {
+            throw new Error("Failed to get QueryExecutionId for create objects table");
+        }
+
+        await waitForQueryCompletion(createObjectsResponse.QueryExecutionId);
+
+        // Check for empty source tables
         if (sourceTables.length === 0) {
             return {
                 message: "Created merged table (no source tables found)",

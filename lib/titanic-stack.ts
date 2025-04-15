@@ -58,7 +58,7 @@ export class TitanicStack extends cdk.Stack {
         // Grant Lambda permissions
         mergeLambda.addToRolePolicy(
             new iam.PolicyStatement({
-                actions: ["glue:GetTables", "glue:GetTable"],
+                actions: ["glue:GetTables", "glue:GetTable", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable"],
                 resources: [
                     `arn:aws:glue:${this.region}:${this.account}:catalog`,
                     `arn:aws:glue:${this.region}:${this.account}:database/${props.quiltDatabaseName}`,
@@ -82,78 +82,6 @@ export class TitanicStack extends cdk.Stack {
         titanicBucket.grantReadWrite(mergeLambda);
         mergeQueue.grantConsumeMessages(mergeLambda);
 
-        // Create Glue table for packages
-        new glue.CfnTable(this, "MergedPackagesTable", {
-            databaseName: props.quiltDatabaseName,
-            catalogId: this.account,
-            tableInput: {
-                name: "titanic_merged_packages",
-                tableType: "ICEBERG",
-                parameters: {
-                    "table_type": "ICEBERG",
-                    "format": "parquet",
-                    "write_target_data_file_size_bytes": "536870912",
-                    "write_compression": "SNAPPY"
-                },
-                partitionKeys: [
-                    { name: "source_bucket", type: "string" }
-                ],
-                storageDescriptor: {
-                    location: `s3://${titanicBucket.bucketName}/merged/packages/`,
-                    inputFormat: "org.apache.iceberg.mr.hive.HiveIcebergInputFormat",
-                    outputFormat: "org.apache.iceberg.mr.hive.HiveIcebergOutputFormat",
-                    serdeInfo: {
-                        serializationLibrary: "org.apache.iceberg.mr.hive.HiveIcebergSerDe"
-                    },
-                    columns: [
-                        { name: "pkg_name", type: "string" },
-                        { name: "top_hash", type: "string" },
-                        { name: "timestamp", type: "string" },
-                        { name: "message", type: "string" },
-                        { name: "user_meta", type: "string" },
-                        { name: "source_bucket", type: "string" }
-                    ]
-                }
-            },
-        });
-
-        // Create Glue table for objects
-        new glue.CfnTable(this, "MergedObjectsTable", {
-            databaseName: props.quiltDatabaseName,
-            catalogId: this.account,
-            tableInput: {
-                name: "titanic_merged_objects",
-                tableType: "ICEBERG",
-                parameters: {
-                    "table_type": "ICEBERG",
-                    "format": "parquet",
-                    "write_target_data_file_size_bytes": "536870912",
-                    "write_compression": "SNAPPY"
-                },
-                partitionKeys: [
-                    { name: "source_bucket", type: "string" }
-                ],
-                storageDescriptor: {
-                    location: `s3://${titanicBucket.bucketName}/merged/objects/`,
-                    inputFormat: "org.apache.iceberg.mr.hive.HiveIcebergInputFormat",
-                    outputFormat: "org.apache.iceberg.mr.hive.HiveIcebergOutputFormat",
-                    serdeInfo: {
-                        serializationLibrary: "org.apache.iceberg.mr.hive.HiveIcebergSerDe"
-                    },
-                    columns: [
-                        { name: "pkg_name", type: "string" },
-                        { name: "top_hash", type: "string" },
-                        { name: "timestamp", type: "string" },
-                        { name: "logical_key", type: "string" },
-                        { name: "physical_key", type: "string" },
-                        { name: "size", type: "bigint" },
-                        { name: "hash", type: "struct<type:string,value:string>" },
-                        { name: "meta", type: "string" },
-                        { name: "source_bucket", type: "string" }
-                    ]
-                }
-            },
-        });
 
     }
 }
