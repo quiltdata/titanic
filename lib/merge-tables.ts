@@ -127,27 +127,27 @@ export async function handler(
       INSERT INTO "${databaseName}"."${table.Name?.includes('packages') ? 'titanic_merged_packages' : 'titanic_merged_objects'}"
       SELECT DISTINCT
         ${table.Name?.includes('packages') ? `
-        s."pkg_name",
-        s."top_hash",
-        s."timestamp",
-        s."message",
-        s."user_meta",
-        s."source_bucket"` : `
-        s."pkg_name",
-        s."top_hash",
-        s."timestamp",
-        s."logical_key",
-        s."physical_key",
-        s."size",
-        s."hash",
-        s."meta",
-        s."source_bucket"`}
+        s.pkg_name,
+        s.top_hash,
+        s.timestamp,
+        s.message,
+        s.user_meta,
+        s.source_bucket` : `
+        s.pkg_name,
+        s.top_hash,
+        s.timestamp,
+        s.logical_key,
+        s.physical_key,
+        s.size,
+        s.hash,
+        s.meta,
+        s.source_bucket`}
       FROM "${databaseName}"."${table.Name}" s
       LEFT JOIN "${databaseName}"."${table.Name?.includes('packages') ? 'titanic_merged_packages' : 'titanic_merged_objects'}" t
-      ON s."pkg_name" = t."pkg_name" 
-      AND s."top_hash" = t."top_hash"
-      AND s."source_bucket" = t."source_bucket"
-      WHERE t."pkg_name" IS NULL`;
+      ON s.pkg_name = t.pkg_name 
+      AND s.top_hash = t.top_hash
+      AND s.source_bucket = t.source_bucket
+      WHERE t.pkg_name IS NULL`;
 
             console.log(
                 "Generated merge query for table",
@@ -216,7 +216,7 @@ export async function handler(
                 CAST(NULL AS VARCHAR) as timestamp,
                 CAST(NULL AS VARCHAR) as message,
                 CAST(NULL AS VARCHAR) as user_meta,
-                CAST(NULL AS VARCHAR) as source_bucket
+                CAST(NULL AS VARCHAR) as source_bucket,
             WHERE false
         `;
 
@@ -236,9 +236,9 @@ export async function handler(
                 CAST(NULL AS VARCHAR) as logical_key,
                 CAST(NULL AS VARCHAR) as physical_key,
                 CAST(NULL AS BIGINT) as size,
-                CAST(NULL AS STRUCT<type:VARCHAR,value:VARCHAR>) as hash,
+                CAST(NULL AS ROW(type VARCHAR, value VARCHAR)) as hash,
                 CAST(NULL AS VARCHAR) as meta,
-                CAST(NULL AS VARCHAR) as source_bucket
+                CAST(NULL AS VARCHAR) as source_bucket,
             WHERE false
         `;
 
