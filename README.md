@@ -100,6 +100,37 @@ LIMIT 10;
 - AWS CLI configured
 - AWS CDK CLI (`npm install -g aws-cdk`)
 
+### Environment Configuration
+
+Before deploying or running the project, ensure you have configured the required environment variables. You can use the provided `example.env` file as a template. Copy it to `.env` and update the values as needed:
+
+```bash
+cp example.env .env
+```
+
+Edit the `.env` file to include your specific configuration:
+
+```env
+AWS_DEFAULT_REGION=us-east-2
+AWS_ACCESS_KEY_ID=your-access-key-id
+AWS_SECRET_ACCESS_KEY=your-secret-access-key
+CDK_DEFAULT_ACCOUNT=your-account-id
+CDK_DEFAULT_REGION=$AWS_DEFAULT_REGION
+CDK_BOOTSTRAP=aws://$CDK_DEFAULT_ACCOUNT/$CDK_DEFAULT_REGION
+CDK_DEFAULT_EMAIL=your-email@example.com
+QUEUE_NAME=YourQueueName
+QUEUE_URL=https://sqs.$AWS_DEFAULT_REGION.amazonaws.com/$CDK_DEFAULT_ACCOUNT/$QUEUE_NAME
+QUILT_CATALOG_DOMAIN=your-catalog-domain
+QUILT_DATABASE_NAME=your-database-name
+QUILT_READ_POLICY_ARN=arn:aws:iam::your-account-id:policy/your-policy-name
+```
+
+Load the environment variables into your shell session before running commands:
+
+```bash
+source .env
+```
+
 ### Quick Start
 
 1. Install dependencies:
