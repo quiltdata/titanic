@@ -24,6 +24,7 @@
     "typescript": "~5.8.0"
   },
   "dependencies": {
+    "@aws-cdk/aws-lambda-event-sources": "^1.203.0",
     "@aws-sdk/client-athena": "^3.787.0",
     "@aws-sdk/client-glue": "^3.787.0",
     "aws-cdk-lib": "2.189.0",
