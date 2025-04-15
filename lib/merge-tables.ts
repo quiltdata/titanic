@@ -120,7 +120,7 @@ export async function handler(
 
         // First check if merged table exists
         const createIfNotExistsQuery = `
-      CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_table"
+      CREATE EXTERNAL TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_table"
       WITH (
         external_location = 's3://${targetBucket}/merged/',
         format = 'PARQUET',
