@@ -87,12 +87,12 @@ describe('merge-tables lambda', () => {
     glueMock.on(GetTablesCommand).resolves({
       TableList: [
         {
-          Name: 'packages_all_quilt-bake',
-          StorageDescriptor: { Location: 's3://bucket/packages_all' }
+          Name: 'bucket1_objects-view',
+          StorageDescriptor: { Location: 's3://bucket1/objects' }
         },
         {
-          Name: 'objects_all_quilt-bake',
-          StorageDescriptor: { Location: 's3://bucket/objects_all' }
+          Name: 'bucket2_objects-view',
+          StorageDescriptor: { Location: 's3://bucket2/objects' }
         }
       ]
     });
@@ -141,15 +141,15 @@ describe('merge-tables lambda', () => {
       glueMock.on(GetTablesCommand).resolves({
         TableList: [
           {
-            Name: 'packages_all_test',
-            StorageDescriptor: { Location: 's3://bucket/packages_all' }
+            Name: 'test_objects-view',
+            StorageDescriptor: { Location: 's3://test/objects' }
           },
           {
-            Name: 'packages_all_prod',
-            StorageDescriptor: { Location: 's3://bucket/packages_all' }
+            Name: 'prod_objects-view',
+            StorageDescriptor: { Location: 's3://prod/objects' }
           },
           {
-            Name: 'objects_all_test',
+            Name: 'dev_objects-view',
             StorageDescriptor: { Location: 's3://bucket/objects_all' }
           }
         ]
@@ -189,7 +189,7 @@ describe('merge-tables lambda', () => {
       const result = await handler(sqsEvent, {} as Context);
       expect(result).toEqual({
         message: 'Merge queries started successfully',
-        numTables: 2 // Should find both packages_all_test and objects_all_test
+        numTables: 1 // Should find test_objects-view
       });
     });
 
