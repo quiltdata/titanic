@@ -42,11 +42,12 @@ describe('TitanicStack', () => {
     });
   });
 
-  it('should pass DEBUG_BUCKET to Lambda when provided', () => {
+  it('should pass environment variables to Lambda when provided', () => {
     const debugApp = new cdk.App();
     const debugStack = new TitanicStack(debugApp, 'DebugStack', {
       quiltDatabaseName: 'test-database',
-      debugBucket: 'quilt-bake'
+      debugBucket: 'quilt-bake',
+      lambdaTimeout: 10000
     });
     const debugTemplate = Template.fromStack(debugStack);
 
@@ -54,7 +55,8 @@ describe('TitanicStack', () => {
       Environment: {
         Variables: {
           DATABASE_NAME: 'test-database',
-          DEBUG_BUCKET: 'quilt-bake'
+          DEBUG_BUCKET: 'quilt-bake',
+          LAMBDA_TIMEOUT: '10000'
         }
       }
     });

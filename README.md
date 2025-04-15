@@ -28,6 +28,7 @@ npm install
 
 ```bash
 export QUILT_DATABASE_NAME=your_database_name  # Default: userathenadatabase
+export QUILT_LAMBDA_TIMEOUT=10000             # Default: 5000 (milliseconds)
 export CDK_DEFAULT_ACCOUNT=your_aws_account_id
 export CDK_DEFAULT_REGION=your_aws_region
 ```
