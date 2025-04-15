@@ -40,27 +40,32 @@ describe("TitanicStack", () => {
     });
 
     test("creates Lambda with required Athena permissions", () => {
-        template.hasResourceProperties("AWS::IAM::Policy", {
-            PolicyDocument: {
-                Statement: expect.arrayContaining([
-                    expect.objectContaining({
-                        Action: [
-                            "athena:StartQueryExecution",
-                            "athena:GetQueryExecution",
-                            "athena:GetWorkGroup",
-                            "athena:BatchGetQueryExecution"
-                        ],
-                        Effect: "Allow",
-                        Resource: {
-                            "Fn::Join": ["", ["arn:aws:athena:", {"Ref": "AWS::Region"}, ":", {"Ref": "AWS::AccountId"}, ":workgroup/primary"]]
-                        }
-                    }),
-                    expect.objectContaining({
-                        Action: ["s3:GetBucketLocation"],
-                        Effect: "Allow"
-                    })
-                ])
-            }
-        });
+        const policies = template.findResources("AWS::IAM::Policy");
+        const policy = Object.values(policies)[0];
+        const statements = policy.Properties.PolicyDocument.Statement;
+        
+        // Check Athena permissions
+        expect(statements).toContainEqual(
+            expect.objectContaining({
+                Action: [
+                    "athena:StartQueryExecution",
+                    "athena:GetQueryExecution",
+                    "athena:GetWorkGroup",
+                    "athena:BatchGetQueryExecution"
+                ],
+                Effect: "Allow",
+                Resource: {
+                    "Fn::Join": ["", ["arn:aws:athena:", {"Ref": "AWS::Region"}, ":", {"Ref": "AWS::AccountId"}, ":workgroup/primary"]]
+                }
+            })
+        );
+
+        // Check S3 bucket location permission
+        expect(statements).toContainEqual(
+            expect.objectContaining({
+                Action: "s3:GetBucketLocation",
+                Effect: "Allow"
+            })
+        );
     });
 });

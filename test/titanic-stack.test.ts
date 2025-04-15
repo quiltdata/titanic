@@ -37,8 +37,8 @@ describe("TitanicStack", () => {
         expect(policyDoc.Statement).toContainEqual(
             expect.objectContaining({
                 Effect: "Allow",
-                Action: ["glue:GetTables", "glue:GetTable", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable"],
-                Resource: expect.arrayContaining([
+                Action: ["glue:GetTables", "glue:GetTable", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
+                Resource: [
                     expect.objectContaining({
                         "Fn::Join": ["", expect.arrayContaining([":catalog"])]
                     }),
@@ -48,7 +48,7 @@ describe("TitanicStack", () => {
                     expect.objectContaining({
                         "Fn::Join": ["", expect.arrayContaining([":table/test-database/*"])]
                     })
-                ])
+                ]
             })
         );
     });
