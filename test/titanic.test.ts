@@ -11,7 +11,7 @@ describe('TitanicStack', () => {
 
   test('creates SQS queue with correct settings', () => {
     template.hasResourceProperties('AWS::SQS::Queue', {
-      VisibilityTimeout: 300,
+      VisibilityTimeout: 900,
       MessageRetentionPeriod: 1209600 // 14 days in seconds
     });
   });
