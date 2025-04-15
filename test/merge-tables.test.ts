@@ -21,12 +21,8 @@ describe('merge-tables lambda', () => {
 
   it('should throw error if environment variables are missing', async () => {
     delete process.env.DATABASE_NAME;
-    const mockEvent = {
-      RequestType: 'Create' as const,
-      ResponseURL: 'https://test.com',
-      StackId: 'test-stack',
-      RequestId: 'test-request',
-      LogicalResourceId: 'test-resource'
+    const mockEvent: SQSEvent = {
+      Records: []
     };
     await expect(handler(mockEvent, {} as Context)).rejects.toThrow(
       'Missing required environment variables'
@@ -62,12 +58,23 @@ describe('merge-tables lambda', () => {
       }
     });
 
-    const mockEvent = {
-      RequestType: 'Create' as const,
-      ResponseURL: 'https://test.com',
-      StackId: 'test-stack',
-      RequestId: 'test-request',
-      LogicalResourceId: 'test-resource'
+    const mockEvent: SQSEvent = {
+      Records: [{
+        messageId: '1',
+        receiptHandle: 'handle',
+        body: '{}',
+        attributes: {
+          ApproximateReceiveCount: '1',
+          SentTimestamp: '1',
+          SenderId: 'sender',
+          ApproximateFirstReceiveTimestamp: '1'
+        },
+        messageAttributes: {},
+        md5OfBody: 'md5',
+        eventSource: 'aws:sqs',
+        eventSourceARN: 'arn:aws:sqs:region:account:queue',
+        awsRegion: 'region'
+      }]
     };
     const result = await handler(mockEvent, {} as Context);
     expect(result).toEqual({

@@ -30,7 +30,7 @@ describe('TitanicStack', () => {
       BatchSize: 1,
       EventSourceArn: {
         'Fn::GetAtt': [
-          template.findResources('AWS::SQS::Queue')['MergeQueue'].logicalId,
+          Object.keys(template.findResources('AWS::SQS::Queue'))[0],
           'Arn'
         ]
       }
