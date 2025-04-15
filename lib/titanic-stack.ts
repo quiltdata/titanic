@@ -12,6 +12,7 @@ import * as path from "path";
 export interface TitanicStackProps extends cdk.StackProps {
     quiltDatabaseName: string;
     lambdaTimeout?: number;
+    quiltReadPolicyArn: string;
 }
 
 export class TitanicStack extends cdk.Stack {
@@ -52,13 +53,14 @@ export class TitanicStack extends cdk.Stack {
                 TARGET_BUCKET: titanicBucket.bucketName,
                 LAMBDA_TIMEOUT: (props.lambdaTimeout || 5000).toString(),
                 QUEUE_URL: mergeQueue.queueUrl,
+                QUILT_READ_POLICY_ARN: props.quiltReadPolicyArn,
             },
         });
 
         // Grant Lambda permissions
         mergeLambda.addToRolePolicy(
             new iam.PolicyStatement({
-                actions: ["glue:GetTables", "glue:GetTable", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable"],
+                actions: ["glue:GetTables", "glue:GetTable", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
                 resources: [
                     `arn:aws:glue:${this.region}:${this.account}:catalog`,
                     `arn:aws:glue:${this.region}:${this.account}:database/${props.quiltDatabaseName}`,
@@ -72,6 +74,8 @@ export class TitanicStack extends cdk.Stack {
                 actions: [
                     "athena:StartQueryExecution",
                     "athena:GetQueryExecution",
+                    "athena:GetWorkGroup",
+                    "athena:BatchGetQueryExecution"
                 ],
                 resources: [
                     `arn:aws:athena:${this.region}:${this.account}:workgroup/primary`,
@@ -79,8 +83,25 @@ export class TitanicStack extends cdk.Stack {
             }),
         );
 
+        // Add explicit S3 bucket location permission
+        mergeLambda.addToRolePolicy(
+            new iam.PolicyStatement({
+                actions: ["s3:GetBucketLocation"],
+                resources: [titanicBucket.bucketArn],
+            }),
+        );
+
         titanicBucket.grantReadWrite(mergeLambda);
         mergeQueue.grantConsumeMessages(mergeLambda);
+
+        // Grant read access to source buckets via the provided policy
+        mergeLambda.role?.addManagedPolicy(
+            iam.ManagedPolicy.fromManagedPolicyArn(
+                this,
+                "QuiltReadPolicy",
+                props.quiltReadPolicyArn
+            )
+        );
 
 
     }

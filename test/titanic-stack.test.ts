@@ -6,6 +6,7 @@ describe("TitanicStack", () => {
     const app = new cdk.App();
     const stack = new TitanicStack(app, "TestStack", {
         quiltDatabaseName: "test-database",
+        quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
     });
     const template = Template.fromStack(stack);
 
@@ -21,6 +22,7 @@ describe("TitanicStack", () => {
             Environment: {
                 Variables: {
                     DATABASE_NAME: "test-database",
+                    QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
                 },
             },
         });
@@ -55,6 +57,7 @@ describe("TitanicStack", () => {
         const debugApp = new cdk.App();
         const debugStack = new TitanicStack(debugApp, "DebugStack", {
             quiltDatabaseName: "test-database",
+            quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
             lambdaTimeout: 10000,
         });
         const debugTemplate = Template.fromStack(debugStack);

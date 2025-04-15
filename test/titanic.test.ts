@@ -6,6 +6,7 @@ describe("TitanicStack", () => {
     const app = new cdk.App();
     const stack = new TitanicStack(app, "MyTestStack", {
         quiltDatabaseName: "test-database",
+        quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
     });
     const template = Template.fromStack(stack);
 
@@ -22,6 +23,7 @@ describe("TitanicStack", () => {
                 Variables: {
                     DATABASE_NAME: "test-database",
                     LAMBDA_TIMEOUT: "5000",
+                    QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
                 },
             },
         });
@@ -34,6 +36,31 @@ describe("TitanicStack", () => {
                     "Arn",
                 ],
             },
+        });
+    });
+
+    test("creates Lambda with required Athena permissions", () => {
+        template.hasResourceProperties("AWS::IAM::Policy", {
+            PolicyDocument: {
+                Statement: expect.arrayContaining([
+                    expect.objectContaining({
+                        Action: [
+                            "athena:StartQueryExecution",
+                            "athena:GetQueryExecution",
+                            "athena:GetWorkGroup",
+                            "athena:BatchGetQueryExecution"
+                        ],
+                        Effect: "Allow",
+                        Resource: {
+                            "Fn::Join": ["", ["arn:aws:athena:", {"Ref": "AWS::Region"}, ":", {"Ref": "AWS::AccountId"}, ":workgroup/primary"]]
+                        }
+                    }),
+                    expect.objectContaining({
+                        Action: ["s3:GetBucketLocation"],
+                        Effect: "Allow"
+                    })
+                ])
+            }
         });
     });
 });
