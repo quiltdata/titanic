@@ -136,51 +136,109 @@ describe('merge-tables lambda', () => {
   });
 
 
-  it('should handle SQS events with table prefix', async () => {
-    glueMock.on(GetTablesCommand).resolves({
-      TableList: [
-        {
-          Name: 'packages_all_test',
-          StorageDescriptor: { Location: 's3://bucket/packages_all' }
+  describe('table prefix filtering', () => {
+    it('should handle SQS events with table prefix', async () => {
+      glueMock.on(GetTablesCommand).resolves({
+        TableList: [
+          {
+            Name: 'packages_all_test',
+            StorageDescriptor: { Location: 's3://bucket/packages_all' }
+          },
+          {
+            Name: 'packages_all_prod',
+            StorageDescriptor: { Location: 's3://bucket/packages_all' }
+          },
+          {
+            Name: 'objects_all_test',
+            StorageDescriptor: { Location: 's3://bucket/objects_all' }
+          }
+        ]
+      });
+
+      athenaMock.on(StartQueryExecutionCommand).resolves({
+        QueryExecutionId: 'test-query-id'
+      });
+
+      athenaMock.on(GetQueryExecutionCommand).resolves({
+        QueryExecution: {
+          Status: {
+            State: QueryExecutionState.SUCCEEDED
+          }
         }
-      ]
+      });
+
+      const sqsEvent: SQSEvent = {
+        Records: [{
+          messageId: '1',
+          receiptHandle: 'handle',
+          body: JSON.stringify({ table_prefix: 'test' }),
+          attributes: {
+            ApproximateReceiveCount: '1',
+            SentTimestamp: '1',
+            SenderId: 'sender',
+            ApproximateFirstReceiveTimestamp: '1'
+          },
+          messageAttributes: {},
+          md5OfBody: 'md5',
+          eventSource: 'aws:sqs',
+          eventSourceARN: 'arn:aws:sqs:region:account:queue',
+          awsRegion: 'region'
+        }]
+      };
+
+      const result = await handler(sqsEvent, {} as Context);
+      expect(result).toEqual({
+        message: 'Merge queries started successfully',
+        numTables: 2 // Should find both packages_all_test and objects_all_test
+      });
     });
 
-    athenaMock.on(StartQueryExecutionCommand).resolves({
-      QueryExecutionId: 'test-query-id'
-    });
+    it('should handle invalid table prefix gracefully', async () => {
+      glueMock.on(GetTablesCommand).resolves({
+        TableList: [
+          {
+            Name: 'packages_all_prod',
+            StorageDescriptor: { Location: 's3://bucket/packages_all' }
+          }
+        ]
+      });
 
-    athenaMock.on(GetQueryExecutionCommand).resolves({
-      QueryExecution: {
-        Status: {
-          State: QueryExecutionState.SUCCEEDED
+      athenaMock.on(StartQueryExecutionCommand).resolves({
+        QueryExecutionId: 'test-query-id'
+      });
+
+      athenaMock.on(GetQueryExecutionCommand).resolves({
+        QueryExecution: {
+          Status: {
+            State: QueryExecutionState.SUCCEEDED
+          }
         }
-      }
-    });
+      });
 
-    const sqsEvent: SQSEvent = {
-      Records: [{
-        messageId: '1',
-        receiptHandle: 'handle',
-        body: JSON.stringify({ table_prefix: 'test' }),
-        attributes: {
-          ApproximateReceiveCount: '1',
-          SentTimestamp: '1',
-          SenderId: 'sender',
-          ApproximateFirstReceiveTimestamp: '1'
-        },
-        messageAttributes: {},
-        md5OfBody: 'md5',
-        eventSource: 'aws:sqs',
-        eventSourceARN: 'arn:aws:sqs:region:account:queue',
-        awsRegion: 'region'
-      }]
-    };
+      const sqsEvent: SQSEvent = {
+        Records: [{
+          messageId: '1',
+          receiptHandle: 'handle',
+          body: JSON.stringify({ table_prefix: 'nonexistent' }),
+          attributes: {
+            ApproximateReceiveCount: '1',
+            SentTimestamp: '1',
+            SenderId: 'sender',
+            ApproximateFirstReceiveTimestamp: '1'
+          },
+          messageAttributes: {},
+          md5OfBody: 'md5',
+          eventSource: 'aws:sqs',
+          eventSourceARN: 'arn:aws:sqs:region:account:queue',
+          awsRegion: 'region'
+        }]
+      };
 
-    const result = await handler(sqsEvent, {} as Context);
-    expect(result).toEqual({
-      message: 'Merge queries started successfully',
-      numTables: 1
+      const result = await handler(sqsEvent, {} as Context);
+      expect(result).toEqual({
+        message: 'Created merged table (no source tables found)',
+        numTables: 0
+      });
     });
   });
 
