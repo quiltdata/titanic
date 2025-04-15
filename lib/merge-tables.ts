@@ -51,6 +51,8 @@ async function waitForQueryCompletion(
     }
 }
 
+const sourceBucketFromTableName = (name: string) => name.replace(/_(objects|packages)-view$/, "");
+
 type HandlerResponse = {
     message: string;
     numTables: number;
@@ -132,7 +134,7 @@ export async function handler(
         s.timestamp,
         s.message,
         s.user_meta,
-        s.source_bucket` : `
+        '${sourceBucketFromTableName(table.Name!)}' AS source_bucket` : `
         s.pkg_name,
         s.top_hash,
         s.timestamp,
@@ -141,12 +143,12 @@ export async function handler(
         s.size,
         s.hash,
         s.meta,
-        s.source_bucket`}
+        '${sourceBucketFromTableName(table.Name!)}' AS source_bucket`}
       FROM "${databaseName}"."${table.Name}" s
       LEFT JOIN "${databaseName}"."${table.Name?.includes('packages') ? 'titanic_merged_packages' : 'titanic_merged_objects'}" t
       ON s.pkg_name = t.pkg_name 
       AND s.top_hash = t.top_hash
-      AND s.source_bucket = t.source_bucket
+      AND '${sourceBucketFromTableName(table.Name!)}' = t.source_bucket
       WHERE t.pkg_name IS NULL`;
 
             console.log(
