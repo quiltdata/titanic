@@ -39,20 +39,32 @@ describe("merge-tables lambda", () => {
             TableList: [],
         });
 
-        // Mock successful table creation
+        // Mock successful table cleanup and creation
         athenaMock
             .on(StartQueryExecutionCommand)
+            .resolvesOnce({ QueryExecutionId: "cleanup-packages-id" })
+            .resolvesOnce({ QueryExecutionId: "cleanup-objects-id" })
             .resolvesOnce({ QueryExecutionId: "create-packages-id" })
             .resolvesOnce({ QueryExecutionId: "create-objects-id" });
 
         athenaMock
             .on(GetQueryExecutionCommand)
-            .resolvesOnce({
+            .resolvesOnce({ // cleanup packages
                 QueryExecution: {
                     Status: { State: QueryExecutionState.SUCCEEDED },
                 },
             })
-            .resolvesOnce({
+            .resolvesOnce({ // cleanup objects
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
+                },
+            })
+            .resolvesOnce({ // create packages
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
+                },
+            })
+            .resolvesOnce({ // create objects
                 QueryExecution: {
                     Status: { State: QueryExecutionState.SUCCEEDED },
                 },
