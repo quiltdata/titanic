@@ -4,6 +4,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as glue from 'aws-cdk-lib/aws-glue';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import * as path from 'path';
 
@@ -22,8 +23,19 @@ export class TitanicStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
+    // Create SQS queue
+    const mergeQueue = new sqs.Queue(this, 'MergeQueue', {
+      visibilityTimeout: cdk.Duration.seconds(300),
+      retentionPeriod: cdk.Duration.days(14)
+    });
+
     // Create merge tables Lambda
     const mergeLambda = new lambda.NodejsFunction(this, 'MergeTables', {
+      events: [
+        new lambda.SqsEventSource(mergeQueue, {
+          batchSize: 1
+        })
+      ],
       entry: path.join(__dirname, 'merge-tables.ts'),
       handler: 'handler',
       runtime: Runtime.NODEJS_18_X,
@@ -36,7 +48,8 @@ export class TitanicStack extends cdk.Stack {
       environment: {
         DATABASE_NAME: props.quiltDatabaseName,
         TARGET_BUCKET: titanicBucket.bucketName,
-        LAMBDA_TIMEOUT: (props.lambdaTimeout || 5000).toString()
+        LAMBDA_TIMEOUT: (props.lambdaTimeout || 5000).toString(),
+        QUEUE_URL: mergeQueue.queueUrl
       },
     });
 
@@ -54,6 +67,7 @@ export class TitanicStack extends cdk.Stack {
     }));
 
     titanicBucket.grantReadWrite(mergeLambda);
+    mergeQueue.grantConsumeMessages(mergeLambda);
 
     // Create Glue table for Athena
     new glue.CfnTable(this, 'MergedTable', {
