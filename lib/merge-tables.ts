@@ -158,6 +158,48 @@ export async function handler(
             return query;
         });
 
+        // Clean up existing data and create tables
+        const cleanupPackagesQuery = `
+            DELETE FROM "${databaseName}"."titanic_merged_packages"
+            WHERE true`;
+
+        const cleanupObjectsQuery = `
+            DELETE FROM "${databaseName}"."titanic_merged_objects"
+            WHERE true`;
+
+        // Try to clean up existing data first
+        try {
+            const cleanupPackagesResponse = await athenaClient.send(
+                new StartQueryExecutionCommand({
+                    QueryString: cleanupPackagesQuery,
+                    ResultConfiguration: {
+                        OutputLocation: `s3://${targetBucket}/athena-results/`,
+                    },
+                }),
+            );
+            if (cleanupPackagesResponse.QueryExecutionId) {
+                await waitForQueryCompletion(cleanupPackagesResponse.QueryExecutionId);
+            }
+        } catch (e) {
+            console.log("No existing packages table to clean up");
+        }
+
+        try {
+            const cleanupObjectsResponse = await athenaClient.send(
+                new StartQueryExecutionCommand({
+                    QueryString: cleanupObjectsQuery,
+                    ResultConfiguration: {
+                        OutputLocation: `s3://${targetBucket}/athena-results/`,
+                    },
+                }),
+            );
+            if (cleanupObjectsResponse.QueryExecutionId) {
+                await waitForQueryCompletion(cleanupObjectsResponse.QueryExecutionId);
+            }
+        } catch (e) {
+            console.log("No existing objects table to clean up");
+        }
+
         // Create tables if they don't exist
         const createPackagesQuery = `
             CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_packages"
