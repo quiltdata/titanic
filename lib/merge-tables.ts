@@ -218,7 +218,7 @@ export async function handler(
                 CAST(NULL AS VARCHAR) as timestamp,
                 CAST(NULL AS VARCHAR) as message,
                 CAST(NULL AS VARCHAR) as user_meta,
-                CAST(NULL AS VARCHAR) as source_bucket,
+                CAST(NULL AS VARCHAR) as source_bucket
             WHERE false
         `;
 
@@ -240,7 +240,7 @@ export async function handler(
                 CAST(NULL AS BIGINT) as size,
                 CAST(NULL AS ROW(type VARCHAR, value VARCHAR)) as hash,
                 CAST(NULL AS VARCHAR) as meta,
-                CAST(NULL AS VARCHAR) as source_bucket,
+                CAST(NULL AS VARCHAR) as source_bucket
             WHERE false
         `;
 
