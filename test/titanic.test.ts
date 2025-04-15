@@ -1,17 +1,39 @@
-// import * as cdk from 'aws-cdk-lib';
-// import { Template } from 'aws-cdk-lib/assertions';
-// import * as Titanic from '../lib/titanic-stack';
+import * as cdk from 'aws-cdk-lib';
+import { Template } from 'aws-cdk-lib/assertions';
+import { TitanicStack } from '../lib/titanic-stack';
 
-// example test. To run these tests, uncomment this file along with the
-// example resource in lib/titanic-stack.ts
-test('SQS Queue Created', () => {
-//   const app = new cdk.App();
-//     // WHEN
-//   const stack = new Titanic.TitanicStack(app, 'MyTestStack');
-//     // THEN
-//   const template = Template.fromStack(stack);
+describe('TitanicStack', () => {
+  const app = new cdk.App();
+  const stack = new TitanicStack(app, 'MyTestStack', {
+    quiltDatabaseName: 'test-database'
+  });
+  const template = Template.fromStack(stack);
 
-//   template.hasResourceProperties('AWS::SQS::Queue', {
-//     VisibilityTimeout: 300
-//   });
+  test('creates SQS queue with correct settings', () => {
+    template.hasResourceProperties('AWS::SQS::Queue', {
+      VisibilityTimeout: 300,
+      MessageRetentionPeriod: 1209600 // 14 days in seconds
+    });
+  });
+
+  test('creates Lambda function with SQS trigger', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: {
+          DATABASE_NAME: 'test-database',
+          LAMBDA_TIMEOUT: '5000'
+        }
+      }
+    });
+
+    template.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
+      BatchSize: 1,
+      EventSourceArn: {
+        'Fn::GetAtt': [
+          template.findResources('AWS::SQS::Queue')['MergeQueue'].logicalId,
+          'Arn'
+        ]
+      }
+    });
+  });
 });

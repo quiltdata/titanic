@@ -1,19 +1,5 @@
-import { Context } from 'aws-lambda';
+import { Context, SQSEvent } from 'aws-lambda';
 import { mockClient } from 'aws-sdk-client-mock';
-import * as https from 'https';
-
-// Mock https.request
-jest.mock('https', () => {
-  const originalModule = jest.requireActual('https');
-  return {
-    ...originalModule,
-    request: jest.fn().mockImplementation((options, callback) => ({
-      on: jest.fn(),
-      write: jest.fn(),
-      end: jest.fn(),
-    }))
-  };
-});
 
 jest.setTimeout(30000); // Increase timeout to 30 seconds
 import { GlueClient, GetTablesCommand } from '@aws-sdk/client-glue';
@@ -132,17 +118,52 @@ describe('merge-tables lambda', () => {
   });
 
 
-  it('should handle CloudFormation DELETE events', async () => {
-    const event = {
-      RequestType: 'Delete' as const,
-      ResponseURL: 'https://cloudformation-custom-resource-response-useast1.s3.amazonaws.com/',
-      StackId: 'test-stack',
-      RequestId: 'test-request',
-      LogicalResourceId: 'TestResource'
+  it('should handle SQS events with table prefix', async () => {
+    glueMock.on(GetTablesCommand).resolves({
+      TableList: [
+        {
+          Name: 'packages_all_test',
+          StorageDescriptor: { Location: 's3://bucket/packages_all' }
+        }
+      ]
+    });
+
+    athenaMock.on(StartQueryExecutionCommand).resolves({
+      QueryExecutionId: 'test-query-id'
+    });
+
+    athenaMock.on(GetQueryExecutionCommand).resolves({
+      QueryExecution: {
+        Status: {
+          State: QueryExecutionState.SUCCEEDED
+        }
+      }
+    });
+
+    const sqsEvent: SQSEvent = {
+      Records: [{
+        messageId: '1',
+        receiptHandle: 'handle',
+        body: JSON.stringify({ table_prefix: 'test' }),
+        attributes: {
+          ApproximateReceiveCount: '1',
+          SentTimestamp: '1',
+          SenderId: 'sender',
+          ApproximateFirstReceiveTimestamp: '1'
+        },
+        messageAttributes: {},
+        md5OfBody: 'md5',
+        eventSource: 'aws:sqs',
+        eventSourceARN: 'arn:aws:sqs:region:account:queue',
+        awsRegion: 'region'
+      }]
     };
 
-    const result = await handler(event, {} as Context);
-    expect(result).toBeUndefined();
+    const result = await handler(sqsEvent, {} as Context);
+    expect(result).toEqual({
+      message: 'Merge queries started successfully',
+      numTables: 1
+    });
   });
 
   it('should respect custom timeout configuration', async () => {
