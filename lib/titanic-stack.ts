@@ -57,12 +57,6 @@ export class TitanicStack extends cdk.Stack {
 
     titanicBucket.grantReadWrite(mergeLambda);
 
-    // Allow CloudFormation to invoke the Lambda
-    mergeLambda.addPermission('AllowCloudFormationInvoke', {
-      principal: new iam.ServicePrincipal('cloudformation.amazonaws.com'),
-      action: 'lambda:InvokeFunction'
-    });
-
     // Create Glue table for Athena
     new glue.CfnTable(this, 'MergedTable', {
       databaseName: props.quiltDatabaseName,
@@ -146,12 +140,5 @@ export class TitanicStack extends cdk.Stack {
       },
     });
 
-    // Create Custom Resource to trigger table creation
-    new cdk.CustomResource(this, 'TriggerMergeTables', {
-      serviceToken: mergeLambda.functionArn,
-      properties: {
-        timestamp: Date.now(), // Force execution on each deployment
-      }
-    });
   }
 }
