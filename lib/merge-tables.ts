@@ -1,6 +1,4 @@
 import { Context } from 'aws-lambda';
-import * as https from 'https';
-import { URL } from 'url';
 import { GlueClient } from '@aws-sdk/client-glue';
 import { GetTablesCommand, GetTableCommand } from '@aws-sdk/client-glue';
 import { AthenaClient } from '@aws-sdk/client-athena';
@@ -17,79 +15,6 @@ const athenaClient = new AthenaClient({
   maxAttempts: 3
 });
 
-// CloudFormation custom resource event types
-type CloudFormationEvent = {
-  RequestType: 'Create' | 'Update' | 'Delete';
-  ResponseURL: string;
-  StackId: string;
-  RequestId: string;
-  LogicalResourceId: string;
-  PhysicalResourceId?: string;
-};
-
-async function sendCloudFormationResponse(
-  event: CloudFormationEvent,
-  status: 'SUCCESS' | 'FAILED',
-  reason?: string,
-  data?: any
-): Promise<void> {
-  const responseBody = JSON.stringify({
-    Status: status,
-    Reason: reason || 'See CloudWatch logs',
-    PhysicalResourceId: event.PhysicalResourceId || event.LogicalResourceId,
-    StackId: event.StackId,
-    RequestId: event.RequestId,
-    LogicalResourceId: event.LogicalResourceId,
-    Data: data
-  });
-
-  const parsedUrl = new URL(event.ResponseURL);
-  const options = {
-    hostname: parsedUrl.hostname,
-    port: 443,
-    path: parsedUrl.pathname + parsedUrl.search,
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': responseBody.length
-    }
-  };
-
-  // In test environment, just resolve immediately
-  if (process.env.NODE_ENV === 'test') {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve, reject) => {
-    const request = https.request(options, (response) => {
-      let responseData = '';
-      response.on('data', (chunk) => {
-        responseData += chunk;
-      });
-      response.on('end', () => {
-        console.log('CloudFormation response sent successfully');
-        resolve();
-      });
-    });
-
-    request.on('error', (error) => {
-      console.error('Failed to send CloudFormation response:', error);
-      reject(error);
-    });
-
-    // Add timeout to the request
-    const timeout = parseInt(process.env.LAMBDA_TIMEOUT || '5000');
-    request.setTimeout(timeout, () => {
-      request.destroy();
-      reject(new Error('Timeout sending CloudFormation response'));
-    });
-
-    // Write response body and end request
-    console.log('Sending CloudFormation response:', responseBody);
-    request.write(responseBody);
-    request.end();
-  });
-}
 
 async function waitForQueryCompletion(queryExecutionId: string, maxAttempts: number = 30): Promise<void> {
   let attempts = 0;
@@ -123,12 +48,7 @@ type HandlerResponse = {
   numTables: number;
 } | undefined;
 
-export async function handler(event: CloudFormationEvent & Record<string, any>, context: Context): Promise<HandlerResponse> {
-  // Handle DELETE events immediately
-  if (event.RequestType === 'Delete') {
-    await sendCloudFormationResponse(event, 'SUCCESS');
-    return;
-  }
+export async function handler(event: Record<string, any>, context: Context): Promise<HandlerResponse> {
   const databaseName = process.env.DATABASE_NAME;
   const targetBucket = process.env.TARGET_BUCKET;
 
@@ -248,7 +168,6 @@ export async function handler(event: CloudFormationEvent & Record<string, any>, 
       numTables: sourceTables.length
     };
 
-    await sendCloudFormationResponse(event, 'SUCCESS', undefined, response);
     return response;
   } catch (error) {
     const err = error as Error;
@@ -256,10 +175,8 @@ export async function handler(event: CloudFormationEvent & Record<string, any>, 
       error: err.message,
       stack: err.stack,
       databaseName,
-      targetBucket,
-      requestType: event.RequestType
+      targetBucket
     });
-    await sendCloudFormationResponse(event, 'FAILED', err.message);
     throw err;
   }
 }
