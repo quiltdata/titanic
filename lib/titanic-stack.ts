@@ -1,5 +1,6 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
+import * as dotenv from 'dotenv';
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as glue from "aws-cdk-lib/aws-glue";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -8,6 +9,8 @@ import * as sqs from "aws-cdk-lib/aws-sqs";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import * as path from "path";
+
+dotenv.config();
 
 export interface TitanicStackProps extends cdk.StackProps {
     quiltDatabaseName: string;
