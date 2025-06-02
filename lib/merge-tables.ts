@@ -126,7 +126,7 @@ export async function handler(
         // Build MERGE query for each source table
         const mergeQueries = sourceTables.map((table) => {
             const query = `
-      INSERT INTO "${databaseName}"."${table.Name?.includes('packages') ? 'titanic_merged_packages' : 'titanic_merged_objects'}"
+      INSERT INTO "${databaseName}"."${table.Name?.includes('packages-view') ? 'titanic_merged_packages' : 'titanic_merged_objects'}"
       SELECT DISTINCT
         ${table.Name?.includes('packages') ? `
         s.pkg_name,
@@ -145,7 +145,7 @@ export async function handler(
         s.meta,
         '${sourceBucketFromTableName(table.Name!)}' AS source_bucket`}
       FROM "${databaseName}"."${table.Name}" s
-      LEFT JOIN "${databaseName}"."${table.Name?.includes('packages') ? 'titanic_merged_packages' : 'titanic_merged_objects'}" t
+      LEFT JOIN "${databaseName}"."${table.Name?.includes('packages-view') ? 'titanic_merged_packages' : 'titanic_merged_objects'}" t
       ON s.pkg_name = t.pkg_name 
       AND s.top_hash = t.top_hash
       AND '${sourceBucketFromTableName(table.Name!)}' = t.source_bucket

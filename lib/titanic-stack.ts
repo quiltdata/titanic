@@ -54,7 +54,7 @@ export class TitanicStack extends cdk.Stack {
             environment: {
                 DATABASE_NAME: props.quiltDatabaseName,
                 TARGET_BUCKET: titanicBucket.bucketName,
-                LAMBDA_TIMEOUT: (props.lambdaTimeout || 5000).toString(),
+                LAMBDA_TIMEOUT: (props.lambdaTimeout || 15000).toString(),
                 QUEUE_URL: mergeQueue.queueUrl,
                 QUILT_READ_POLICY_ARN: props.quiltReadPolicyArn,
             },
@@ -63,7 +63,7 @@ export class TitanicStack extends cdk.Stack {
         // Grant Lambda permissions
         mergeLambda.addToRolePolicy(
             new iam.PolicyStatement({
-                actions: ["glue:GetTables", "glue:GetTable", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
+                actions: ["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
                 resources: [
                     `arn:aws:glue:${this.region}:${this.account}:catalog`,
                     `arn:aws:glue:${this.region}:${this.account}:database/${props.quiltDatabaseName}`,
