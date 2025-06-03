@@ -78,17 +78,24 @@ export async function handler(
     try {
         // Get all tables in the database
         console.log("Fetching tables from Glue database:", databaseName);
-        const tablesResponse = await glueClient.send(
-            new GetTablesCommand({
-                DatabaseName: databaseName,
-            }),
-        );
+        let allTables = [];
+        let nextToken = undefined;
 
-        if (!tablesResponse.TableList) {
-            throw new Error(
-                `Unable to list tables in database ${databaseName}`,
+        do {
+            const tablesResponse = await glueClient.send(
+                new GetTablesCommand({
+                    DatabaseName: databaseName,
+                    NextToken: nextToken,
+                })
             );
-        }
+            if (!tablesResponse.TableList) {
+                throw new Error(
+                    `Unable to list tables in database ${databaseName}`,
+                );
+            }
+            allTables.push(...tablesResponse.TableList);
+            nextToken = tablesResponse.NextToken;
+        } while (nextToken);
 
         // Get table_prefix from SQS message if present
         const messageBody = event.Records?.[0]?.body;
@@ -107,7 +114,7 @@ export async function handler(
         }
 
         // Filter for source tables (excluding the merged table)
-        const sourceTables = tablesResponse.TableList?.filter((table) => {
+        const sourceTables = allTables?.filter((table) => {
             console.log("Checking table:", table.Name);
             if (!table.Name) return false;
 
