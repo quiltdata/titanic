@@ -22,7 +22,7 @@ describe("TitanicStack", () => {
             Environment: {
                 Variables: {
                     DATABASE_NAME: "test-database",
-                    LAMBDA_TIMEOUT: "5000",
+                    LAMBDA_TIMEOUT: "15000",
                     QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
                 },
             },

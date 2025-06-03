@@ -1,6 +1,7 @@
 import { Context, SQSEvent } from "aws-lambda";
 import { GlueClient } from "@aws-sdk/client-glue";
 import { GetTableCommand, GetTablesCommand } from "@aws-sdk/client-glue";
+import { GetTablesCommandOutput } from "@aws-sdk/client-glue";
 import { AthenaClient } from "@aws-sdk/client-athena";
 import {
     GetQueryExecutionCommand,
@@ -82,7 +83,7 @@ export async function handler(
         let nextToken = undefined;
 
         do {
-            const tablesResponse = await glueClient.send(
+            const tablesResponse: GetTablesCommandOutput = await glueClient.send(
                 new GetTablesCommand({
                     DatabaseName: databaseName,
                     NextToken: nextToken,

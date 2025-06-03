@@ -37,6 +37,7 @@ describe("merge-tables lambda", () => {
     it("should handle empty table list gracefully", async () => {
         glueMock.on(GetTablesCommand).resolves({
             TableList: [],
+            NextToken: undefined,
         });
 
         // Mock successful table cleanup and creation
@@ -107,6 +108,7 @@ describe("merge-tables lambda", () => {
                     StorageDescriptor: { Location: "s3://bucket2/objects" },
                 },
             ],
+            NextToken: undefined,
         });
 
         athenaMock.on(StartQueryExecutionCommand).resolves({
@@ -166,6 +168,7 @@ describe("merge-tables lambda", () => {
                         },
                     },
                 ],
+                NextToken: undefined,
             });
 
             athenaMock.on(StartQueryExecutionCommand).resolves({
@@ -216,6 +219,7 @@ describe("merge-tables lambda", () => {
                         },
                     },
                 ],
+                NextToken: undefined,
             });
 
             athenaMock.on(StartQueryExecutionCommand).resolves({
@@ -262,6 +266,7 @@ describe("merge-tables lambda", () => {
 
         glueMock.on(GetTablesCommand).resolves({
             TableList: [],
+            NextToken: undefined,
         });
 
         athenaMock.on(StartQueryExecutionCommand).resolves({
@@ -307,6 +312,7 @@ describe("merge-tables lambda", () => {
                     StorageDescriptor: { Location: "s3://bucket/table1" },
                 },
             ],
+            NextToken: undefined,
         });
 
         // Mock Athena failure response
