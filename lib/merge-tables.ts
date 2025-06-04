@@ -1,6 +1,7 @@
 import { Context, SQSEvent } from "aws-lambda";
 import { GlueClient } from "@aws-sdk/client-glue";
 import { GetTableCommand, GetTablesCommand } from "@aws-sdk/client-glue";
+import { GetTablesCommandOutput } from "@aws-sdk/client-glue";
 import { AthenaClient } from "@aws-sdk/client-athena";
 import {
     GetQueryExecutionCommand,
@@ -78,17 +79,24 @@ export async function handler(
     try {
         // Get all tables in the database
         console.log("Fetching tables from Glue database:", databaseName);
-        const tablesResponse = await glueClient.send(
-            new GetTablesCommand({
-                DatabaseName: databaseName,
-            }),
-        );
+        let allTables = [];
+        let nextToken = undefined;
 
-        if (!tablesResponse.TableList) {
-            throw new Error(
-                `Unable to list tables in database ${databaseName}`,
+        do {
+            const tablesResponse: GetTablesCommandOutput = await glueClient.send(
+                new GetTablesCommand({
+                    DatabaseName: databaseName,
+                    NextToken: nextToken,
+                })
             );
-        }
+            if (!tablesResponse.TableList) {
+                throw new Error(
+                    `Unable to list tables in database ${databaseName}`,
+                );
+            }
+            allTables.push(...tablesResponse.TableList);
+            nextToken = tablesResponse.NextToken;
+        } while (nextToken);
 
         // Get table_prefix from SQS message if present
         const messageBody = event.Records?.[0]?.body;
@@ -107,7 +115,7 @@ export async function handler(
         }
 
         // Filter for source tables (excluding the merged table)
-        const sourceTables = tablesResponse.TableList?.filter((table) => {
+        const sourceTables = allTables?.filter((table) => {
             console.log("Checking table:", table.Name);
             if (!table.Name) return false;
 
@@ -126,7 +134,7 @@ export async function handler(
         // Build MERGE query for each source table
         const mergeQueries = sourceTables.map((table) => {
             const query = `
-      INSERT INTO "${databaseName}"."${table.Name?.includes('packages') ? 'titanic_merged_packages' : 'titanic_merged_objects'}"
+      INSERT INTO "${databaseName}"."${table.Name?.includes('packages-view') ? 'titanic_merged_packages' : 'titanic_merged_objects'}"
       SELECT DISTINCT
         ${table.Name?.includes('packages') ? `
         s.pkg_name,
@@ -145,7 +153,7 @@ export async function handler(
         s.meta,
         '${sourceBucketFromTableName(table.Name!)}' AS source_bucket`}
       FROM "${databaseName}"."${table.Name}" s
-      LEFT JOIN "${databaseName}"."${table.Name?.includes('packages') ? 'titanic_merged_packages' : 'titanic_merged_objects'}" t
+      LEFT JOIN "${databaseName}"."${table.Name?.includes('packages-view') ? 'titanic_merged_packages' : 'titanic_merged_objects'}" t
       ON s.pkg_name = t.pkg_name 
       AND s.top_hash = t.top_hash
       AND '${sourceBucketFromTableName(table.Name!)}' = t.source_bucket
