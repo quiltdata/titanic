@@ -175,11 +175,8 @@ export async function handler(
                 pkg_name VARCHAR,
                 top_hash VARCHAR,
                 timestamp VARCHAR,
-                logical_key VARCHAR,
-                physical_key VARCHAR,
-                size BIGINT,
-                hash ROW(type VARCHAR, value VARCHAR),
-                meta VARCHAR,
+                message VARCHAR,
+                user_meta VARCHAR,
                 source_bucket VARCHAR
             )
             WITH (
@@ -194,13 +191,14 @@ export async function handler(
         const createObjectsBaseTableQuery = `
             CREATE TABLE IF NOT EXISTS "${databaseName}"."objects"
             (
+                pkg_name VARCHAR,
+                top_hash VARCHAR,
+                timestamp VARCHAR,
                 logical_key VARCHAR,
                 physical_key VARCHAR,
                 size BIGINT,
                 hash ROW(type VARCHAR, value VARCHAR),
                 meta VARCHAR,
-                timestamp VARCHAR,
-                version_id VARCHAR,
                 source_bucket VARCHAR
             )
             WITH (
