@@ -2,6 +2,7 @@ import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as dotenv from 'dotenv';
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as s3express from "aws-cdk-lib/aws-s3express";
 import * as glue from "aws-cdk-lib/aws-glue";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
@@ -16,16 +17,19 @@ export interface TitanicStackProps extends cdk.StackProps {
     quiltDatabaseName: string;
     lambdaTimeout?: number;
     quiltReadPolicyArn: string;
+    availabilityZone?: string;
 }
 
 export class TitanicStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props: TitanicStackProps) {
         super(scope, id, props);
 
-        // Create the Titanic bucket
-        const titanicBucket = new s3.Bucket(this, "TitanicBucket", {
+        // Create the Titanic bucket as an S3 Table bucket
+        const titanicBucket = new s3express.DirectoryBucket(this, "TitanicBucket", {
             removalPolicy: cdk.RemovalPolicy.DESTROY,
             autoDeleteObjects: true,
+            // S3 Express requires a specific availability zone
+            availabilityZone: `${this.region}${props.availabilityZone || 'a'}`,
         });
 
         // Create SQS queue
@@ -94,7 +98,23 @@ export class TitanicStack extends cdk.Stack {
             }),
         );
 
-        titanicBucket.grantReadWrite(mergeLambda);
+        // Grant S3 Express specific permissions
+        mergeLambda.addToRolePolicy(
+            new iam.PolicyStatement({
+                actions: [
+                    "s3express:CreateSession",
+                    "s3express:DeleteObject",
+                    "s3express:GetObject",
+                    "s3express:PutObject",
+                    "s3express:ListBucket",
+                    "s3express:ListDirectoryBucket",
+                ],
+                resources: [
+                    titanicBucket.bucketArn,
+                    `${titanicBucket.bucketArn}/*`,
+                ],
+            })
+        );
         mergeQueue.grantConsumeMessages(mergeLambda);
 
         // Grant read access to source buckets via the provided policy

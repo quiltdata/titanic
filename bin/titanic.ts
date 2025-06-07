@@ -6,6 +6,7 @@ const app = new cdk.App();
 new TitanicStack(app, "TitanicStack", {
     quiltDatabaseName: process.env.QUILT_DATABASE_NAME || "userathenadatabase",
     quiltReadPolicyArn: process.env.QUILT_READ_POLICY_ARN || "",
+    availabilityZone: process.env.AVAILABILITY_ZONE || "a",
     env: {
         account: process.env.CDK_DEFAULT_ACCOUNT,
         region: process.env.CDK_DEFAULT_REGION,
