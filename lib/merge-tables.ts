@@ -114,18 +114,25 @@ export async function handler(
             console.warn("Failed to parse message body:", e);
         }
 
+        // Check for EventBridge event with 'detail.bucket' to filter source tables
+        let eventBucket: string | undefined = undefined;
+        if (event.detail && event.detail.bucket) {
+            eventBucket = event.detail.bucket;
+            console.log("EventBridge event detected, filtering for bucket:", eventBucket);
+        }
+
         // Filter for source tables (excluding the merged table)
         const sourceTables = allTables?.filter((table) => {
-            console.log("Checking table:", table.Name);
             if (!table.Name) return false;
-
-            // Check if table name ends with -view
             const isView = table.Name.endsWith("-view");
             const matchesPrefix = tablePrefix
                 ? table.Name.startsWith(tablePrefix)
                 : true;
-
-            return isView && matchesPrefix;
+            // If eventBucket is set, only include tables for that bucket
+            const matchesBucket = eventBucket
+                ? table.Name.startsWith(eventBucket + "_")
+                : true;
+            return isView && matchesPrefix && matchesBucket;
         }) || [];
 
 
