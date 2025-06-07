@@ -168,6 +168,78 @@ export async function handler(
             return query;
         });
 
+        // Ensure 'packages' and 'objects' Iceberg tables exist before any cleanup or merge
+        const createPackagesBaseTableQuery = `
+            CREATE TABLE IF NOT EXISTS "${databaseName}"."packages"
+            (
+                pkg_name VARCHAR,
+                top_hash VARCHAR,
+                timestamp VARCHAR,
+                logical_key VARCHAR,
+                physical_key VARCHAR,
+                size BIGINT,
+                hash ROW(type VARCHAR, value VARCHAR),
+                meta VARCHAR,
+                source_bucket VARCHAR
+            )
+            WITH (
+                table_type = 'ICEBERG',
+                format = 'PARQUET',
+                write_compression = 'SNAPPY',
+                location = 's3://${targetBucket}/iceberg/packages/',
+                partitioning = ARRAY['source_bucket']
+            )
+        `;
+
+        const createObjectsBaseTableQuery = `
+            CREATE TABLE IF NOT EXISTS "${databaseName}"."objects"
+            (
+                logical_key VARCHAR,
+                physical_key VARCHAR,
+                size BIGINT,
+                hash ROW(type VARCHAR, value VARCHAR),
+                meta VARCHAR,
+                timestamp VARCHAR,
+                version_id VARCHAR,
+                source_bucket VARCHAR
+            )
+            WITH (
+                table_type = 'ICEBERG',
+                format = 'PARQUET',
+                write_compression = 'SNAPPY',
+                location = 's3://${targetBucket}/iceberg/objects/',
+                partitioning = ARRAY['source_bucket']
+            )
+        `;
+
+        // Create 'packages' table if not exists
+        const createPackagesBaseResponse = await athenaClient.send(
+            new StartQueryExecutionCommand({
+                QueryString: createPackagesBaseTableQuery,
+                ResultConfiguration: {
+                    OutputLocation: `s3://${targetBucket}/athena-results/`,
+                },
+            }),
+        );
+        if (!createPackagesBaseResponse.QueryExecutionId) {
+            throw new Error("Failed to get QueryExecutionId for create base packages table");
+        }
+        await waitForQueryCompletion(createPackagesBaseResponse.QueryExecutionId);
+
+        // Create 'objects' table if not exists
+        const createObjectsBaseResponse = await athenaClient.send(
+            new StartQueryExecutionCommand({
+                QueryString: createObjectsBaseTableQuery,
+                ResultConfiguration: {
+                    OutputLocation: `s3://${targetBucket}/athena-results/`,
+                },
+            }),
+        );
+        if (!createObjectsBaseResponse.QueryExecutionId) {
+            throw new Error("Failed to get QueryExecutionId for create base objects table");
+        }
+        await waitForQueryCompletion(createObjectsBaseResponse.QueryExecutionId);
+
         // Clean up existing data and create tables
         const cleanupPackagesQuery = `
             DELETE FROM "${databaseName}"."titanic_merged_packages"
