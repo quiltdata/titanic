@@ -361,4 +361,85 @@ describe("merge-tables lambda", () => {
             "Athena error",
         );
     });
+
+    it("should only merge from the bucket in EventBridge event", async () => {
+        glueMock.on(GetTablesCommand).resolves({
+            TableList: [
+                { Name: "example_objects-view", StorageDescriptor: { Location: "s3://example/objects" } },
+                { Name: "otherbucket_objects-view", StorageDescriptor: { Location: "s3://otherbucket/objects" } },
+            ],
+            NextToken: undefined,
+        });
+
+        athenaMock.on(StartQueryExecutionCommand).resolves({
+            QueryExecutionId: "test-execution-id",
+        });
+        athenaMock.on(GetQueryExecutionCommand).resolves({
+            QueryExecution: {
+                Status: {
+                    State: QueryExecutionState.SUCCEEDED,
+                },
+            },
+        });
+
+        // Simulate EventBridge event with detail.bucket
+        const eventBridgeEvent: any = {
+            Records: [],
+            detail: {
+                bucket: "example",
+            },
+        };
+        const result = await handler(eventBridgeEvent, {} as Context);
+        expect(result).toEqual({
+            message: "Merge queries started successfully",
+            numTables: 1, // Only 'example_objects-view' should be merged
+        });
+    });
+
+    it("should issue correct CREATE TABLE queries for base tables", async () => {
+        glueMock.on(GetTablesCommand).resolves({
+            TableList: [],
+            NextToken: undefined,
+        });
+
+        // Track all StartQueryExecutionCommand calls
+        const startQueryCalls: any[] = [];
+        athenaMock.on(StartQueryExecutionCommand).callsFake((input) => {
+            startQueryCalls.push(input);
+            return { QueryExecutionId: "test-create-id" };
+        });
+        athenaMock.on(GetQueryExecutionCommand).resolves({
+            QueryExecution: {
+                Status: { State: QueryExecutionState.SUCCEEDED },
+            },
+        });
+
+        const mockEvent: SQSEvent = {
+            Records: [{
+                messageId: "1",
+                receiptHandle: "handle",
+                body: "{}",
+                attributes: {
+                    ApproximateReceiveCount: "1",
+                    SentTimestamp: "1",
+                    SenderId: "sender",
+                    ApproximateFirstReceiveTimestamp: "1",
+                },
+                messageAttributes: {},
+                md5OfBody: "md5",
+                eventSource: "aws:sqs",
+                eventSourceARN: "arn:aws:sqs:region:account:queue",
+                awsRegion: "region",
+            }],
+        };
+        await handler(mockEvent, {} as Context);
+
+        // Find CREATE TABLE queries for base tables
+        const createPackages = startQueryCalls.find(call => call.QueryString.includes('CREATE TABLE IF NOT EXISTS "test-db"."packages"'));
+        const createObjects = startQueryCalls.find(call => call.QueryString.includes('CREATE TABLE IF NOT EXISTS "test-db"."objects"'));
+        expect(createPackages).toBeDefined();
+        expect(createObjects).toBeDefined();
+        expect(createPackages.QueryString).toContain('table_type = \'ICEBERG\'');
+        expect(createObjects.QueryString).toContain('table_type = \'ICEBERG\'');
+    });
 });
