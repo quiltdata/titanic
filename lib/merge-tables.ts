@@ -264,7 +264,7 @@ export async function handler(
                     },
                 }),
             );
-            if (cleanupPackagesResponse.QueryExecutionId) {
+            if (cleanupPackagesResponse?.QueryExecutionId) {
                 await waitForQueryCompletion(cleanupPackagesResponse.QueryExecutionId);
             }
         } catch (e) {
@@ -280,7 +280,7 @@ export async function handler(
                     },
                 }),
             );
-            if (cleanupObjectsResponse.QueryExecutionId) {
+            if (cleanupObjectsResponse?.QueryExecutionId) {
                 await waitForQueryCompletion(cleanupObjectsResponse.QueryExecutionId);
             }
         } catch (e) {
@@ -339,7 +339,7 @@ export async function handler(
             }),
         );
 
-        if (!createPackagesResponse.QueryExecutionId) {
+        if (!createPackagesResponse?.QueryExecutionId) {
             throw new Error("Failed to get QueryExecutionId for create packages table");
         }
 
@@ -355,7 +355,7 @@ export async function handler(
             }),
         );
 
-        if (!createObjectsResponse.QueryExecutionId) {
+        if (!createObjectsResponse?.QueryExecutionId) {
             throw new Error("Failed to get QueryExecutionId for create objects table");
         }
 
@@ -388,7 +388,7 @@ export async function handler(
                 }),
             );
 
-            if (!queryResponse.QueryExecutionId) {
+            if (!queryResponse?.QueryExecutionId) {
                 throw new Error(
                     "Failed to get QueryExecutionId for merge query",
                 );

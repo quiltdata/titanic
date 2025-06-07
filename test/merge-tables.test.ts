@@ -43,13 +43,25 @@ describe("merge-tables lambda", () => {
         // Mock successful table cleanup and creation
         athenaMock
             .on(StartQueryExecutionCommand)
-            .resolvesOnce({ QueryExecutionId: "cleanup-packages-id" })
-            .resolvesOnce({ QueryExecutionId: "cleanup-objects-id" })
-            .resolvesOnce({ QueryExecutionId: "create-packages-id" })
-            .resolvesOnce({ QueryExecutionId: "create-objects-id" });
+            .resolvesOnce({ QueryExecutionId: "create-packages-base-id" })  // For createPackagesBaseResponse
+            .resolvesOnce({ QueryExecutionId: "create-objects-base-id" })   // For createObjectsBaseResponse
+            .resolvesOnce({ QueryExecutionId: "cleanup-packages-id" })      // For cleanupPackagesResponse
+            .resolvesOnce({ QueryExecutionId: "cleanup-objects-id" })       // For cleanupObjectsResponse
+            .resolvesOnce({ QueryExecutionId: "create-packages-id" })       // For createPackagesResponse
+            .resolvesOnce({ QueryExecutionId: "create-objects-id" });       // For createObjectsResponse
 
         athenaMock
             .on(GetQueryExecutionCommand)
+            .resolvesOnce({ // create packages base
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
+                },
+            })
+            .resolvesOnce({ // create objects base
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
+                },
+            })
             .resolvesOnce({ // cleanup packages
                 QueryExecution: {
                     Status: { State: QueryExecutionState.SUCCEEDED },
