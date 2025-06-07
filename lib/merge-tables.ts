@@ -111,13 +111,13 @@ export async function handler(
                 console.log("Parsed table_prefix from message:", tablePrefix);
             }
         } catch (e) {
-            console.warn("Failed to parse message body:", e);
+            console.warn("Failed to parse message body as SQS event (this may be an EventBridge event):", e);
         }
 
         // Check for EventBridge event with 'detail.bucket' to filter source tables
         let eventBucket: string | undefined = undefined;
-        if (event.detail && event.detail.bucket) {
-            eventBucket = event.detail.bucket;
+        if ((event as any).detail && (event as any).detail.bucket) {
+            eventBucket = (event as any).detail.bucket;
             console.log("EventBridge event detected, filtering for bucket:", eventBucket);
         }
 
