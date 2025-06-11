@@ -1,0 +1,15 @@
+# aider.conf.yaml
+
+model: bedrock/anthropic.claude-3-sonnet-20240229-v1:0
+
+file:
+  - bin/iceberg-examples.sql
+  - bin/titanic.ts
+  - lib/merge-tables.ts
+  - lib/titanic-stack.ts
+  - python/DuckDBJoin.ipynb
+  - python/querytest.py
+  - test/merge-tables.test.ts
+  - test/titanic-stack.test.ts
+  - test/titanic.test.ts
+
