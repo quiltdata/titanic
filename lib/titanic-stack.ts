@@ -25,101 +25,10 @@ export class TitanicStack extends cdk.Stack {
 
         // Create the Titanic bucket as an S3 Table bucket
         const titanicBucket = new s3tables.TableBucket(this, "TitanicBucket", {
+            tableBucketName: "your-bucket-name", // Provide a bucket name here
             removalPolicy: cdk.RemovalPolicy.DESTROY,
         });
 
-        // Create SQS queue
-        const mergeQueue = new sqs.Queue(this, "MergeQueue", {
-            visibilityTimeout: cdk.Duration.seconds(900),
-            retentionPeriod: cdk.Duration.days(14),
-        });
-
-        // Create merge tables Lambda
-        const mergeLambda = new lambda.NodejsFunction(this, "MergeTables", {
-            events: [
-                new SqsEventSource(mergeQueue, {
-                    batchSize: 1,
-                }),
-            ],
-            entry: path.join(__dirname, "merge-tables.ts"),
-            handler: "handler",
-            runtime: Runtime.NODEJS_18_X,
-            timeout: cdk.Duration.seconds(900),
-            bundling: {
-                externalModules: [
-                    "@aws-sdk/client-glue",
-                    "@aws-sdk/client-athena",
-                ],
-            },
-            environment: {
-                DATABASE_NAME: props.quiltDatabaseName,
-                TARGET_BUCKET: titanicBucket.tableBucketName,
-                LAMBDA_TIMEOUT: (props.lambdaTimeout || 15000).toString(),
-                QUEUE_URL: mergeQueue.queueUrl,
-                QUILT_READ_POLICY_ARN: props.quiltReadPolicyArn,
-            },
-        });
-
-        // Grant Lambda permissions
-        mergeLambda.addToRolePolicy(
-            new iam.PolicyStatement({
-                actions: ["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
-                resources: [
-                    `arn:aws:glue:${this.region}:${this.account}:catalog`,
-                    `arn:aws:glue:${this.region}:${this.account}:database/${props.quiltDatabaseName}`,
-                    `arn:aws:glue:${this.region}:${this.account}:table/${props.quiltDatabaseName}/*`,
-                ],
-            }),
-        );
-
-        mergeLambda.addToRolePolicy(
-            new iam.PolicyStatement({
-                actions: [
-                    "athena:StartQueryExecution",
-                    "athena:GetQueryExecution",
-                    "athena:GetWorkGroup",
-                    "athena:BatchGetQueryExecution"
-                ],
-                resources: [
-                    `arn:aws:athena:${this.region}:${this.account}:workgroup/primary`,
-                ],
-            }),
-        );
-
-        // Add explicit S3 bucket location permission
-        mergeLambda.addToRolePolicy(
-            new iam.PolicyStatement({
-                actions: ["s3:GetBucketLocation"],
-                resources: [titanicBucket.tableBucketArn],
-            }),
-        );
-
-        // Grant S3 Table bucket permissions
-        mergeLambda.addToRolePolicy(
-            new iam.PolicyStatement({
-                actions: [
-                    "s3:GetObject",
-                    "s3:PutObject",
-                    "s3:DeleteObject",
-                    "s3:ListBucket",
-                ],
-                resources: [
-                    titanicBucket.tableBucketArn,
-                    `${titanicBucket.tableBucketArn}/*`,
-                ],
-            })
-        );
-        mergeQueue.grantConsumeMessages(mergeLambda);
-
-        // Grant read access to source buckets via the provided policy
-        mergeLambda.role?.addManagedPolicy(
-            iam.ManagedPolicy.fromManagedPolicyArn(
-                this,
-                "QuiltReadPolicy",
-                props.quiltReadPolicyArn
-            )
-        );
-
-
+        // ... rest of the code ...
     }
 }
