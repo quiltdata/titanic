@@ -26,8 +26,6 @@ export class TitanicStack extends cdk.Stack {
         // Create the Titanic bucket as an S3 Table bucket
         const titanicBucket = new s3tables.TableBucket(this, "TitanicBucket", {
             removalPolicy: cdk.RemovalPolicy.DESTROY,
-            autoDeleteObjects: true,
-            bucketName: "your-bucket-name", // Optional, to specify a custom bucket name
         });
 
         // Create SQS queue
@@ -55,7 +53,7 @@ export class TitanicStack extends cdk.Stack {
             },
             environment: {
                 DATABASE_NAME: props.quiltDatabaseName,
-                TARGET_BUCKET: titanicBucket.bucketName,
+                TARGET_BUCKET: titanicBucket.tableBucketName,
                 LAMBDA_TIMEOUT: (props.lambdaTimeout || 15000).toString(),
                 QUEUE_URL: mergeQueue.queueUrl,
                 QUILT_READ_POLICY_ARN: props.quiltReadPolicyArn,
@@ -92,7 +90,7 @@ export class TitanicStack extends cdk.Stack {
         mergeLambda.addToRolePolicy(
             new iam.PolicyStatement({
                 actions: ["s3:GetBucketLocation"],
-                resources: [titanicBucket.bucketArn],
+                resources: [titanicBucket.tableBucketArn],
             }),
         );
 
@@ -106,8 +104,8 @@ export class TitanicStack extends cdk.Stack {
                     "s3:ListBucket",
                 ],
                 resources: [
-                    titanicBucket.bucketArn,
-                    `${titanicBucket.bucketArn}/*`,
+                    titanicBucket.tableBucketArn,
+                    `${titanicBucket.tableBucketArn}/*`,
                 ],
             })
         );
