@@ -1,8 +1,7 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as dotenv from 'dotenv';
-import * as s3 from "aws-cdk-lib/aws-s3";
-import * as s3express from "aws-cdk-lib/aws-s3express";
+import * as s3tables from '@aws-cdk/aws-s3tables-alpha';
 import * as glue from "aws-cdk-lib/aws-glue";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
@@ -25,11 +24,10 @@ export class TitanicStack extends cdk.Stack {
         super(scope, id, props);
 
         // Create the Titanic bucket as an S3 Table bucket
-        const titanicBucket = new s3express.DirectoryBucket(this, "TitanicBucket", {
+        const titanicBucket = new s3tables.TableBucket(this, "TitanicBucket", {
             removalPolicy: cdk.RemovalPolicy.DESTROY,
             autoDeleteObjects: true,
-            // S3 Express requires a specific availability zone
-            availabilityZone: `${this.region}${props.availabilityZone || 'a'}`,
+            bucketName: "your-bucket-name", // Optional, to specify a custom bucket name
         });
 
         // Create SQS queue
@@ -98,16 +96,14 @@ export class TitanicStack extends cdk.Stack {
             }),
         );
 
-        // Grant S3 Express specific permissions
+        // Grant S3 Table bucket permissions
         mergeLambda.addToRolePolicy(
             new iam.PolicyStatement({
                 actions: [
-                    "s3express:CreateSession",
-                    "s3express:DeleteObject",
-                    "s3express:GetObject",
-                    "s3express:PutObject",
-                    "s3express:ListBucket",
-                    "s3express:ListDirectoryBucket",
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject",
+                    "s3:ListBucket",
                 ],
                 resources: [
                     titanicBucket.bucketArn,
