@@ -13,30 +13,36 @@ The system creates and manages these tables:
 ### Package Table Schema
 
 ```sql
-CREATE TABLE titanic_merged_packages (
-    pkg_name STRING,
-    top_hash STRING,
-    timestamp STRING,
-    message STRING,
-    user_meta STRING,
-    source_bucket STRING
+CREATE TABLE quilt_titanic.quilt_packages (
+  pkg_name STRING,
+  top_hash STRING,
+  timestamp STRING,
+  message STRING,
+  user_meta STRING,
+  source_bucket STRING
 )
+TBLPROPERTIES (
+  'table_type' = 'ICEBERG'
+);
 ```
 
 ### Objects Table Schema
 
 ```sql
-CREATE TABLE titanic_merged_objects (
+CREATE TABLE quilt_titanic.quilt_entries (
     pkg_name STRING,
     top_hash STRING,
     timestamp STRING,
     logical_key STRING,
     physical_key STRING,
     size BIGINT,
-    hash STRUCT<type:STRING,value:STRING>,
+    hash STRUCT<type:STRING, value:STRING>,
     meta STRING,
     source_bucket STRING
 )
+TBLPROPERTIES (
+  'table_type' = 'ICEBERG'
+);
 ```
 
 ### Example Queries
