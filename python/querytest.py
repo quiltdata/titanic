@@ -5,7 +5,7 @@ import quilt3 as q3
 
 # Step 1: Look up S3 path from Glue
 glue = boto3.client('glue', region_name='us-east-1')
-table = glue.get_table(DatabaseName='userathenadatabase-mbq1ihawbzb7', Name='titanic_merged_objects')
+table = glue.get_table(DatabaseName='userathenadatabase-mbq1ihawbzb7', Name='titanic_entries')
 s3_path = table['Table']['StorageDescriptor']['Location']
 
 # Step 2: Connect to DuckDB

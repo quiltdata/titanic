@@ -7,13 +7,13 @@ Automatically merges multiple AWS Glue tables into a single queryable table whil
 The system creates and manages these tables:
 
 - **Source Views** (`*-view`): Views over your source data, e.g., `bucket1_objects-view`, `bucket2_objects-view`
-- **Merged Package Table** (`titanic_merged_packages`): An Iceberg table containing deduplicated package metadata
-- **Merged Objects Table** (`titanic_merged_objects`): An Iceberg table containing deduplicated object metadata
+- **Merged Package Table** (`titanic_packages`): An Iceberg table containing deduplicated package metadata
+- **Merged Objects Table** (`titanic_entries`): An Iceberg table containing deduplicated object metadata
 
 ### Package Table Schema
 
 ```sql
-CREATE TABLE titanic_merged_packages (
+CREATE TABLE titanic_packages (
     pkg_name STRING,
     top_hash STRING,
     timestamp STRING,
@@ -26,7 +26,7 @@ CREATE TABLE titanic_merged_packages (
 ### Objects Table Schema
 
 ```sql
-CREATE TABLE titanic_merged_objects (
+CREATE TABLE titanic_entries (
     pkg_name STRING,
     top_hash STRING,
     timestamp STRING,
@@ -46,17 +46,17 @@ Query package metadata:
 ```sql
 -- Get latest package versions
 SELECT DISTINCT pkg_name, top_hash, timestamp 
-FROM titanic_merged_packages
+FROM titanic_packages
 ORDER BY timestamp DESC
 LIMIT 10;
 
 -- Find packages from a specific source
-SELECT * FROM titanic_merged_packages 
+SELECT * FROM titanic_packages 
 WHERE source_bucket = 'my-bucket'
 LIMIT 10;
 
 -- Time travel query (point-in-time view)
-SELECT * FROM titanic_merged_packages 
+SELECT * FROM titanic_packages 
 FOR SYSTEM_TIME AS OF TIMESTAMP '2025-04-14 12:00:00'
 WHERE pkg_name = 'my-package';
 ```
@@ -66,8 +66,8 @@ Query objects with their package metadata:
 ```sql
 -- Join packages and objects
 SELECT p.pkg_name, p.top_hash, o.logical_key, o.size
-FROM titanic_merged_packages p
-JOIN titanic_merged_objects o 
+FROM titanic_packages p
+JOIN titanic_entries o 
   ON p.pkg_name = o.pkg_name 
   AND p.top_hash = o.top_hash
 WHERE p.source_bucket = 'my-bucket'
@@ -75,7 +75,7 @@ LIMIT 10;
 
 -- Find all objects in a specific package version
 SELECT o.* 
-FROM titanic_merged_objects o
+FROM titanic_entries o
 WHERE o.pkg_name = 'my-package'
   AND o.top_hash = 'abc123'
 ORDER BY o.logical_key;
@@ -86,7 +86,7 @@ SELECT
   o.top_hash,
   COUNT(*) as num_objects,
   SUM(o.size) as total_bytes
-FROM titanic_merged_objects o
+FROM titanic_entries o
 GROUP BY o.pkg_name, o.top_hash
 ORDER BY total_bytes DESC
 LIMIT 10;
