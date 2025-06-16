@@ -1,8 +1,5 @@
 import { Context } from "aws-lambda";
 import { mockClient } from "aws-sdk-client-mock";
-import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
-
-const cloudWatchMock = mockClient(CloudWatchLogsClient);
 
 jest.setTimeout(30000); // Increase timeout to 30 seconds
 import { GetTablesCommand, GlueClient } from "@aws-sdk/client-glue";
@@ -25,7 +22,6 @@ describe("merge-tables lambda", () => {
         process.env.LAMBDA_TIMEOUT = "5000";
         glueMock.reset();
         athenaMock.reset();
-        cloudWatchMock.reset();
     });
 
     it("should throw error if environment variables are missing", async () => {
