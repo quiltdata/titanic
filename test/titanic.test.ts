@@ -7,6 +7,8 @@ describe("TitanicStack", () => {
     const stack = new TitanicStack(app, "MyTestStack", {
         quiltDatabaseName: "test-database",
         quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
+        athenaBucket: "test-athena-results-bucket",
+        serviceBucket: "test-titanic-bucket",
     });
     const template = Template.fromStack(stack);
 
@@ -24,6 +26,8 @@ describe("TitanicStack", () => {
                     DATABASE_NAME: "test-database",
                     LAMBDA_TIMEOUT: "15000",
                     QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
+                    ATHENA_BUCKET: "test-athena-results-bucket",
+                    TARGET_BUCKET: "test-titanic-bucket",
                 },
             },
         });

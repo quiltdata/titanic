@@ -16,6 +16,8 @@ export interface TitanicStackProps extends cdk.StackProps {
     quiltDatabaseName: string;
     lambdaTimeout?: number;
     quiltReadPolicyArn: string;
+    athenaBucket: string;
+    serviceBucket: string;
 }
 
 export class TitanicStack extends cdk.Stack {
@@ -23,7 +25,7 @@ export class TitanicStack extends cdk.Stack {
         super(scope, id, props);
 
         // Create the Titanic bucket
-        const titanicBucket = new s3.Bucket(this, "TitanicBucket", {
+        const serviceBucket = new s3.Bucket(this, "serviceBucket", {
             removalPolicy: cdk.RemovalPolicy.DESTROY,
             autoDeleteObjects: true,
         });
@@ -53,7 +55,7 @@ export class TitanicStack extends cdk.Stack {
             },
             environment: {
                 DATABASE_NAME: props.quiltDatabaseName,
-                TARGET_BUCKET: titanicBucket.bucketName,
+                TARGET_BUCKET: serviceBucket.bucketName,
                 LAMBDA_TIMEOUT: (props.lambdaTimeout || 15000).toString(),
                 QUEUE_URL: mergeQueue.queueUrl,
                 QUILT_READ_POLICY_ARN: props.quiltReadPolicyArn,
@@ -90,11 +92,11 @@ export class TitanicStack extends cdk.Stack {
         mergeLambda.addToRolePolicy(
             new iam.PolicyStatement({
                 actions: ["s3:GetBucketLocation"],
-                resources: [titanicBucket.bucketArn],
+                resources: [serviceBucket.bucketArn],
             }),
         );
 
-        titanicBucket.grantReadWrite(mergeLambda);
+        serviceBucket.grantReadWrite(mergeLambda);
         mergeQueue.grantConsumeMessages(mergeLambda);
 
         // Grant read access to source buckets via the provided policy
