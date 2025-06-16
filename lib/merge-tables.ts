@@ -241,6 +241,7 @@ export async function handler(
         `;
 
         // Create packages table
+        console.log("Creating packages table if it doesn't exist...");
         const createPackagesResponse = await athenaClient.send(
             new StartQueryExecutionCommand({
                 QueryString: createPackagesQuery,
@@ -248,15 +249,21 @@ export async function handler(
                     OutputLocation: `s3://${targetBucket}/athena-results/`,
                 },
             }),
-        );
+        ).catch((err) => {
+            console.error("Error creating packages table:", err);
+            throw err;
+        });
 
         if (!createPackagesResponse.QueryExecutionId) {
             throw new Error("Failed to get QueryExecutionId for create packages table");
         }
 
+        console.log("Waiting for packages table creation to complete...");
         await waitForQueryCompletion(createPackagesResponse.QueryExecutionId);
+        console.log("Packages table created successfully");
 
         // Create objects table
+        console.log("Creating objects table if it doesn't exist...");
         const createObjectsResponse = await athenaClient.send(
             new StartQueryExecutionCommand({
                 QueryString: createObjectsQuery,
@@ -264,13 +271,18 @@ export async function handler(
                     OutputLocation: `s3://${targetBucket}/athena-results/`,
                 },
             }),
-        );
+        ).catch((err) => {
+            console.error("Error creating objects table:", err);
+            throw err;
+        });
 
         if (!createObjectsResponse.QueryExecutionId) {
             throw new Error("Failed to get QueryExecutionId for create objects table");
         }
 
+        console.log("Waiting for objects table creation to complete...");
         await waitForQueryCompletion(createObjectsResponse.QueryExecutionId);
+        console.log("Objects table created successfully");
 
         // Check for empty source tables
         if (sourceTables.length === 0) {
