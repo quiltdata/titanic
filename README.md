@@ -36,7 +36,8 @@ CREATE TABLE quilt_titanic.quilt_entries (
     logical_key STRING,
     physical_key STRING,
     size BIGINT,
-    hash STRUCT<type:STRING, value:STRING>,
+    hash_type STRING,
+    hash_value STRING,
     meta STRING,
     source_bucket STRING
 )
@@ -44,6 +45,37 @@ TBLPROPERTIES (
   'table_type' = 'ICEBERG'
 );
 ```
+
+### Merges
+
+#### Package Revision Merge
+
+```sql
+INSERT INTO quilt_titanic.quilt_packages AS target
+USING "userethenadatabase-6fosfzznfasm"."quilt-bake_packages-view" AS source
+ON target.pkg_name = source.pkg_name
+   AND target.top_hash = source.top_hash
+WHEN NOT MATCHED THEN
+  INSERT (
+    pkg_name,
+    top_hash,
+    timestamp,
+    message,
+    user_meta,
+    source_bucket
+  )
+  VALUES (
+    source.pkg_name,
+    source.top_hash,
+    source.timestamp,
+    source.message,
+    source.user_meta,
+    NULL
+  );
+  ```
+
+
+
 
 ### Example Queries
 
