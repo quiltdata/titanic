@@ -13,10 +13,10 @@ describe("TitanicStack", () => {
     const template = Template.fromStack(stack);
 
     it("creates an S3 bucket", () => {
-        template.hasResource("AWS::S3::Bucket", {
-            DeletionPolicy: "Delete",
-            UpdateReplacePolicy: "Delete",
-        });
+        // Since the stack now imports an existing bucket, we should check for a bucket reference, not creation
+        // The stack should NOT create a new S3 bucket resource
+        const resources = template.findResources("AWS::S3::Bucket");
+        expect(Object.keys(resources).length).toBe(0);
     });
 
     it("creates a Lambda function", () => {

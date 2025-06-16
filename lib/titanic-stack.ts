@@ -24,11 +24,8 @@ export class TitanicStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props: TitanicStackProps) {
         super(scope, id, props);
 
-        // Create the Titanic bucket
-        const serviceBucket = new s3.Bucket(this, "serviceBucket", {
-            removalPolicy: cdk.RemovalPolicy.DESTROY,
-            autoDeleteObjects: true,
-        });
+        // Use the provided serviceBucket name instead of creating a new bucket
+        const serviceBucket = s3.Bucket.fromBucketName(this, "serviceBucket", props.serviceBucket);
 
         // Create SQS queue
         const mergeQueue = new sqs.Queue(this, "MergeQueue", {
@@ -55,10 +52,11 @@ export class TitanicStack extends cdk.Stack {
             },
             environment: {
                 DATABASE_NAME: props.quiltDatabaseName,
-                TARGET_BUCKET: serviceBucket.bucketName,
+                TARGET_BUCKET: props.serviceBucket,
                 LAMBDA_TIMEOUT: (props.lambdaTimeout || 15000).toString(),
                 QUEUE_URL: mergeQueue.queueUrl,
                 QUILT_READ_POLICY_ARN: props.quiltReadPolicyArn,
+                ATHENA_BUCKET: props.athenaBucket,
             },
         });
 
@@ -100,14 +98,14 @@ export class TitanicStack extends cdk.Stack {
         mergeQueue.grantConsumeMessages(mergeLambda);
 
         // Grant read access to source buckets via the provided policy
-        mergeLambda.role?.addManagedPolicy(
-            iam.ManagedPolicy.fromManagedPolicyArn(
-                this,
-                "QuiltReadPolicy",
-                props.quiltReadPolicyArn
-            )
-        );
-
-
+        if (props.quiltReadPolicyArn) {
+            mergeLambda.role?.addManagedPolicy(
+                iam.ManagedPolicy.fromManagedPolicyArn(
+                    this,
+                    "QuiltReadPolicy",
+                    props.quiltReadPolicyArn
+                )
+            );
+        }
     }
 }
