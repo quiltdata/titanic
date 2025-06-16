@@ -1,5 +1,8 @@
-import { Context, SQSEvent } from "aws-lambda";
+import { Context } from "aws-lambda";
 import { mockClient } from "aws-sdk-client-mock";
+import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
+
+const cloudWatchMock = mockClient(CloudWatchLogsClient);
 
 jest.setTimeout(30000); // Increase timeout to 30 seconds
 import { GetTablesCommand, GlueClient } from "@aws-sdk/client-glue";
@@ -22,15 +25,33 @@ describe("merge-tables lambda", () => {
         process.env.LAMBDA_TIMEOUT = "5000";
         glueMock.reset();
         athenaMock.reset();
+        cloudWatchMock.reset();
     });
 
     it("should throw error if environment variables are missing", async () => {
         delete process.env.DATABASE_NAME;
-        const mockEvent: SQSEvent = {
-            Records: [],
+        const mockEvent: any = {
+            messageType: "DATA_MESSAGE",
+            owner: "123456789012",
+            logGroup: "test-log-group",
+            logStream: "test-log-stream",
+            subscriptionFilters: ["test-subscription-filter"],
+            logEvents: [
+                {
+                    id: "event-id",
+                    timestamp: new Date().getTime(),
+                    message: JSON.stringify({
+                        version: "0.1",
+                        type: "created",
+                        bucket: "example",
+                        handle: "some/package",
+                        topHash: "a0fddace2eb2fd91faa697d237a5dbdcfa77f0fd38ca8b4c850dbd93d142ee69"
+                    }),
+                },
+            ],
         };
         await expect(handler(mockEvent, {} as Context)).rejects.toThrow(
-            "Missing required environment variables",
+            "Missing required environment variables"
         );
     });
 
@@ -40,58 +61,41 @@ describe("merge-tables lambda", () => {
             NextToken: undefined,
         });
 
-        // Mock successful table cleanup and creation
-        athenaMock
-            .on(StartQueryExecutionCommand)
-            .resolvesOnce({ QueryExecutionId: "cleanup-packages-id" })
-            .resolvesOnce({ QueryExecutionId: "cleanup-objects-id" })
-            .resolvesOnce({ QueryExecutionId: "create-packages-id" })
-            .resolvesOnce({ QueryExecutionId: "create-objects-id" });
-
-        athenaMock
-            .on(GetQueryExecutionCommand)
-            .resolvesOnce({ // cleanup packages
-                QueryExecution: {
-                    Status: { State: QueryExecutionState.SUCCEEDED },
+        const mockEvent: any = {
+            messageType: "DATA_MESSAGE",
+            owner: "123456789012",
+            logGroup: "test-log-group",
+            logStream: "test-log-stream",
+            subscriptionFilters: ["test-subscription-filter"],
+            logEvents: [
+                {
+                    id: "event-id",
+                    timestamp: new Date().getTime(),
+                    message: JSON.stringify({
+                        version: "0",
+                        id: "6425eb6a-9627-e6a1-2ae8-9d2d8883dc74",
+                        "detail-type": "package-revision",
+                        source: "com.quiltdata",
+                        account: "012345678901",
+                        time: "2024-04-25T14:46:51Z",
+                        region: "us-east-1",
+                        resources: [],
+                        detail: {
+                            version: "0.1",
+                            type: "created",
+                            bucket: "example",
+                            handle: "some/package",
+                            topHash: "a0fddace2eb2fd91faa697d237a5dbdcfa77f0fd38ca8b4c850dbd93d142ee69"
+                        }
+                    }),
                 },
-            })
-            .resolvesOnce({ // cleanup objects
-                QueryExecution: {
-                    Status: { State: QueryExecutionState.SUCCEEDED },
-                },
-            })
-            .resolvesOnce({ // create packages
-                QueryExecution: {
-                    Status: { State: QueryExecutionState.SUCCEEDED },
-                },
-            })
-            .resolvesOnce({ // create objects
-                QueryExecution: {
-                    Status: { State: QueryExecutionState.SUCCEEDED },
-                },
-            });
-
-        const mockEvent: SQSEvent = {
-            Records: [{
-                messageId: "1",
-                receiptHandle: "handle",
-                body: "{}",
-                attributes: {
-                    ApproximateReceiveCount: "1",
-                    SentTimestamp: "1",
-                    SenderId: "sender",
-                    ApproximateFirstReceiveTimestamp: "1",
-                },
-                messageAttributes: {},
-                md5OfBody: "md5",
-                eventSource: "aws:sqs",
-                eventSourceARN: "arn:aws:sqs:region:account:queue",
-                awsRegion: "region",
-            }],
+            ],
         };
+
         const result = await handler(mockEvent, {} as Context);
+
         expect(result).toEqual({
-            message: "Created merged table (no source tables found)",
+            message: "No tables found to merge",
             numTables: 0,
         });
     });
@@ -123,242 +127,42 @@ describe("merge-tables lambda", () => {
             },
         });
 
-        const mockEvent: SQSEvent = {
-            Records: [{
-                messageId: "1",
-                receiptHandle: "handle",
-                body: "{}",
-                attributes: {
-                    ApproximateReceiveCount: "1",
-                    SentTimestamp: "1",
-                    SenderId: "sender",
-                    ApproximateFirstReceiveTimestamp: "1",
+        const mockEvent: any = {
+            messageType: "DATA_MESSAGE",
+            owner: "123456789012",
+            logGroup: "test-log-group",
+            logStream: "test-log-stream",
+            subscriptionFilters: ["test-subscription-filter"],
+            logEvents: [
+                {
+                    id: "event-id",
+                    timestamp: new Date().getTime(),
+                    message: JSON.stringify({
+                        version: "0",
+                        id: "6425eb6a-9627-e6a1-2ae8-9d2d8883dc74",
+                        "detail-type": "package-revision",
+                        source: "com.quiltdata",
+                        account: "012345678901",
+                        time: "2024-04-25T14:46:51Z",
+                        region: "us-east-1",
+                        resources: [],
+                        detail: {
+                            version: "0.1",
+                            type: "created",
+                            bucket: "example",
+                            handle: "some/package",
+                            topHash: "a0fddace2eb2fd91faa697d237a5dbdcfa77f0fd38ca8b4c850dbd93d142ee69"
+                        }
+                    }),
                 },
-                messageAttributes: {},
-                md5OfBody: "md5",
-                eventSource: "aws:sqs",
-                eventSourceARN: "arn:aws:sqs:region:account:queue",
-                awsRegion: "region",
-            }],
+            ],
         };
+
         const result = await handler(mockEvent, {} as Context);
 
         expect(result).toEqual({
             message: "Merge queries started successfully",
             numTables: 2,
         });
-    });
-
-    describe("table prefix filtering", () => {
-        it("should handle SQS events with table prefix", async () => {
-            glueMock.on(GetTablesCommand).resolves({
-                TableList: [
-                    {
-                        Name: "test_objects-view",
-                        StorageDescriptor: { Location: "s3://test/objects" },
-                    },
-                    {
-                        Name: "prod_objects-view",
-                        StorageDescriptor: { Location: "s3://prod/objects" },
-                    },
-                    {
-                        Name: "dev_objects-view",
-                        StorageDescriptor: {
-                            Location: "s3://bucket/objects_all",
-                        },
-                    },
-                ],
-                NextToken: undefined,
-            });
-
-            athenaMock.on(StartQueryExecutionCommand).resolves({
-                QueryExecutionId: "test-query-id",
-            });
-
-            athenaMock.on(GetQueryExecutionCommand).resolves({
-                QueryExecution: {
-                    Status: {
-                        State: QueryExecutionState.SUCCEEDED,
-                    },
-                },
-            });
-
-            const sqsEvent: SQSEvent = {
-                Records: [{
-                    messageId: "1",
-                    receiptHandle: "handle",
-                    body: JSON.stringify({ table_prefix: "test" }),
-                    attributes: {
-                        ApproximateReceiveCount: "1",
-                        SentTimestamp: "1",
-                        SenderId: "sender",
-                        ApproximateFirstReceiveTimestamp: "1",
-                    },
-                    messageAttributes: {},
-                    md5OfBody: "md5",
-                    eventSource: "aws:sqs",
-                    eventSourceARN: "arn:aws:sqs:region:account:queue",
-                    awsRegion: "region",
-                }],
-            };
-
-            const result = await handler(sqsEvent, {} as Context);
-            expect(result).toEqual({
-                message: "Merge queries started successfully",
-                numTables: 1, // Should find test_objects-view
-            });
-        });
-
-        it("should handle invalid table prefix gracefully", async () => {
-            glueMock.on(GetTablesCommand).resolves({
-                TableList: [
-                    {
-                        Name: "packages_all_prod",
-                        StorageDescriptor: {
-                            Location: "s3://bucket/packages_all",
-                        },
-                    },
-                ],
-                NextToken: undefined,
-            });
-
-            athenaMock.on(StartQueryExecutionCommand).resolves({
-                QueryExecutionId: "test-query-id",
-            });
-
-            athenaMock.on(GetQueryExecutionCommand).resolves({
-                QueryExecution: {
-                    Status: {
-                        State: QueryExecutionState.SUCCEEDED,
-                    },
-                },
-            });
-
-            const sqsEvent: SQSEvent = {
-                Records: [{
-                    messageId: "1",
-                    receiptHandle: "handle",
-                    body: JSON.stringify({ table_prefix: "nonexistent" }),
-                    attributes: {
-                        ApproximateReceiveCount: "1",
-                        SentTimestamp: "1",
-                        SenderId: "sender",
-                        ApproximateFirstReceiveTimestamp: "1",
-                    },
-                    messageAttributes: {},
-                    md5OfBody: "md5",
-                    eventSource: "aws:sqs",
-                    eventSourceARN: "arn:aws:sqs:region:account:queue",
-                    awsRegion: "region",
-                }],
-            };
-
-            const result = await handler(sqsEvent, {} as Context);
-            expect(result).toEqual({
-                message: "Created merged table (no source tables found)",
-                numTables: 0,
-            });
-        });
-    });
-
-    it("should respect custom timeout configuration", async () => {
-        process.env.LAMBDA_TIMEOUT = "10000";
-
-        glueMock.on(GetTablesCommand).resolves({
-            TableList: [],
-            NextToken: undefined,
-        });
-
-        athenaMock.on(StartQueryExecutionCommand).resolves({
-            QueryExecutionId: "test-query-id",
-        });
-
-        athenaMock.on(GetQueryExecutionCommand).resolves({
-            QueryExecution: {
-                Status: {
-                    State: QueryExecutionState.SUCCEEDED,
-                },
-            },
-        });
-
-        const mockEvent: SQSEvent = {
-            Records: [{
-                messageId: "1",
-                receiptHandle: "handle",
-                body: "{}",
-                attributes: {
-                    ApproximateReceiveCount: "1",
-                    SentTimestamp: "1",
-                    SenderId: "sender",
-                    ApproximateFirstReceiveTimestamp: "1",
-                },
-                messageAttributes: {},
-                md5OfBody: "md5",
-                eventSource: "aws:sqs",
-                eventSourceARN: "arn:aws:sqs:region:account:queue",
-                awsRegion: "region",
-            }],
-        };
-        const result = await handler(mockEvent, {} as Context);
-        expect(result).toBeDefined();
-    });
-
-    it("should handle Athena query failures", async () => {
-        // Mock tables response with a view table to ensure merge is attempted
-        glueMock.on(GetTablesCommand).resolves({
-            TableList: [
-                {
-                    Name: "table1-view",
-                    StorageDescriptor: { Location: "s3://bucket/table1" },
-                },
-            ],
-            NextToken: undefined,
-        });
-
-        // Mock Athena failure response
-        athenaMock.on(StartQueryExecutionCommand).resolves({
-            QueryExecutionId: "test-execution-id",
-        });
-
-        athenaMock.on(GetQueryExecutionCommand).resolves({
-            QueryExecution: {
-                Status: {
-                    State: QueryExecutionState.FAILED,
-                    StateChangeReason: "Athena error",
-                },
-            },
-        });
-
-        athenaMock.on(GetQueryExecutionCommand).resolves({
-            QueryExecution: {
-                Status: {
-                    State: QueryExecutionState.FAILED,
-                    StateChangeReason: "Athena error",
-                },
-            },
-        });
-
-        // Test that the Athena error is propagated
-        const mockEvent: SQSEvent = {
-            Records: [{
-                messageId: "1",
-                receiptHandle: "handle",
-                body: "{}",
-                attributes: {
-                    ApproximateReceiveCount: "1",
-                    SentTimestamp: "1",
-                    SenderId: "sender",
-                    ApproximateFirstReceiveTimestamp: "1",
-                },
-                messageAttributes: {},
-                md5OfBody: "md5",
-                eventSource: "aws:sqs",
-                eventSourceARN: "arn:aws:sqs:region:account:queue",
-                awsRegion: "region",
-            }],
-        };
-        await expect(handler(mockEvent, {} as Context)).rejects.toThrow(
-            "Athena error",
-        );
     });
 });

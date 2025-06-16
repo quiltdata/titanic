@@ -5,9 +5,9 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import * as glue from "aws-cdk-lib/aws-glue";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
-import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as events from "aws-cdk-lib/aws-events";
+import * as targets from "aws-cdk-lib/aws-events-targets";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
-import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import * as path from "path";
 
 dotenv.config();
@@ -27,19 +27,8 @@ export class TitanicStack extends cdk.Stack {
         // Use the provided serviceBucket name instead of creating a new bucket
         const serviceBucket = s3.Bucket.fromBucketName(this, "serviceBucket", props.serviceBucket);
 
-        // Create SQS queue
-        const mergeQueue = new sqs.Queue(this, "MergeQueue", {
-            visibilityTimeout: cdk.Duration.seconds(900),
-            retentionPeriod: cdk.Duration.days(14),
-        });
-
         // Create merge tables Lambda
         const mergeLambda = new lambda.NodejsFunction(this, "MergeTables", {
-            events: [
-                new SqsEventSource(mergeQueue, {
-                    batchSize: 1,
-                }),
-            ],
             entry: path.join(__dirname, "merge-tables.ts"),
             handler: "handler",
             runtime: Runtime.NODEJS_18_X,
@@ -49,12 +38,12 @@ export class TitanicStack extends cdk.Stack {
                     "@aws-sdk/client-glue",
                     "@aws-sdk/client-athena",
                 ],
+                platform: "linux/amd64",
             },
             environment: {
                 DATABASE_NAME: props.quiltDatabaseName,
                 TARGET_BUCKET: props.serviceBucket,
                 LAMBDA_TIMEOUT: (props.lambdaTimeout || 15000).toString(),
-                QUEUE_URL: mergeQueue.queueUrl,
                 QUILT_READ_POLICY_ARN: props.quiltReadPolicyArn,
                 ATHENA_BUCKET: props.athenaBucket,
             },
@@ -95,7 +84,6 @@ export class TitanicStack extends cdk.Stack {
         );
 
         serviceBucket.grantReadWrite(mergeLambda);
-        mergeQueue.grantConsumeMessages(mergeLambda);
 
         // Grant read access to source buckets via the provided policy
         if (props.quiltReadPolicyArn) {
@@ -107,5 +95,16 @@ export class TitanicStack extends cdk.Stack {
                 )
             );
         }
+
+        // Create CloudWatch event rule to trigger the Lambda
+        const packageRevisionRule = new events.Rule(this, "PackageRevisionRule", {
+            description: "Trigger Lambda on package-revision event",
+            eventPattern: {
+                source: ["com.quiltdata"],
+                detailType: ["package-revision"],
+            },
+        });
+
+        packageRevisionRule.addTarget(new targets.LambdaFunction(mergeLambda));
     }
 }

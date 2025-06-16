@@ -1,6 +1,6 @@
-import { Context, SQSEvent } from "aws-lambda";
+import { Context } from "aws-lambda";
 import { GlueClient } from "@aws-sdk/client-glue";
-import { GetTableCommand, GetTablesCommand } from "@aws-sdk/client-glue";
+import { GetTablesCommand } from "@aws-sdk/client-glue";
 import { GetTablesCommandOutput } from "@aws-sdk/client-glue";
 import { AthenaClient } from "@aws-sdk/client-athena";
 import {
@@ -60,7 +60,7 @@ type HandlerResponse = {
 } | undefined;
 
 export async function handler(
-    event: SQSEvent,
+    event: any,
     context: Context,
 ): Promise<HandlerResponse> {
     const databaseName = process.env.DATABASE_NAME;
@@ -98,21 +98,10 @@ export async function handler(
             nextToken = tablesResponse.NextToken;
         } while (nextToken);
 
-        // Get table_prefix from SQS message if present
-        const messageBody = event.Records?.[0]?.body;
-        console.log("SQS message body:", messageBody);
-        let tablePrefix: string | undefined;
-        try {
-            if (messageBody) {
-                const parsedBody = JSON.parse(messageBody) as {
-                    table_prefix?: string;
-                };
-                tablePrefix = parsedBody.table_prefix;
-                console.log("Parsed table_prefix from message:", tablePrefix);
-            }
-        } catch (e) {
-            console.warn("Failed to parse message body:", e);
-        }
+        // Get table_prefix from event.detail.bucket
+        const detail = event.detail;
+        const tablePrefix = detail?.bucket;
+        console.log("Parsed table_prefix from event:", tablePrefix);
 
         // Filter for source tables (excluding the merged table)
         const sourceTables = allTables?.filter((table) => {
@@ -128,13 +117,12 @@ export async function handler(
             return isView && matchesPrefix;
         }) || [];
 
-
         console.log("Source tables found:", sourceTables.map((t) => t.Name));
 
         // Build MERGE query for each source table
         const mergeQueries = sourceTables.map((table) => {
             const query = `
-      INSERT INTO "${databaseName}"."${table.Name?.includes('packages-view') ? 'titanic_merged_packages' : 'titanic_merged_objects'}"
+      INSERT INTO "${databaseName}"."${table.Name?.includes('packages-view') ? 'titanic_packages' : 'titanic_entries'}"
       SELECT DISTINCT
         ${table.Name?.includes('packages') ? `
         s.pkg_name,
@@ -153,7 +141,7 @@ export async function handler(
         s.meta,
         '${sourceBucketFromTableName(table.Name!)}' AS source_bucket`}
       FROM "${databaseName}"."${table.Name}" s
-      LEFT JOIN "${databaseName}"."${table.Name?.includes('packages-view') ? 'titanic_merged_packages' : 'titanic_merged_objects'}" t
+      LEFT JOIN "${databaseName}"."${table.Name?.includes('packages-view') ? 'titanic_packages' : 'titanic_entries'}" t
       ON s.pkg_name = t.pkg_name 
       AND s.top_hash = t.top_hash
       AND '${sourceBucketFromTableName(table.Name!)}' = t.source_bucket
@@ -170,11 +158,11 @@ export async function handler(
 
         // Clean up existing data and create tables
         const cleanupPackagesQuery = `
-            DELETE FROM "${databaseName}"."titanic_merged_packages"
+            DELETE FROM "${databaseName}"."titanic_packages"
             WHERE true`;
 
         const cleanupObjectsQuery = `
-            DELETE FROM "${databaseName}"."titanic_merged_objects"
+            DELETE FROM "${databaseName}"."titanic_entries"
             WHERE true`;
 
         // Try to clean up existing data first
@@ -212,7 +200,7 @@ export async function handler(
 
         // Create tables if they don't exist
         const createPackagesQuery = `
-            CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_packages"
+            CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_packages"
             WITH (
                 format = 'PARQUET',
                 write_compression = 'SNAPPY',
@@ -231,7 +219,7 @@ export async function handler(
         `;
 
         const createObjectsQuery = `
-            CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_objects"
+            CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_entries"
             WITH (
                 format = 'PARQUET',
                 write_compression = 'SNAPPY',

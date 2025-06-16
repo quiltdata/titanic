@@ -12,14 +12,7 @@ describe("TitanicStack", () => {
     });
     const template = Template.fromStack(stack);
 
-    test("creates SQS queue with correct settings", () => {
-        template.hasResourceProperties("AWS::SQS::Queue", {
-            VisibilityTimeout: 900,
-            MessageRetentionPeriod: 1209600, // 14 days in seconds
-        });
-    });
-
-    test("creates Lambda function with SQS trigger", () => {
+    test("creates Lambda function with required permissions", () => {
         template.hasResourceProperties("AWS::Lambda::Function", {
             Environment: {
                 Variables: {
@@ -32,18 +25,6 @@ describe("TitanicStack", () => {
             },
         });
 
-        template.hasResourceProperties("AWS::Lambda::EventSourceMapping", {
-            BatchSize: 1,
-            EventSourceArn: {
-                "Fn::GetAtt": [
-                    Object.keys(template.findResources("AWS::SQS::Queue"))[0],
-                    "Arn",
-                ],
-            },
-        });
-    });
-
-    test("creates Lambda with required Athena permissions", () => {
         const policies = template.findResources("AWS::IAM::Policy");
         const policy = Object.values(policies)[0];
         const statements = policy.Properties.PolicyDocument.Statement;
