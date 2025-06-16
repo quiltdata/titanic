@@ -195,7 +195,7 @@ export async function handler(
                 await waitForQueryCompletion(cleanupObjectsResponse.QueryExecutionId);
             }
         } catch (e) {
-            console.log("No existing objects table to clean up");
+            console.log("No existing entries table to clean up");
         }
 
         // Create tables if they don't exist
@@ -262,8 +262,8 @@ export async function handler(
         await waitForQueryCompletion(createPackagesResponse.QueryExecutionId);
         console.log("Packages table created successfully");
 
-        // Create objects table
-        console.log("Creating objects table if it doesn't exist...");
+        // Create entries table
+        console.log("Creating entries table if it doesn't exist...");
         const createObjectsResponse = await athenaClient.send(
             new StartQueryExecutionCommand({
                 QueryString: createObjectsQuery,
@@ -272,17 +272,17 @@ export async function handler(
                 },
             }),
         ).catch((err) => {
-            console.error("Error creating objects table:", err);
+            console.error("Error creating entries table:", err);
             throw err;
         });
 
         if (!createObjectsResponse.QueryExecutionId) {
-            throw new Error("Failed to get QueryExecutionId for create objects table");
+            throw new Error("Failed to get QueryExecutionId for create entries table");
         }
 
-        console.log("Waiting for objects table creation to complete...");
+        console.log("Waiting for entries table creation to complete...");
         await waitForQueryCompletion(createObjectsResponse.QueryExecutionId);
-        console.log("Objects table created successfully");
+        console.log("entries table created successfully");
 
         // Check for empty source tables
         if (sourceTables.length === 0) {

@@ -6,9 +6,9 @@ Automatically merges multiple AWS Glue tables into a single queryable table whil
 
 The system creates and manages these tables:
 
-- **Source Views** (`*-view`): Views over your source data, e.g., `bucket1_objects-view`, `bucket2_objects-view`
+- **Source Views** (`*-view`): Views over your source data, e.g., `bucket1_packages-view`, `bucket2_objects-view`
 - **Merged Package Table** (`titanic_packages`): An Iceberg table containing deduplicated package metadata
-- **Merged Objects Table** (`titanic_entries`): An Iceberg table containing deduplicated object metadata
+- **Merged Entries Table** (`titanic_entries`): An Iceberg table containing deduplicated object-level metadata from package entries
 
 ### Package Table Schema
 
@@ -23,7 +23,7 @@ CREATE TABLE titanic_packages (
 )
 ```
 
-### Objects Table Schema
+### Entries Table Schema
 
 ```sql
 CREATE TABLE titanic_entries (
@@ -158,17 +158,14 @@ npm run cdk
 
 ### Triggering Merges
 
-Send a message to the SQS queue to trigger a merge:
+Send a custom event to EventBus to trigger the lambda.
 
 ```bash
-# Get queue URL
+# Get DEFAULT_EVENT_BUS
 source .env
 
-# Merge all tables
-aws sqs send-message --queue-url $QUEUE_URL --message-body '{}'
 
-# Merge specific tables
-aws sqs send-message --queue-url $QUEUE_URL --message-body '{"table_prefix": "test"}'
+
 ```
 
 ## Development
