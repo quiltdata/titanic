@@ -138,7 +138,6 @@ async function ensureMergedTablesExist(databaseName: string, targetBucket: strin
 function generateMergeQuery(databaseName: string, tableName: string, sourceBucket: string): string {
     const query = `
         INSERT INTO "${databaseName}"."${tableName.includes("packages-view") ? "titanic_packages" : "titanic_entries"}"
-        PARTITION (source_bucket, timestamp)
         SELECT DISTINCT
             ${
                 tableName.includes("packages")
