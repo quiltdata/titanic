@@ -29,13 +29,24 @@ export class PartitionedExampleTable extends BaseTable {
             )`;
     }
 
+    protected generateSelectClause(registryName: string, sourceAlias: string): string {
+        return `${sourceAlias}.id,
+              ${sourceAlias}.data,
+              ${sourceAlias}.created_at`;
+    }
+
+    protected generateWhereClauseForCtas(sourceAlias: string): string {
+        // No additional WHERE clause needed for this example
+        return '';
+    }
+
     protected generateInsertQuery(context: TableContext, sourceTableName: string): string {
+        const selectClause = this.generateSelectClause(context.registryName, 's');
+        
         return `
             INSERT INTO "${context.databaseName}"."${this.tableName}" (id, data, created_at)
             SELECT DISTINCT
-              s.id,
-              s.data,
-              s.created_at
+              ${selectClause}
             FROM "${context.databaseName}"."${sourceTableName}" s`;
     }
 }

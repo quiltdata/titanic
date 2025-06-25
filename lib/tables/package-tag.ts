@@ -25,14 +25,24 @@ export class PackageTagTable extends BaseTable {
             )`;
     }
 
+    protected generateSelectClause(registryName: string, sourceAlias: string): string {
+        return `'${registryName}' AS registry,
+              ${sourceAlias}.pkg_name,
+              ${sourceAlias}.timestamp AS tag_name,
+              ${sourceAlias}.top_hash`;
+    }
+
+    protected generateWhereClauseForCtas(sourceAlias: string): string {
+        return `${sourceAlias}.timestamp = 'latest'`;
+    }
+
     protected generateInsertQuery(context: TableContext, sourceTableName: string): string {
+        const selectClause = this.generateSelectClause(context.registryName, 's');
+        
         return `
             INSERT INTO "${context.databaseName}"."${this.tableName}" (registry, pkg_name, tag_name, top_hash)
             SELECT DISTINCT
-              '${context.registryName}' AS registry,
-              s.pkg_name,
-              s.timestamp AS tag_name,
-              s.top_hash
+              ${selectClause}
             FROM "${context.databaseName}"."${sourceTableName}" s
             LEFT JOIN "${context.databaseName}"."${this.tableName}" t
               ON s.pkg_name = t.pkg_name

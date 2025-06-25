@@ -11,9 +11,15 @@ export abstract class BaseTable {
     protected abstract getCreateTableSchema(databaseName: string): string;
     protected abstract getPartitioningClause(): string;
     protected abstract generateInsertQuery(context: TableContext, sourceTableName: string): string;
+    
+    // New abstract methods for cleaner CTAS generation
+    protected abstract generateSelectClause(registryName: string, sourceAlias: string): string;
+    protected abstract generateWhereClauseForCtas(sourceAlias: string): string;
 
     /**
-     * Ensure table exists using separate CREATE and INSERT operations
+     * Ensure table exists using appropriate strategy based on table type
+     * S3 tables: CREATE empty table with partitions
+     * Iceberg tables: CTAS (CREATE TABLE AS SELECT) with initial data
      */
     static async ensureExists(
         databaseName: string,
@@ -27,21 +33,82 @@ export abstract class BaseTable {
             return;
         }
 
-        console.log(`Creating ${instance.tableName} table using separate CREATE and INSERT`);
-        await instance.createTable(databaseName, targetBucket, useS3Table);
+        const shouldUseS3Table = useS3Table || false;
+        
+        if (shouldUseS3Table) {
+            // S3 table: create empty table with partitions
+            console.log(`Creating ${instance.tableName} S3 table (empty, partitioned)`);
+            await instance.createEmptyTable(databaseName, targetBucket, true);
+        } else {
+            // Iceberg table: use CTAS to create with initial data
+            console.log(`Creating ${instance.tableName} Iceberg table using CTAS`);
+            await instance.createTableAsSelect(databaseName, targetBucket, sourceView);
+        }
     }
 
     /**
-     * Create the table with the schema defined by the subclass
+     * Create an empty table with the schema defined by the subclass (for S3 tables)
      */
-    private async createTable(
+    private async createEmptyTable(
         databaseName: string,
         targetBucket: string,
-        useS3Table?: boolean
+        useS3Table: boolean
     ): Promise<void> {
         const createQuery = this.getCompleteCreateTableSchema(databaseName, targetBucket, useS3Table);
-        console.log(`Creating ${this.tableName} table with SQL:`, createQuery);
+        console.log(`Creating empty ${this.tableName} table with SQL:`, createQuery);
         await executeQuery(createQuery, targetBucket);
+    }
+
+    /**
+     * Create table using CTAS (CREATE TABLE AS SELECT) for Iceberg tables
+     */
+    private async createTableAsSelect(
+        databaseName: string,
+        targetBucket: string,
+        sourceView: string
+    ): Promise<void> {
+        const ctasQuery = this.generateCtasQuery(databaseName, targetBucket, sourceView);
+        console.log(`Creating ${this.tableName} table with CTAS:`, ctasQuery);
+        await executeQuery(ctasQuery, targetBucket);
+    }
+
+    /**
+     * Generate CTAS query for Iceberg tables
+     */
+    protected generateCtasQuery(databaseName: string, targetBucket: string, sourceView: string): string {
+        const withClause = this.getWithClause(targetBucket);
+        const selectQuery = this.generateSelectForCtas(databaseName, sourceView);
+        
+        return `CREATE TABLE "${databaseName}"."${this.tableName}"${withClause}
+AS ${selectQuery}`;
+    }
+
+    /**
+     * Generate the SELECT portion for CTAS using dedicated methods
+     */
+    protected generateSelectForCtas(databaseName: string, sourceView: string): string {
+        const registryName = this.extractRegistryFromSourceView(sourceView);
+        const sourceAlias = 's';
+        
+        const selectClause = this.generateSelectClause(registryName, sourceAlias);
+        const whereClause = this.generateWhereClauseForCtas(sourceAlias);
+        
+        let query = `SELECT DISTINCT ${selectClause} FROM "${databaseName}"."${sourceView}" ${sourceAlias}`;
+        
+        if (whereClause) {
+            query += ` WHERE ${whereClause}`;
+        }
+        
+        return query;
+    }
+
+    /**
+     * Extract registry name from source view name
+     */
+    private extractRegistryFromSourceView(sourceView: string): string {
+        // Extract registry from source view name (e.g., "bucket_name_packages-view" -> "bucket_name")
+        const match = sourceView.match(/^(.+?)_(?:packages|objects)-view$/);
+        return match ? match[1] : sourceView;
     }
 
     /**
