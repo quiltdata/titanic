@@ -1,0 +1,17 @@
+{
+    "version": "0",
+    "id": "6425eb6a-9627-e6a1-2ae8-9d2d8883dc74",
+    "detail-type": "package-revision",
+    "source": "com.quiltdata",
+    "account": "012345678901",
+    "time": "2025-04-25T14:46:51Z",
+    "region": "us-east-2",
+    "resources": [],
+    "detail": {
+        "version": "0.1",
+        "type": "created",
+        "bucket": "quilt-bake",
+        "handle": "test/2024-01-18",
+        "topHash": "39cb81fc1a02d5487d982d9adfbfabf328e4fa07161813497f5571c35674def2"
+    }
+}
