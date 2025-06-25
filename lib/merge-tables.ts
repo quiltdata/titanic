@@ -49,8 +49,6 @@ export async function handler(
         } while (nextToken);
 
         // Derive table prefix from bucket name (source registry name)
-        const tablePrefix = bucket?.replace(/[^a-zA-Z0-9]/g, '_');
-        console.log("Derived table_prefix from bucket:", tablePrefix);
 
         // Filter for source tables (excluding the merged table)
         const sourceTables = allTables?.filter((table) => {
@@ -59,8 +57,8 @@ export async function handler(
 
             // Check if table name ends with -view
             const isView = table.Name.endsWith("-view");
-            const matchesPrefix = tablePrefix
-                ? table.Name.startsWith(tablePrefix)
+            const matchesPrefix = bucket
+                ? table.Name.startsWith(bucket)
                 : true;
 
             return isView && matchesPrefix;
