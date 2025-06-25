@@ -16,8 +16,8 @@
   "devDependencies": {
     "@types/aws-lambda": "^8.10.149",
     "@types/jest": "^30.0.0",
-    "@types/node": "22.15.32",
-    "aws-cdk": "2.1018.1",
+    "@types/node": "22.15.33",
+    "aws-cdk": "2.1019.2",
     "aws-sdk-client-mock": "^4.1.0",
     "jest": "^30.0.0",
     "ts-jest": "^29.2.5",
@@ -28,7 +28,7 @@
     "@aws-cdk/aws-lambda-event-sources": "^1.203.0",
     "@aws-sdk/client-athena": "^3.787.0",
     "@aws-sdk/client-glue": "^3.787.0",
-    "aws-cdk-lib": "2.201.0",
+    "aws-cdk-lib": "2.202.0",
     "constructs": "^10.0.0",
     "dotenv": "^16.5.0"
   }
