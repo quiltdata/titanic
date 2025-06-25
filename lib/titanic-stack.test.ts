@@ -28,14 +28,20 @@ describe("TitanicStack", () => {
         });
     });
 
-    it("creates SQS queue with correct settings", () => {
-        template.hasResourceProperties("AWS::SQS::Queue", {
-            VisibilityTimeout: 900,
-            MessageRetentionPeriod: 1209600, // 14 days in seconds
+    it("creates EventBridge rule with correct event pattern", () => {
+        template.hasResourceProperties("AWS::Events::Rule", {
+            Description: "Route package revision events to merge tables Lambda",
+            EventPattern: {
+                source: ["com.quiltdata"],
+                "detail-type": ["package-revision", "package-tag", "package-entry"],
+                detail: {
+                    type: ["created", "updated"],
+                }
+            },
         });
     });
 
-    it("creates Lambda function with SQS trigger", () => {
+    it("creates Lambda function with EventBridge trigger", () => {
         template.hasResourceProperties("AWS::Lambda::Function", {
             Environment: {
                 Variables: {
@@ -46,15 +52,14 @@ describe("TitanicStack", () => {
             },
         });
 
-        template.hasResourceProperties("AWS::Lambda::EventSourceMapping", {
-            BatchSize: 1,
-            EventSourceArn: {
-                "Fn::GetAtt": [
-                    Object.keys(template.findResources("AWS::SQS::Queue"))[0],
-                    "Arn",
-                ],
-            },
-        });
+        // Check that EventBridge rule exists and has Lambda targets
+        const rules = template.findResources("AWS::Events::Rule");
+        const ruleProps = Object.values(rules)[0].Properties;
+        
+        expect(ruleProps.Targets).toHaveLength(1);
+        expect(ruleProps.Targets[0]).toHaveProperty("Arn");
+        expect(ruleProps.Targets[0].Arn).toHaveProperty("Fn::GetAtt");
+        expect(ruleProps.Targets[0].Arn["Fn::GetAtt"][1]).toBe("Arn");
     });
 
     it("creates required IAM policies", () => {
