@@ -1,9 +1,9 @@
 -- NOTE: Requires Athena session for that Iceberg Catalog
 
-DROP TABLE package_revision;
-DROP TABLE package_tag;
-DROP TABLE package_entry;
-DROP TABLE package_revision_entry;
+DROP TABLE IF EXISTS package_revision;
+DROP TABLE IF EXISTS package_tag;
+DROP TABLE IF EXISTS package_entry;
+DROP TABLE IF EXISTS package_revision_entry;
 
 
 -- Create Iceberg tables with the proper schema and partitioning
