@@ -91,7 +91,7 @@ describe("merge-tables lambda", () => {
         };
         const result = await handler(mockEvent, {} as Context);
         expect(result).toEqual({
-            message: "Created merged table (no source tables found)",
+            message: "Created tables (no source tables found)",
             numTables: 0,
         });
     });
@@ -144,7 +144,7 @@ describe("merge-tables lambda", () => {
         const result = await handler(mockEvent, {} as Context);
 
         expect(result).toEqual({
-            message: "Merge queries started successfully",
+            message: "Merge queries completed successfully",
             numTables: 2,
         });
     });
@@ -204,7 +204,7 @@ describe("merge-tables lambda", () => {
 
             const result = await handler(sqsEvent, {} as Context);
             expect(result).toEqual({
-                message: "Merge queries started successfully",
+                message: "Merge queries completed successfully",
                 numTables: 1, // Should find test_objects-view
             });
         });
@@ -255,7 +255,7 @@ describe("merge-tables lambda", () => {
 
             const result = await handler(sqsEvent, {} as Context);
             expect(result).toEqual({
-                message: "Created merged table (no source tables found)",
+                message: "Created tables (no source tables found)",
                 numTables: 0,
             });
         });
