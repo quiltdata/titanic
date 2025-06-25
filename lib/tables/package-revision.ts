@@ -1,28 +1,14 @@
-import { tableExists, executeQuery } from "../shared/athena-utils";
+import { BaseTable } from "./base-table";
 import { TableContext } from "../shared/types";
 
-export class PackageRevisionTable {
-    private static readonly TABLE_NAME = "package_revision";
-
-    static async ensureExists(
-        databaseName: string,
-        targetBucket: string,
-        sourceView: string
-    ): Promise<void> {
-        if (await tableExists(databaseName, this.TABLE_NAME)) {
-            return;
-        }
-
-        console.log(`Creating ${this.TABLE_NAME} table using separate CREATE and INSERT`);
-        await this.createTable(databaseName, targetBucket);
+export class PackageRevisionTable extends BaseTable {
+    protected get tableName(): string {
+        return "package_revision";
     }
 
-    private static async createTable(
-        databaseName: string,
-        targetBucket: string
-    ): Promise<void> {
-        const createQuery = `
-            CREATE TABLE IF NOT EXISTS "${databaseName}"."${this.TABLE_NAME}" (
+    protected getCreateTableSchema(databaseName: string): string {
+        return `
+            CREATE TABLE IF NOT EXISTS "${databaseName}"."${this.tableName}" (
               registry     STRING,   
               pkg_name     STRING,   
               top_hash     STRING,   
@@ -36,14 +22,11 @@ export class PackageRevisionTable {
               bucket(8, top_hash)
             )
         `;
-
-        console.log(`Creating ${this.TABLE_NAME} table with SQL:`, createQuery);
-        await executeQuery(createQuery, targetBucket);
     }
 
-    static generateInsertQuery(context: TableContext, sourceTableName: string): string {
+    protected generateInsertQuery(context: TableContext, sourceTableName: string): string {
         return `
-            INSERT INTO "${context.databaseName}"."${this.TABLE_NAME}" (registry, pkg_name, top_hash, timestamp, message, metadata)
+            INSERT INTO "${context.databaseName}"."${this.tableName}" (registry, pkg_name, top_hash, timestamp, message, metadata)
             SELECT DISTINCT
               '${context.registryName}' AS registry,
               s.pkg_name,
@@ -52,17 +35,11 @@ export class PackageRevisionTable {
               s.message,
               s.user_meta AS metadata
             FROM "${context.databaseName}"."${sourceTableName}" s
-            LEFT JOIN "${context.databaseName}"."${this.TABLE_NAME}" t
+            LEFT JOIN "${context.databaseName}"."${this.tableName}" t
               ON s.pkg_name = t.pkg_name
               AND s.top_hash = t.top_hash
               AND t.registry = '${context.registryName}'
             WHERE t.pkg_name IS NULL
               AND s.timestamp != 'latest'`;
-    }
-
-    static async insert(context: TableContext, sourceTableName: string): Promise<void> {
-        const query = this.generateInsertQuery(context, sourceTableName);
-        console.log(`Inserting into ${this.TABLE_NAME} with SQL:`, query);
-        await executeQuery(query, context.targetBucket);
     }
 }
