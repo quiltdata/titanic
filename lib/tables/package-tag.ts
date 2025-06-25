@@ -8,7 +8,7 @@ export class PackageTagTable extends BaseTable {
 
     protected getCreateTableSchema(databaseName: string): string {
         return `
-            CREATE TABLE IF NOT EXISTS "${databaseName}"."${this.tableName}" (
+            CREATE TABLE "${databaseName}"."${this.tableName}" (
               registry   STRING,      
               pkg_name   STRING,      
               tag_name   STRING,      

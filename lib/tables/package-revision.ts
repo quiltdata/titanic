@@ -8,7 +8,7 @@ export class PackageRevisionTable extends BaseTable {
 
     protected getCreateTableSchema(databaseName: string): string {
         return `
-            CREATE TABLE IF NOT EXISTS "${databaseName}"."${this.tableName}" (
+            CREATE TABLE "${databaseName}"."${this.tableName}" (
               registry     STRING,   
               pkg_name     STRING,   
               top_hash     STRING,   

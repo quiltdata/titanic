@@ -6,7 +6,7 @@ describe("Runtime Partitioning Configuration", () => {
             const table = new PackageRevisionTable();
             const schema = (table as any).getCompleteCreateTableSchema("test-db", false);
             
-            expect(schema).toContain('CREATE TABLE IF NOT EXISTS "test-db"."package_revision"');
+            expect(schema).toContain('CREATE TABLE "test-db"."package_revision"');
             expect(schema).not.toContain("PARTITIONED BY");
         });
 
@@ -14,7 +14,7 @@ describe("Runtime Partitioning Configuration", () => {
             const table = new PackageRevisionTable();
             const schema = (table as any).getCompleteCreateTableSchema("test-db", false);
             
-            expect(schema).toContain('CREATE TABLE IF NOT EXISTS "test-db"."package_revision"');
+            expect(schema).toContain('CREATE TABLE "test-db"."package_revision"');
             expect(schema).not.toContain("PARTITIONED BY");
         });
     });
@@ -24,7 +24,7 @@ describe("Runtime Partitioning Configuration", () => {
             const table = new PackageRevisionTable();
             const schema = (table as any).getCompleteCreateTableSchema("test-db", true);
             
-            expect(schema).toContain('CREATE TABLE IF NOT EXISTS "test-db"."package_revision"');
+            expect(schema).toContain('CREATE TABLE "test-db"."package_revision"');
             expect(schema).toContain("PARTITIONED BY");
             expect(schema).toContain("bucket(8, pkg_name)");
             expect(schema).toContain("bucket(8, top_hash)");

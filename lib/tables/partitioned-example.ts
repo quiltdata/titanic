@@ -15,7 +15,7 @@ export class PartitionedExampleTable extends BaseTable {
 
     protected getCreateTableSchema(databaseName: string): string {
         return `
-            CREATE TABLE IF NOT EXISTS "${databaseName}"."${this.tableName}" (
+            CREATE TABLE "${databaseName}"."${this.tableName}" (
               id           STRING,   
               data         STRING,   
               created_at   TIMESTAMP

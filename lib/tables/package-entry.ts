@@ -8,7 +8,7 @@ export class PackageEntryTable extends BaseTable {
 
     protected getCreateTableSchema(databaseName: string): string {
         return `
-            CREATE TABLE IF NOT EXISTS "${databaseName}"."${this.tableName}" (
+            CREATE TABLE "${databaseName}"."${this.tableName}" (
               registry     STRING,    
               top_hash     STRING,
               logical_key  STRING,    

@@ -59,7 +59,7 @@ describe("PackageTagTable", () => {
             expect(tableExists).toHaveBeenCalledWith("test-db", "package_tag");
             expect(executeQuery).toHaveBeenCalledTimes(1);
             expect(executeQuery).toHaveBeenCalledWith(
-                expect.stringContaining('CREATE TABLE IF NOT EXISTS "test-db"."package_tag"'),
+                expect.stringContaining('CREATE TABLE "test-db"."package_tag"'),
                 "test-bucket"
             );
         });
