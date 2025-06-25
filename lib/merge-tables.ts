@@ -1,4 +1,4 @@
-import { Context, SQSEvent } from "aws-lambda";
+import { Context, EventBridgeEvent } from "aws-lambda";
 import { GlueClient } from "@aws-sdk/client-glue";
 import { GetTableCommand, GetTablesCommand } from "@aws-sdk/client-glue";
 import { GetTablesCommandOutput } from "@aws-sdk/client-glue";
@@ -54,13 +54,22 @@ async function waitForQueryCompletion(
 
 const sourceBucketFromTableName = (name: string) => name.replace(/_(objects|packages)-view$/, "");
 
+// EventBridge event detail structure
+interface PackageEventDetail {
+    version: string;
+    type: string;
+    bucket: string;
+    handle: string;
+    topHash: string;
+}
+
 type HandlerResponse = {
     message: string;
     numTables: number;
 } | undefined;
 
 export async function handler(
-    event: SQSEvent,
+    event: EventBridgeEvent<string, PackageEventDetail>,
     context: Context,
 ): Promise<HandlerResponse> {
     const databaseName = process.env.DATABASE_NAME;
@@ -77,6 +86,11 @@ export async function handler(
     }
 
     try {
+        // Extract details from EventBridge event
+        console.log("EventBridge event:", JSON.stringify(event, null, 2));
+        const { bucket, handle, topHash } = event.detail;
+        console.log("Event details:", { bucket, handle, topHash });
+
         // Get all tables in the database
         console.log("Fetching tables from Glue database:", databaseName);
         let allTables = [];
@@ -98,21 +112,9 @@ export async function handler(
             nextToken = tablesResponse.NextToken;
         } while (nextToken);
 
-        // Get table_prefix from SQS message if present
-        const messageBody = event.Records?.[0]?.body;
-        console.log("SQS message body:", messageBody);
-        let tablePrefix: string | undefined;
-        try {
-            if (messageBody) {
-                const parsedBody = JSON.parse(messageBody) as {
-                    table_prefix?: string;
-                };
-                tablePrefix = parsedBody.table_prefix;
-                console.log("Parsed table_prefix from message:", tablePrefix);
-            }
-        } catch (e) {
-            console.warn("Failed to parse message body:", e);
-        }
+        // Derive table prefix from bucket name (source registry name)
+        const tablePrefix = bucket?.replace(/[^a-zA-Z0-9]/g, '_');
+        console.log("Derived table_prefix from bucket:", tablePrefix);
 
         // Filter for source tables (excluding the merged table)
         const sourceTables = allTables?.filter((table) => {
