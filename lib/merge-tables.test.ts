@@ -101,11 +101,11 @@ describe("merge-tables lambda", () => {
         glueMock.on(GetTablesCommand).resolves({
             TableList: [
                 {
-                    Name: "test_bucket_objects-view",
+                    Name: "test-bucket_objects-view",
                     StorageDescriptor: { Location: "s3://test-bucket/objects" },
                 },
                 {
-                    Name: "test_bucket_packages-view",
+                    Name: "test-bucket_packages-view",
                     StorageDescriptor: { Location: "s3://test-bucket/packages" },
                 },
             ],
@@ -129,7 +129,7 @@ describe("merge-tables lambda", () => {
 
         expect(result).toEqual({
             message: "Merge queries completed successfully",
-            numTables: 2, // Should find test_bucket_objects-view and test_bucket_packages-view
+            numTables: 2, // Should find test-bucket_objects-view and test-bucket_packages-view
         });
     });
 
@@ -138,15 +138,15 @@ describe("merge-tables lambda", () => {
             glueMock.on(GetTablesCommand).resolves({
                 TableList: [
                     {
-                        Name: "test_bucket_objects-view",
+                        Name: "test-bucket_objects-view",
                         StorageDescriptor: { Location: "s3://test/objects" },
                     },
                     {
-                        Name: "prod_bucket_objects-view",
+                        Name: "prod-bucket_objects-view",
                         StorageDescriptor: { Location: "s3://prod/objects" },
                     },
                     {
-                        Name: "dev_bucket_objects-view",
+                        Name: "dev-bucket_objects-view",
                         StorageDescriptor: {
                             Location: "s3://bucket/objects_all",
                         },
@@ -172,7 +172,7 @@ describe("merge-tables lambda", () => {
             const result = await handler(eventBridgeEvent, {} as Context);
             expect(result).toEqual({
                 message: "Merge queries completed successfully",
-                numTables: 1, // Should find test_bucket_objects-view
+                numTables: 1, // Should find test-bucket_objects-view
             });
         });
 
@@ -241,7 +241,7 @@ describe("merge-tables lambda", () => {
         glueMock.on(GetTablesCommand).resolves({
             TableList: [
                 {
-                    Name: "test_bucket_objects-view",
+                    Name: "test-bucket_objects-view",
                     StorageDescriptor: { Location: "s3://test-bucket/table1" },
                 },
             ],

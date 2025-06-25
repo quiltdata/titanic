@@ -57,8 +57,11 @@ export async function handler(
 
             // Check if table name ends with -view
             const isView = table.Name.endsWith("-view");
+            
+            // Match bucket name - table names use format: bucket_tabletype-view
+            // The bucket name in the table keeps its original format (with hyphens)
             const matchesPrefix = bucket
-                ? table.Name.startsWith(bucket)
+                ? table.Name.startsWith(bucket + "_")
                 : true;
 
             return isView && matchesPrefix;
