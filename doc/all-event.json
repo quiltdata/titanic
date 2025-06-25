@@ -1,0 +1,8 @@
+[
+  {
+    "Source": "com.quiltdata",
+    "DetailType": "package-revision",
+    "Detail": "{\"version\":\"0.1\",\"type\":\"created\",\"handle\":\"test/2024-01-18\",\"topHash\":\"39cb81fc1a02d5487d982d9adfbfabf328e4fa07161813497f5571c35674def2\"}",
+    "EventBusName": "default"
+  }
+]

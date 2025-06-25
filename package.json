@@ -7,9 +7,10 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf cdk.out */{*.js,*.d.ts}",
-    "cdk": "npm run test && npx cdk deploy --require-approval never && npm run event",
+    "cdk": "npm run test && npx cdk deploy --require-approval never && npm run event:bake",
     "lint": "eslint . --ext .ts --fix",
-    "event": "aws events put-events --entries file://doc/bus-event.json",
+    "event:bake": "aws events put-events --entries file://doc/bake-event.json",
+    "event:all": "aws events put-events --entries file://doc/all-event.json",
     "test": "jest",
     "watch": "tsc -w"
   },
