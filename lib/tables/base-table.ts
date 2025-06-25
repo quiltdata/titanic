@@ -144,7 +144,7 @@ AS ${selectQuery}`;
             WITH (
                 format = 'PARQUET',
                 write_compression = 'SNAPPY',
-                location = 's3://${targetBucket}/iceberg_catalog/',
+                location = 's3://${targetBucket}/iceberg_catalog/${this.tableName}/',
                 table_type = 'ICEBERG',
                 is_external = false
             )`;

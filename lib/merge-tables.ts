@@ -64,7 +64,7 @@ export async function handler(
             // The bucket name in the table keeps its original format (with hyphens)
             const matchesPrefix = bucket
                 ? table.Name.startsWith(bucket + "_")
-                : true;
+                : false;
 
             return isView && matchesPrefix;
         }) || [];

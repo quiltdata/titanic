@@ -11,7 +11,7 @@ describe("Runtime Table Configuration", () => {
             expect(schema).toContain("WITH (");
             expect(schema).toContain("format = 'PARQUET'");
             expect(schema).toContain("table_type = 'ICEBERG'");
-            expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/'");
+            expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/package_revision/'");
         });
 
         it("should generate CREATE TABLE with WITH clause when explicitly disabled", () => {
@@ -23,7 +23,7 @@ describe("Runtime Table Configuration", () => {
             expect(schema).toContain("WITH (");
             expect(schema).toContain("format = 'PARQUET'");
             expect(schema).toContain("table_type = 'ICEBERG'");
-            expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/'");
+            expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/package_revision/'");
         });
     });
 
@@ -58,7 +58,7 @@ describe("Runtime Table Configuration", () => {
             expect(schema.trim()).toMatch(/WITH\s*\(/);
             expect(schema.trim()).not.toMatch(/\)\s*PARTITIONED BY/);
             expect(schema).toContain("table_type = 'ICEBERG'");
-            expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/'");
+            expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/package_revision/'");
         });
 
         it("should handle undefined useS3Table parameter as Iceberg (default)", () => {
@@ -68,7 +68,7 @@ describe("Runtime Table Configuration", () => {
             expect(schema).not.toContain("PARTITIONED BY");
             expect(schema).toContain("WITH (");
             expect(schema).toContain("table_type = 'ICEBERG'");
-            expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/'");
+            expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/package_revision/'");
         });
 
         it("should correctly generate S3 table with partitions but no WITH clause", () => {
@@ -85,7 +85,7 @@ describe("Runtime Table Configuration", () => {
             expect(icebergSchema).not.toContain("PARTITIONED BY");
             expect(icebergSchema).toContain("WITH (");
             expect(icebergSchema).toContain("table_type = 'ICEBERG'");
-            expect(icebergSchema).toContain("location = 's3://test-bucket/iceberg_catalog/'");
+            expect(icebergSchema).toContain("location = 's3://test-bucket/iceberg_catalog/package_revision/'");
         });
     });
 });
