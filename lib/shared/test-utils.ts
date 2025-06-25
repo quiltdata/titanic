@@ -6,6 +6,19 @@ import {
     QueryExecutionState,
     StartQueryExecutionCommand,
 } from "@aws-sdk/client-athena";
+import { TableContext, createTableContext } from "./types";
+
+// Test helper for creating table contexts
+export function createTestTableContext(
+    overrides: Partial<TableContext> = {}
+): TableContext {
+    return createTableContext(
+        overrides.databaseName || "test-db",
+        overrides.targetBucket || "test-bucket", 
+        overrides.registryName || "test_registry",
+        overrides.enablePartitioning || false
+    );
+}
 
 // Mock the athena-utils module - this setup should be used in all table tests
 export const mockAthenaUtils = () => {
@@ -91,11 +104,7 @@ export const createInsertQueryTests = (
 ) => {
     describe("generateInsertQuery", () => {
         it(`should generate correct INSERT query for ${tableName}`, () => {
-            const context = {
-                databaseName: "test-db",
-                targetBucket: "test-bucket",
-                registryName: "test_registry"
-            };
+            const context = createTestTableContext();
 
             const query = tableClass.generateInsertQuery(context, "source_table");
 
@@ -112,11 +121,7 @@ export const createInsertQueryTests = (
 
     describe("insert", () => {
         it("should execute insert query", async () => {
-            const context = {
-                databaseName: "test-db",
-                targetBucket: "test-bucket",
-                registryName: "test_registry"
-            };
+            const context = createTestTableContext();
 
             await tableClass.insert(context, "source_table");
 

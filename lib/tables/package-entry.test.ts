@@ -8,6 +8,7 @@ import {
 } from "@aws-sdk/client-athena";
 import { PackageEntryTable } from "./package-entry";
 import { TableContext } from "../shared/types";
+import { createTestTableContext } from "../shared/test-utils";
 
 // Mock the athena-utils module
 jest.mock("../shared/athena-utils", () => {
@@ -61,11 +62,7 @@ describe("PackageEntryTable", () => {
 
     describe("generateInsertQuery", () => {
         it("should generate correct INSERT query with multihash conversion", () => {
-            const context: TableContext = {
-                databaseName: "test-db",
-                targetBucket: "test-bucket",
-                registryName: "test_registry"
-            };
+            const context = createTestTableContext();
 
             const query = PackageEntryTable.generateInsertQuery(context, "source_table");
 
@@ -93,11 +90,7 @@ describe("PackageEntryTable", () => {
 
     describe("insert", () => {
         it("should execute insert query", async () => {
-            const context: TableContext = {
-                databaseName: "test-db",
-                targetBucket: "test-bucket",
-                registryName: "test_registry"
-            };
+            const context = createTestTableContext();
 
             await PackageEntryTable.insert(context, "source_table");
 

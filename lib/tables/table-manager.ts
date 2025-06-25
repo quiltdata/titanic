@@ -2,7 +2,7 @@ import { Table } from "@aws-sdk/client-glue";
 import { PackageRevisionTable } from "./package-revision";
 import { PackageTagTable } from "./package-tag";
 import { PackageEntryTable } from "./package-entry";
-import { TableContext } from "../shared/types";
+import { TableContext, createTableContext } from "../shared/types";
 import { sourceBucketFromTableName } from "../shared/athena-utils";
 
 export class TableManager {
@@ -39,12 +39,12 @@ export class TableManager {
             if (!table.Name) continue;
 
             const registryName = sourceBucketFromTableName(table.Name);
-            const context: TableContext = {
-                databaseName: this.databaseName,
-                targetBucket: this.targetBucket,
+            const context = createTableContext(
+                this.databaseName,
+                this.targetBucket,
                 registryName,
-                enablePartitioning: this.enablePartitioning,
-            };
+                this.enablePartitioning
+            );
 
             const isPackagesView = table.Name.includes('packages-view');
 

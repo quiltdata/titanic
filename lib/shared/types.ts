@@ -22,6 +22,21 @@ export interface TableContext {
     enablePartitioning?: boolean;  // Runtime configuration for partitioning
 }
 
+// Factory function for creating table contexts
+export function createTableContext(
+    databaseName: string,
+    targetBucket: string,
+    registryName: string,
+    enablePartitioning: boolean = false
+): TableContext {
+    return {
+        databaseName,
+        targetBucket,
+        registryName,
+        enablePartitioning,
+    };
+}
+
 // Enhanced error types for better error handling
 export interface TableOperationError extends Error {
     operation: string;
@@ -30,10 +45,39 @@ export interface TableOperationError extends Error {
     queryId?: string;
 }
 
-// Configuration validation result
+// Validation result type
 export interface ValidationResult {
     isValid: boolean;
     errors: string[];
+}
+
+// Context validation utilities
+export class TableContextValidator {
+    static validateTableContext(context: Partial<TableContext>): ValidationResult {
+        const errors: string[] = [];
+
+        if (!context.databaseName) {
+            errors.push("databaseName is required");
+        }
+        if (!context.targetBucket) {
+            errors.push("targetBucket is required");
+        }
+        if (!context.registryName) {
+            errors.push("registryName is required");
+        }
+
+        return {
+            isValid: errors.length === 0,
+            errors
+        };
+    }
+
+    static assertValidContext(context: Partial<TableContext>): asserts context is TableContext {
+        const validation = this.validateTableContext(context);
+        if (!validation.isValid) {
+            throw new Error(`Invalid TableContext: ${validation.errors.join(", ")}`);
+        }
+    }
 }
 
 // Environment configuration interface
@@ -56,27 +100,6 @@ export class ConfigValidator {
         
         if (!process.env.TARGET_BUCKET) {
             errors.push("TARGET_BUCKET environment variable is required");
-        }
-        
-        return {
-            isValid: errors.length === 0,
-            errors
-        };
-    }
-    
-    static validateTableContext(context: Partial<TableContext>): ValidationResult {
-        const errors: string[] = [];
-        
-        if (!context.databaseName) {
-            errors.push("databaseName is required in table context");
-        }
-        
-        if (!context.targetBucket) {
-            errors.push("targetBucket is required in table context");
-        }
-        
-        if (!context.registryName) {
-            errors.push("registryName is required in table context");
         }
         
         return {

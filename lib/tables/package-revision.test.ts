@@ -8,6 +8,7 @@ import {
 } from "@aws-sdk/client-athena";
 import { PackageRevisionTable } from "./package-revision";
 import { TableContext } from "../shared/types";
+import { createTestTableContext } from "../shared/test-utils";
 
 // Mock the athena-utils module
 jest.mock("../shared/athena-utils", () => {
@@ -75,11 +76,7 @@ describe("PackageRevisionTable", () => {
 
     describe("generateInsertQuery", () => {
         it("should generate correct INSERT query", () => {
-            const context: TableContext = {
-                databaseName: "test-db",
-                targetBucket: "test-bucket",
-                registryName: "test_registry"
-            };
+            const context = createTestTableContext();
 
             const query = PackageRevisionTable.generateInsertQuery(context, "source_table");
 
@@ -94,11 +91,7 @@ describe("PackageRevisionTable", () => {
     describe("insert", () => {
         it("should execute insert query", async () => {
             executeQuery.mockResolvedValue(undefined);
-            const context: TableContext = {
-                databaseName: "test-db",
-                targetBucket: "test-bucket", 
-                registryName: "test_registry"
-            };
+            const context = createTestTableContext();
 
             await PackageRevisionTable.insert(context, "source_table");
 
