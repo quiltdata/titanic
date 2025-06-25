@@ -1,5 +1,4 @@
-import { tableExists, executeQuery, athenaClient, waitForQueryCompletion } from "../shared/athena-utils";
-import { StartQueryExecutionCommand } from "@aws-sdk/client-athena";
+import { tableExists, executeQuery } from "../shared/athena-utils";
 import { TableContext } from "../shared/types";
 
 export class PackageTagTable {
@@ -14,50 +13,29 @@ export class PackageTagTable {
             return;
         }
 
-        console.log(`Creating ${this.TABLE_NAME} table using CTAS from`, sourceView);
-        const schema = `
-            WITH (
-                format = 'PARQUET',
-                write_compression = 'SNAPPY',
-                location = 's3://${targetBucket}/${this.TABLE_NAME}/',
-                table_type = 'ICEBERG',
-                is_external = false
-            )
-            PARTITIONED BY (
-                registry,
-                tag_name,
-                bucket(8, pkg_name)
-            )`;
-
-        await this.createTableWithCTAS(databaseName, sourceView, schema, targetBucket);
+        console.log(`Creating ${this.TABLE_NAME} table using separate CREATE and INSERT`);
+        await this.createTable(databaseName, targetBucket);
     }
 
-    private static async createTableWithCTAS(
+    private static async createTable(
         databaseName: string,
-        sourceView: string,
-        schema: string,
         targetBucket: string
     ): Promise<void> {
-        const ctasQuery = `
-            CREATE TABLE IF NOT EXISTS "${databaseName}"."${this.TABLE_NAME}"
-            ${schema}
-            AS SELECT * FROM "${databaseName}"."${sourceView}" WHERE false
+        const createQuery = `
+            CREATE TABLE IF NOT EXISTS "${databaseName}"."${this.TABLE_NAME}" (
+              registry   STRING,      
+              pkg_name   STRING,      
+              tag_name   STRING,      
+              top_hash   STRING       
+            )
+            PARTITIONED BY (
+              registry,
+              tag_name,
+              bucket(8, pkg_name)
+            )
         `;
 
-        const response = await athenaClient.send(
-            new StartQueryExecutionCommand({
-                QueryString: ctasQuery,
-                ResultConfiguration: {
-                    OutputLocation: `s3://${targetBucket}/athena-results/`,
-                },
-            })
-        );
-
-        if (!response.QueryExecutionId) {
-            throw new Error(`Failed to get QueryExecutionId for CTAS for ${this.TABLE_NAME}`);
-        }
-
-        await waitForQueryCompletion(response.QueryExecutionId);
+        await executeQuery(createQuery, targetBucket);
     }
 
     static generateInsertQuery(context: TableContext, sourceTableName: string): string {

@@ -29,6 +29,11 @@ const { tableExists, executeQuery } = require("../shared/athena-utils");
 
 describe("PackageRevisionTable", () => {
     beforeEach(() => {
+        glueMock.reset();
+        athenaMock.reset();
+        jest.clearAllMocks();
+    });
+    beforeEach(() => {
         jest.clearAllMocks();
         glueMock.reset();
         athenaMock.reset();
@@ -46,29 +51,25 @@ describe("PackageRevisionTable", () => {
 
         it("should create table when it does not exist", async () => {
             tableExists.mockResolvedValue(false);
-            athenaMock
-                .on(StartQueryExecutionCommand)
-                .resolves({ QueryExecutionId: "test-id" })
-                .on(GetQueryExecutionCommand)
-                .resolves({
-                    QueryExecution: {
-                        Status: { State: QueryExecutionState.SUCCEEDED }
-                    }
-                });
+            executeQuery.mockResolvedValue(undefined);
 
             await PackageRevisionTable.ensureExists("test-db", "test-bucket", "source-view");
 
             expect(tableExists).toHaveBeenCalledWith("test-db", "package_revision");
-            expect(athenaMock.calls()).toHaveLength(2); // Start + Get query execution
+            expect(executeQuery).toHaveBeenCalledTimes(1);
+            expect(executeQuery).toHaveBeenCalledWith(
+                expect.stringContaining('CREATE TABLE IF NOT EXISTS "test-db"."package_revision"'),
+                "test-bucket"
+            );
         });
 
-        it("should throw error when CTAS query fails to get execution ID", async () => {
+        it("should throw error when CREATE query fails", async () => {
             tableExists.mockResolvedValue(false);
-            athenaMock.on(StartQueryExecutionCommand).resolves({});
+            executeQuery.mockRejectedValue(new Error("Query failed"));
 
             await expect(
                 PackageRevisionTable.ensureExists("test-db", "test-bucket", "source-view")
-            ).rejects.toThrow("Failed to get QueryExecutionId for CTAS for package_revision");
+            ).rejects.toThrow("Query failed");
         });
     });
 
@@ -92,6 +93,7 @@ describe("PackageRevisionTable", () => {
 
     describe("insert", () => {
         it("should execute insert query", async () => {
+            executeQuery.mockResolvedValue(undefined);
             const context: TableContext = {
                 databaseName: "test-db",
                 targetBucket: "test-bucket", 

@@ -29,6 +29,11 @@ const { tableExists, executeQuery } = require("../shared/athena-utils");
 
 describe("PackageTagTable", () => {
     beforeEach(() => {
+        glueMock.reset();
+        athenaMock.reset();
+        jest.clearAllMocks();
+    });
+    beforeEach(() => {
         jest.clearAllMocks();
         glueMock.reset();
         athenaMock.reset();
@@ -46,20 +51,16 @@ describe("PackageTagTable", () => {
 
         it("should create table when it does not exist", async () => {
             tableExists.mockResolvedValue(false);
-            athenaMock
-                .on(StartQueryExecutionCommand)
-                .resolves({ QueryExecutionId: "test-id" })
-                .on(GetQueryExecutionCommand)
-                .resolves({
-                    QueryExecution: {
-                        Status: { State: QueryExecutionState.SUCCEEDED }
-                    }
-                });
+            executeQuery.mockResolvedValue(undefined);
 
             await PackageTagTable.ensureExists("test-db", "test-bucket", "source-view");
 
             expect(tableExists).toHaveBeenCalledWith("test-db", "package_tag");
-            expect(athenaMock.calls()).toHaveLength(2);
+            expect(executeQuery).toHaveBeenCalledTimes(1);
+            expect(executeQuery).toHaveBeenCalledWith(
+                expect.stringContaining('CREATE TABLE IF NOT EXISTS "test-db"."package_tag"'),
+                "test-bucket"
+            );
         });
     });
 

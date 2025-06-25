@@ -46,20 +46,16 @@ describe("PackageEntryTable", () => {
 
         it("should create table when it does not exist", async () => {
             tableExists.mockResolvedValue(false);
-            athenaMock
-                .on(StartQueryExecutionCommand)
-                .resolves({ QueryExecutionId: "test-id" })
-                .on(GetQueryExecutionCommand)
-                .resolves({
-                    QueryExecution: {
-                        Status: { State: QueryExecutionState.SUCCEEDED }
-                    }
-                });
+            executeQuery.mockResolvedValue(undefined);
 
             await PackageEntryTable.ensureExists("test-db", "test-bucket", "source-view");
 
             expect(tableExists).toHaveBeenCalledWith("test-db", "package_entry");
-            expect(athenaMock.calls()).toHaveLength(2);
+            expect(executeQuery).toHaveBeenCalledTimes(1);
+            expect(executeQuery).toHaveBeenCalledWith(
+                expect.stringContaining('CREATE TABLE IF NOT EXISTS "test-db"."package_entry"'),
+                "test-bucket"
+            );
         });
     });
 
