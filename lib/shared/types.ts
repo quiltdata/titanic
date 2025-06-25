@@ -19,7 +19,7 @@ export interface TableContext {
     databaseName: string;
     targetBucket: string;
     registryName: string;
-    enablePartitioning?: boolean;  // Runtime configuration for partitioning
+    useS3Table?: boolean;  // Runtime configuration: true = S3 table with partitions, false = Iceberg table with WITH clause
 }
 
 // Factory function for creating table contexts
@@ -27,13 +27,13 @@ export function createTableContext(
     databaseName: string,
     targetBucket: string,
     registryName: string,
-    enablePartitioning: boolean = false
+    useS3Table: boolean = false
 ): TableContext {
     return {
         databaseName,
         targetBucket,
         registryName,
-        enablePartitioning,
+        useS3Table,
     };
 }
 
@@ -84,6 +84,7 @@ export class TableContextValidator {
 export interface EnvironmentConfig {
     DATABASE_NAME: string;
     TARGET_BUCKET: string;
+    USE_S3_TABLE?: string;  // "true" for S3 tables with partitions, "false" for Iceberg with WITH clause
     LAMBDA_TIMEOUT?: string;
     QUEUE_URL?: string;
     QUILT_READ_POLICY_ARN?: string;

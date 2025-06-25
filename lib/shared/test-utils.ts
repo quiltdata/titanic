@@ -16,7 +16,7 @@ export function createTestTableContext(
         overrides.databaseName || "test-db",
         overrides.targetBucket || "test-bucket", 
         overrides.registryName || "test_registry",
-        overrides.enablePartitioning || false
+        overrides.useS3Table || false
     );
 }
 

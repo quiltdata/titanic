@@ -48,8 +48,8 @@ describe("TableManager", () => {
             expect(MockedPackageEntryTable.ensureExists).not.toHaveBeenCalled();
         });
 
-        it("should pass enablePartitioning=true when configured", async () => {
-            const partitionedTableManager = new TableManager("test-db", "test-bucket", true);
+        it("should pass useS3Table=true when configured", async () => {
+            const s3TableManager = new TableManager("test-db", "test-bucket", true);
             const sourceTables: Table[] = [
                 { Name: "test_packages-view" }
             ];
@@ -57,7 +57,7 @@ describe("TableManager", () => {
             MockedPackageRevisionTable.ensureExists.mockResolvedValue();
             MockedPackageTagTable.ensureExists.mockResolvedValue();
 
-            await partitionedTableManager.ensureTablesExist(sourceTables);
+            await s3TableManager.ensureTablesExist(sourceTables);
 
             expect(MockedPackageRevisionTable.ensureExists).toHaveBeenCalledWith(
                 "test-db", 
@@ -143,7 +143,7 @@ describe("TableManager", () => {
                     databaseName: "test-db",
                     targetBucket: "test-bucket",
                     registryName: "test_bucket",
-                    enablePartitioning: false
+                    useS3Table: false
                 },
                 "test_bucket_packages-view"
             );
@@ -152,14 +152,14 @@ describe("TableManager", () => {
                     databaseName: "test-db",
                     targetBucket: "test-bucket",
                     registryName: "test_bucket",
-                    enablePartitioning: false
+                    useS3Table: false
                 },
                 "test_bucket_packages-view"
             );
         });
 
-        it("should pass enablePartitioning=true in context when configured", async () => {
-            const partitionedTableManager = new TableManager("test-db", "test-bucket", true);
+        it("should pass useS3Table=true in context when configured", async () => {
+            const s3TableManager = new TableManager("test-db", "test-bucket", true);
             const sourceTables: Table[] = [
                 { Name: "test_bucket_packages-view" }
             ];
@@ -167,7 +167,7 @@ describe("TableManager", () => {
             MockedPackageRevisionTable.insert.mockResolvedValue();
             MockedPackageTagTable.insert.mockResolvedValue();
 
-            const queryCount = await partitionedTableManager.executeInserts(sourceTables);
+            const queryCount = await s3TableManager.executeInserts(sourceTables);
 
             expect(queryCount).toBe(2);
             expect(MockedPackageRevisionTable.insert).toHaveBeenCalledWith(
@@ -175,7 +175,7 @@ describe("TableManager", () => {
                     databaseName: "test-db",
                     targetBucket: "test-bucket",
                     registryName: "test_bucket",
-                    enablePartitioning: true
+                    useS3Table: true
                 },
                 "test_bucket_packages-view"
             );
@@ -184,7 +184,7 @@ describe("TableManager", () => {
                     databaseName: "test-db",
                     targetBucket: "test-bucket",
                     registryName: "test_bucket",
-                    enablePartitioning: true
+                    useS3Table: true
                 },
                 "test_bucket_packages-view"
             );
@@ -205,7 +205,7 @@ describe("TableManager", () => {
                     databaseName: "test-db",
                     targetBucket: "test-bucket",
                     registryName: "prod_registry",
-                    enablePartitioning: false
+                    useS3Table: false
                 },
                 "prod_registry_objects-view"
             );

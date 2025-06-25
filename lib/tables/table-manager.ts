@@ -8,12 +8,12 @@ import { sourceBucketFromTableName } from "../shared/athena-utils";
 export class TableManager {
     private databaseName: string;
     private targetBucket: string;
-    private enablePartitioning: boolean;
+    private useS3Table: boolean;
 
-    constructor(databaseName: string, targetBucket: string, enablePartitioning: boolean = false) {
+    constructor(databaseName: string, targetBucket: string, useS3Table: boolean = false) {
         this.databaseName = databaseName;
         this.targetBucket = targetBucket;
-        this.enablePartitioning = enablePartitioning;
+        this.useS3Table = useS3Table;
     }
 
     async ensureTablesExist(sourceTables: Table[]): Promise<void> {
@@ -23,12 +23,12 @@ export class TableManager {
 
         // Create tables if needed
         if (packagesView) {
-            await PackageRevisionTable.ensureExists(this.databaseName, this.targetBucket, packagesView, this.enablePartitioning);
-            await PackageTagTable.ensureExists(this.databaseName, this.targetBucket, packagesView, this.enablePartitioning);
+            await PackageRevisionTable.ensureExists(this.databaseName, this.targetBucket, packagesView, this.useS3Table);
+            await PackageTagTable.ensureExists(this.databaseName, this.targetBucket, packagesView, this.useS3Table);
         }
 
         if (entriesView) {
-            await PackageEntryTable.ensureExists(this.databaseName, this.targetBucket, entriesView, this.enablePartitioning);
+            await PackageEntryTable.ensureExists(this.databaseName, this.targetBucket, entriesView, this.useS3Table);
         }
     }
 
@@ -43,7 +43,7 @@ export class TableManager {
                 this.databaseName,
                 this.targetBucket,
                 registryName,
-                this.enablePartitioning
+                this.useS3Table
             );
 
             const isPackagesView = table.Name.includes('packages-view');

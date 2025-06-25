@@ -6,10 +6,6 @@ import { TableContext } from "../shared/types";
  * Provides common functionality for table creation and data insertion
  */
 export abstract class BaseTable {
-    protected static readonly TABLE_FORMAT = 'PARQUET';
-    protected static readonly COMPRESSION = 'SNAPPY';
-    protected static readonly TABLE_TYPE = 'ICEBERG';
-    
     // Abstract properties that subclasses must implement
     protected abstract get tableName(): string;
     protected abstract getCreateTableSchema(databaseName: string): string;
@@ -23,7 +19,7 @@ export abstract class BaseTable {
         databaseName: string,
         targetBucket: string,
         sourceView: string,
-        enablePartitioning?: boolean
+        useS3Table?: boolean
     ): Promise<void> {
         const instance = new (this as any)();
         
@@ -32,7 +28,7 @@ export abstract class BaseTable {
         }
 
         console.log(`Creating ${instance.tableName} table using separate CREATE and INSERT`);
-        await instance.createTable(databaseName, targetBucket, enablePartitioning);
+        await instance.createTable(databaseName, targetBucket, useS3Table);
     }
 
     /**
@@ -41,28 +37,50 @@ export abstract class BaseTable {
     private async createTable(
         databaseName: string,
         targetBucket: string,
-        enablePartitioning?: boolean
+        useS3Table?: boolean
     ): Promise<void> {
-        const createQuery = this.getCompleteCreateTableSchema(databaseName, enablePartitioning);
+        const createQuery = this.getCompleteCreateTableSchema(databaseName, targetBucket, useS3Table);
         console.log(`Creating ${this.tableName} table with SQL:`, createQuery);
         await executeQuery(createQuery, targetBucket);
     }
 
     /**
-     * Generate the complete CREATE TABLE schema with optional partitioning
+     * Generate the complete CREATE TABLE schema with conditional partitioning and WITH clause
+     * useS3Table=true: S3 table with partitions, no WITH clause
+     * useS3Table=false: Iceberg table with WITH clause, no partitions
      */
-    protected getCompleteCreateTableSchema(databaseName: string, enablePartitioning?: boolean): string {
+    protected getCompleteCreateTableSchema(databaseName: string, targetBucket: string, useS3Table?: boolean): string {
         const baseSchema = this.getCreateTableSchema(databaseName);
         const partitioningClause = this.getPartitioningClause();
         
-        // Check runtime configuration, defaulting to false
-        const shouldPartition = enablePartitioning || false;
+        // Check runtime configuration, defaulting to false (Iceberg)
+        const shouldUseS3Table = useS3Table || false;
         
-        if (shouldPartition && partitioningClause) {
-            return `${baseSchema.trim()}\n            ${partitioningClause}`;
+        let completeSchema = baseSchema.trim();
+        
+        if (shouldUseS3Table && partitioningClause) {
+            // S3 table: add partitioning, no WITH clause
+            completeSchema += `\n            ${partitioningClause}`;
+        } else {
+            // Iceberg table: add WITH clause, no partitioning
+            completeSchema += this.getWithClause(targetBucket);
         }
         
-        return baseSchema;
+        return completeSchema;
+    }
+
+    /**
+     * Generate the WITH clause for Iceberg table properties
+     */
+    protected getWithClause(targetBucket: string): string {
+        return `
+            WITH (
+                format = 'PARQUET',
+                write_compression = 'SNAPPY',
+                location = 's3://${targetBucket}/iceberg_catalog/',
+                table_type = 'ICEBERG',
+                is_external = false
+            )`;
     }
 
     /**

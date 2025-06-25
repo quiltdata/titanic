@@ -8,7 +8,7 @@ DROP TABLE IF EXISTS package_revision_entry;
 
 -- Create Iceberg tables with the proper schema and partitioning
 
-CREATE TABLE IF NOT EXISTS package_revision (
+CREATE TABLE package_revision (
   registry     STRING,   
   pkg_name     STRING,   
   top_hash     STRING,   
@@ -20,9 +20,16 @@ PARTITIONED BY (
   registry,
   bucket(8, pkg_name),
   bucket(8, top_hash)
+)
+WITH (
+  format = 'PARQUET',
+  write_compression = 'SNAPPY',
+  location = 's3://${targetBucket}/iceberg_catalog/',
+  table_type = 'ICEBERG',
+  is_external = false
 );
 
-CREATE TABLE IF NOT EXISTS package_tag (
+CREATE TABLE package_tag (
   registry   STRING,      
   pkg_name   STRING,      
   tag_name   STRING,      
@@ -32,6 +39,13 @@ PARTITIONED BY (
   registry,
   tag_name,
   bucket(8, pkg_name)
+)
+WITH (
+  format = 'PARQUET',
+  write_compression = 'SNAPPY',
+  location = 's3://${targetBucket}/iceberg_catalog/',
+  table_type = 'ICEBERG',
+  is_external = false
 );
 
 CREATE TABLE IF NOT EXISTS package_entry (

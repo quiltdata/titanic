@@ -10,11 +10,11 @@ export async function handler(
 ): Promise<HandlerResponse> {
     const databaseName = process.env.DATABASE_NAME;
     const targetBucket = process.env.TARGET_BUCKET;
-    const enablePartitioning = process.env.ENABLE_PARTITIONING === "true";
+    const useS3Table = process.env.USE_S3_TABLE === "true";
     console.log("Environment variables:", {
         databaseName,
         targetBucket,
-        enablePartitioning,
+        useS3Table,
     });
 
     if (!databaseName || !targetBucket) {
@@ -72,7 +72,7 @@ export async function handler(
         console.log("Source tables found:", sourceTables.map((t) => t.Name));
 
         // Initialize table manager
-        const tableManager = new TableManager(databaseName, targetBucket, enablePartitioning);
+        const tableManager = new TableManager(databaseName, targetBucket, useS3Table);
 
         // Ensure all required tables exist
         await tableManager.ensureTablesExist(sourceTables);
