@@ -9,16 +9,8 @@ import {
     QueryExecutionState,
     StartQueryExecutionCommand,
 } from "@aws-sdk/client-athena";
-import { handler } from "../lib/merge-tables";
-
-// EventBridge event detail structure
-interface PackageEventDetail {
-    version: string;
-    type: string;
-    bucket: string;
-    handle: string;
-    topHash: string;
-}
+import { handler } from "./merge-tables";
+import { PackageEventDetail } from "./shared/types";
 
 const glueMock = mockClient(GlueClient);
 const athenaMock = mockClient(AthenaClient);

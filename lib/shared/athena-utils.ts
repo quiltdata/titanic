@@ -80,4 +80,66 @@ export async function executeQuery(query: string, targetBucket: string): Promise
     console.log("Query completed successfully");
 }
 
+/**
+ * Enhanced query execution with retry logic
+ */
+export async function executeQueryWithRetry(
+    query: string, 
+    targetBucket: string,
+    maxRetries: number = 3,
+    retryDelay: number = 1000
+): Promise<void> {
+    let lastError: Error;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            await executeQuery(query, targetBucket);
+            return; // Success, exit retry loop
+        } catch (error) {
+            lastError = error as Error;
+            console.warn(`Query attempt ${attempt} failed:`, lastError.message);
+            
+            if (attempt < maxRetries) {
+                console.log(`Retrying in ${retryDelay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                retryDelay *= 2; // Exponential backoff
+            }
+        }
+    }
+    
+    throw new Error(`Query failed after ${maxRetries} attempts: ${lastError!.message}`);
+}
+
+/**
+ * Validate query syntax before execution (basic validation)
+ */
+export function validateQuery(query: string): { isValid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    
+    // Basic SQL injection protection
+    const suspiciousPatterns = [
+        /;\s*DROP\s+/i,
+        /;\s*DELETE\s+/i,
+        /;\s*TRUNCATE\s+/i,
+        /;\s*ALTER\s+/i
+    ];
+    
+    for (const pattern of suspiciousPatterns) {
+        if (pattern.test(query)) {
+            errors.push(`Potentially dangerous SQL pattern detected: ${pattern.source}`);
+        }
+    }
+    
+    // Ensure query contains expected table operations
+    if (!query.toLowerCase().includes('create table') && 
+        !query.toLowerCase().includes('insert into')) {
+        errors.push("Query must be a CREATE TABLE or INSERT INTO statement");
+    }
+    
+    return {
+        isValid: errors.length === 0,
+        errors
+    };
+}
+
 export const sourceBucketFromTableName = (name: string) => name.replace(/_(objects|packages)-view$/, "");
