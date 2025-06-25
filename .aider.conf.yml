@@ -12,4 +12,6 @@ file:
   - test/merge-tables.test.ts
   - test/titanic-stack.test.ts
   - test/titanic.test.ts
+  - package.json
+  - README.md
 
