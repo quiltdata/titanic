@@ -8,10 +8,12 @@ import { sourceBucketFromTableName } from "../shared/athena-utils";
 export class TableManager {
     private databaseName: string;
     private targetBucket: string;
+    private enablePartitioning: boolean;
 
-    constructor(databaseName: string, targetBucket: string) {
+    constructor(databaseName: string, targetBucket: string, enablePartitioning: boolean = false) {
         this.databaseName = databaseName;
         this.targetBucket = targetBucket;
+        this.enablePartitioning = enablePartitioning;
     }
 
     async ensureTablesExist(sourceTables: Table[]): Promise<void> {
@@ -21,12 +23,12 @@ export class TableManager {
 
         // Create tables if needed
         if (packagesView) {
-            await PackageRevisionTable.ensureExists(this.databaseName, this.targetBucket, packagesView);
-            await PackageTagTable.ensureExists(this.databaseName, this.targetBucket, packagesView);
+            await PackageRevisionTable.ensureExists(this.databaseName, this.targetBucket, packagesView, this.enablePartitioning);
+            await PackageTagTable.ensureExists(this.databaseName, this.targetBucket, packagesView, this.enablePartitioning);
         }
 
         if (entriesView) {
-            await PackageEntryTable.ensureExists(this.databaseName, this.targetBucket, entriesView);
+            await PackageEntryTable.ensureExists(this.databaseName, this.targetBucket, entriesView, this.enablePartitioning);
         }
     }
 
@@ -41,6 +43,7 @@ export class TableManager {
                 databaseName: this.databaseName,
                 targetBucket: this.targetBucket,
                 registryName,
+                enablePartitioning: this.enablePartitioning,
             };
 
             const isPackagesView = table.Name.includes('packages-view');

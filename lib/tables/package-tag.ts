@@ -14,12 +14,15 @@ export class PackageTagTable extends BaseTable {
               tag_name   STRING,      
               top_hash   STRING       
             )
-            PARTITIONED BY (
+        `;
+    }
+
+    protected getPartitioningClause(): string {
+        return `PARTITIONED BY (
               registry,
               tag_name,
               bucket(8, pkg_name)
-            )
-        `;
+            )`;
     }
 
     protected generateInsertQuery(context: TableContext, sourceTableName: string): string {

@@ -13,6 +13,7 @@ export abstract class BaseTable {
     // Abstract properties that subclasses must implement
     protected abstract get tableName(): string;
     protected abstract getCreateTableSchema(databaseName: string): string;
+    protected abstract getPartitioningClause(): string;
     protected abstract generateInsertQuery(context: TableContext, sourceTableName: string): string;
 
     /**
@@ -21,7 +22,8 @@ export abstract class BaseTable {
     static async ensureExists(
         databaseName: string,
         targetBucket: string,
-        sourceView: string
+        sourceView: string,
+        enablePartitioning?: boolean
     ): Promise<void> {
         const instance = new (this as any)();
         
@@ -30,7 +32,7 @@ export abstract class BaseTable {
         }
 
         console.log(`Creating ${instance.tableName} table using separate CREATE and INSERT`);
-        await instance.createTable(databaseName, targetBucket);
+        await instance.createTable(databaseName, targetBucket, enablePartitioning);
     }
 
     /**
@@ -38,11 +40,29 @@ export abstract class BaseTable {
      */
     private async createTable(
         databaseName: string,
-        targetBucket: string
+        targetBucket: string,
+        enablePartitioning?: boolean
     ): Promise<void> {
-        const createQuery = this.getCreateTableSchema(databaseName);
+        const createQuery = this.getCompleteCreateTableSchema(databaseName, enablePartitioning);
         console.log(`Creating ${this.tableName} table with SQL:`, createQuery);
         await executeQuery(createQuery, targetBucket);
+    }
+
+    /**
+     * Generate the complete CREATE TABLE schema with optional partitioning
+     */
+    protected getCompleteCreateTableSchema(databaseName: string, enablePartitioning?: boolean): string {
+        const baseSchema = this.getCreateTableSchema(databaseName);
+        const partitioningClause = this.getPartitioningClause();
+        
+        // Check runtime configuration, defaulting to false
+        const shouldPartition = enablePartitioning || false;
+        
+        if (shouldPartition && partitioningClause) {
+            return `${baseSchema.trim()}\n            ${partitioningClause}`;
+        }
+        
+        return baseSchema;
     }
 
     /**

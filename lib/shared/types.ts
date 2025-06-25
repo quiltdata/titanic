@@ -19,6 +19,7 @@ export interface TableContext {
     databaseName: string;
     targetBucket: string;
     registryName: string;
+    enablePartitioning?: boolean;  // Runtime configuration for partitioning
 }
 
 // Enhanced error types for better error handling

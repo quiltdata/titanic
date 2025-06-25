@@ -16,12 +16,15 @@ export class PackageRevisionTable extends BaseTable {
               message      STRING,   
               metadata    STRING       
             )
-            PARTITIONED BY (
+        `;
+    }
+
+    protected getPartitioningClause(): string {
+        return `PARTITIONED BY (
               registry,
               bucket(8, pkg_name),
               bucket(8, top_hash)
-            )
-        `;
+            )`;
     }
 
     protected generateInsertQuery(context: TableContext, sourceTableName: string): string {

@@ -17,11 +17,14 @@ export class PackageEntryTable extends BaseTable {
               size         BIGINT,    
               metadata    STRING        
             )
-            PARTITIONED BY (
+        `;
+    }
+
+    protected getPartitioningClause(): string {
+        return `PARTITIONED BY (
               registry,
               bucket(64, physical_key)
-            )
-        `;
+            )`;
     }
 
     protected generateInsertQuery(context: TableContext, sourceTableName: string): string {

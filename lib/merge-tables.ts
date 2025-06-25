@@ -10,9 +10,11 @@ export async function handler(
 ): Promise<HandlerResponse> {
     const databaseName = process.env.DATABASE_NAME;
     const targetBucket = process.env.TARGET_BUCKET;
+    const enablePartitioning = process.env.ENABLE_PARTITIONING === "true";
     console.log("Environment variables:", {
         databaseName,
         targetBucket,
+        enablePartitioning,
     });
 
     if (!databaseName || !targetBucket) {
@@ -70,7 +72,7 @@ export async function handler(
         console.log("Source tables found:", sourceTables.map((t) => t.Name));
 
         // Initialize table manager
-        const tableManager = new TableManager(databaseName, targetBucket);
+        const tableManager = new TableManager(databaseName, targetBucket, enablePartitioning);
 
         // Ensure all required tables exist
         await tableManager.ensureTablesExist(sourceTables);

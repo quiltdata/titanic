@@ -36,14 +36,41 @@ describe("TableManager", () => {
             expect(MockedPackageRevisionTable.ensureExists).toHaveBeenCalledWith(
                 "test-db", 
                 "test-bucket", 
-                "test_packages-view"
+                "test_packages-view",
+                false
             );
             expect(MockedPackageTagTable.ensureExists).toHaveBeenCalledWith(
                 "test-db", 
                 "test-bucket", 
-                "test_packages-view"
+                "test_packages-view",
+                false
             );
             expect(MockedPackageEntryTable.ensureExists).not.toHaveBeenCalled();
+        });
+
+        it("should pass enablePartitioning=true when configured", async () => {
+            const partitionedTableManager = new TableManager("test-db", "test-bucket", true);
+            const sourceTables: Table[] = [
+                { Name: "test_packages-view" }
+            ];
+
+            MockedPackageRevisionTable.ensureExists.mockResolvedValue();
+            MockedPackageTagTable.ensureExists.mockResolvedValue();
+
+            await partitionedTableManager.ensureTablesExist(sourceTables);
+
+            expect(MockedPackageRevisionTable.ensureExists).toHaveBeenCalledWith(
+                "test-db", 
+                "test-bucket", 
+                "test_packages-view",
+                true
+            );
+            expect(MockedPackageTagTable.ensureExists).toHaveBeenCalledWith(
+                "test-db", 
+                "test-bucket", 
+                "test_packages-view",
+                true
+            );
         });
 
         it("should create entry table when objects view exists", async () => {
@@ -59,7 +86,8 @@ describe("TableManager", () => {
             expect(MockedPackageEntryTable.ensureExists).toHaveBeenCalledWith(
                 "test-db", 
                 "test-bucket", 
-                "test_objects-view"
+                "test_objects-view",
+                false
             );
             expect(MockedPackageRevisionTable.ensureExists).not.toHaveBeenCalled();
             expect(MockedPackageTagTable.ensureExists).not.toHaveBeenCalled();
@@ -114,7 +142,8 @@ describe("TableManager", () => {
                 {
                     databaseName: "test-db",
                     targetBucket: "test-bucket",
-                    registryName: "test_bucket"
+                    registryName: "test_bucket",
+                    enablePartitioning: false
                 },
                 "test_bucket_packages-view"
             );
@@ -122,7 +151,40 @@ describe("TableManager", () => {
                 {
                     databaseName: "test-db",
                     targetBucket: "test-bucket",
-                    registryName: "test_bucket"
+                    registryName: "test_bucket",
+                    enablePartitioning: false
+                },
+                "test_bucket_packages-view"
+            );
+        });
+
+        it("should pass enablePartitioning=true in context when configured", async () => {
+            const partitionedTableManager = new TableManager("test-db", "test-bucket", true);
+            const sourceTables: Table[] = [
+                { Name: "test_bucket_packages-view" }
+            ];
+
+            MockedPackageRevisionTable.insert.mockResolvedValue();
+            MockedPackageTagTable.insert.mockResolvedValue();
+
+            const queryCount = await partitionedTableManager.executeInserts(sourceTables);
+
+            expect(queryCount).toBe(2);
+            expect(MockedPackageRevisionTable.insert).toHaveBeenCalledWith(
+                {
+                    databaseName: "test-db",
+                    targetBucket: "test-bucket",
+                    registryName: "test_bucket",
+                    enablePartitioning: true
+                },
+                "test_bucket_packages-view"
+            );
+            expect(MockedPackageTagTable.insert).toHaveBeenCalledWith(
+                {
+                    databaseName: "test-db",
+                    targetBucket: "test-bucket",
+                    registryName: "test_bucket",
+                    enablePartitioning: true
                 },
                 "test_bucket_packages-view"
             );
@@ -142,7 +204,8 @@ describe("TableManager", () => {
                 {
                     databaseName: "test-db",
                     targetBucket: "test-bucket",
-                    registryName: "prod_registry"
+                    registryName: "prod_registry",
+                    enablePartitioning: false
                 },
                 "prod_registry_objects-view"
             );
