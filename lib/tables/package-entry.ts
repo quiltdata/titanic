@@ -37,6 +37,7 @@ export class PackageEntryTable {
             )
         `;
 
+        console.log(`Creating ${this.TABLE_NAME} table with SQL:`, createQuery);
         await executeQuery(createQuery, targetBucket);
     }
 
@@ -69,6 +70,7 @@ export class PackageEntryTable {
 
     static async insert(context: TableContext, sourceTableName: string): Promise<void> {
         const query = this.generateInsertQuery(context, sourceTableName);
+        console.log(`Inserting into ${this.TABLE_NAME} with SQL:`, query);
         await executeQuery(query, context.targetBucket);
     }
 }
