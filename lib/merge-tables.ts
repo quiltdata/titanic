@@ -133,161 +133,171 @@ export async function handler(
 
         // Build MERGE query for each source table
         const mergeQueries = sourceTables.map((table) => {
-            const query = `
-      INSERT INTO "${databaseName}"."${table.Name?.includes('packages-view') ? 'titanic_merged_packages' : 'titanic_merged_objects'}"
-      SELECT DISTINCT
-        ${table.Name?.includes('packages') ? `
-        s.pkg_name,
-        s.top_hash,
-        s.timestamp,
-        s.message,
-        s.user_meta,
-        '${sourceBucketFromTableName(table.Name!)}' AS source_bucket` : `
-        s.pkg_name,
-        s.top_hash,
-        s.timestamp,
-        s.logical_key,
-        s.physical_key,
-        s.size,
-        s.hash,
-        s.meta,
-        '${sourceBucketFromTableName(table.Name!)}' AS source_bucket`}
-      FROM "${databaseName}"."${table.Name}" s
-      LEFT JOIN "${databaseName}"."${table.Name?.includes('packages-view') ? 'titanic_merged_packages' : 'titanic_merged_objects'}" t
-      ON s.pkg_name = t.pkg_name 
-      AND s.top_hash = t.top_hash
-      AND '${sourceBucketFromTableName(table.Name!)}' = t.source_bucket
-      WHERE t.pkg_name IS NULL`;
+            const isPackagesView = table.Name?.includes('packages-view');
+            const registryName = sourceBucketFromTableName(table.Name!);
+            
+            if (isPackagesView) {
+                // Handle package revisions and tags
+                const revisionQuery = `
+                INSERT INTO "${databaseName}"."package_revision" (registry, pkg_name, top_hash, timestamp, message, metadata)
+                SELECT DISTINCT
+                  '${registryName}' AS registry,
+                  s.pkg_name,
+                  s.top_hash,
+                  from_unixtime(CAST(s.timestamp AS bigint)) AS timestamp,
+                  s.message,
+                  s.user_meta AS metadata
+                FROM "${databaseName}"."${table.Name}" s
+                LEFT JOIN "${databaseName}"."package_revision" t
+                  ON s.pkg_name = t.pkg_name
+                  AND s.top_hash = t.top_hash
+                  AND t.registry = '${registryName}'
+                WHERE t.pkg_name IS NULL
+                  AND s.timestamp != 'latest'`;
 
-            console.log(
-                "Generated merge query for table",
-                table.Name,
-                ":",
-                query,
+                const tagQuery = `
+                INSERT INTO "${databaseName}"."package_tag" (registry, pkg_name, tag_name, top_hash)
+                SELECT DISTINCT
+                  '${registryName}' AS registry,
+                  s.pkg_name,
+                  s.timestamp AS tag_name,
+                  s.top_hash
+                FROM "${databaseName}"."${table.Name}" s
+                LEFT JOIN "${databaseName}"."package_tag" t
+                  ON s.pkg_name = t.pkg_name
+                  AND s.timestamp = t.tag_name
+                  AND t.registry = '${registryName}'
+                WHERE s.timestamp = 'latest'
+                  AND (t.top_hash IS NULL OR s.top_hash != t.top_hash)`;
+
+                return [revisionQuery, tagQuery];
+            } else {
+                // Handle package entries
+                const entryQuery = `
+                INSERT INTO "${databaseName}"."package_entry" (registry, top_hash, logical_key, physical_key, multihash, size, metadata)
+                SELECT DISTINCT
+                  '${registryName}' AS registry,
+                  s.top_hash,
+                  s.logical_key,
+                  s.physical_key,
+                  concat(
+                    CASE s.hash.type
+                      WHEN 'SHA256' THEN '1220'
+                      WHEN 'sha2-256-chunked' THEN 'b150'
+                      ELSE '0000'
+                    END,
+                    s.hash.value
+                  ) AS multihash,
+                  s.size,
+                  s.meta AS metadata
+                FROM "${databaseName}"."${table.Name}" s
+                LEFT JOIN "${databaseName}"."package_entry" t
+                  ON s.logical_key = t.logical_key
+                  AND s.meta = t.metadata
+                  AND s.top_hash = t.top_hash
+                  AND t.registry = '${registryName}'
+                WHERE t.logical_key IS NULL`;
+
+                return [entryQuery];
+            }
+        }).flat();
+
+        // Helper to check if a table exists
+        async function tableExists(tableName: string): Promise<boolean> {
+            const tablesResponse: GetTablesCommandOutput = await glueClient.send(
+                new GetTablesCommand({
+                    DatabaseName: databaseName,
+                    Expression: tableName,
+                })
             );
-            return query;
-        });
+            return (tablesResponse.TableList || []).some(t => t.Name === tableName);
+        }
 
-        // Clean up existing data and create tables
-        const cleanupPackagesQuery = `
-            DELETE FROM "${databaseName}"."titanic_merged_packages"
-            WHERE true`;
-
-        const cleanupObjectsQuery = `
-            DELETE FROM "${databaseName}"."titanic_merged_objects"
-            WHERE true`;
-
-        // Try to clean up existing data first
-        try {
-            const cleanupPackagesResponse = await athenaClient.send(
+        // Helper to create table using CTAS from a representative view
+        async function createTableWithCTAS(targetTable: string, sourceView: string, schema: string) {
+            const ctasQuery = `
+                CREATE TABLE IF NOT EXISTS "${databaseName}"."${targetTable}"
+                ${schema}
+                AS SELECT * FROM "${databaseName}"."${sourceView}" WHERE false
+            `;
+            const response = await athenaClient.send(
                 new StartQueryExecutionCommand({
-                    QueryString: cleanupPackagesQuery,
+                    QueryString: ctasQuery,
                     ResultConfiguration: {
                         OutputLocation: `s3://${targetBucket}/athena-results/`,
                     },
-                }),
+                })
             );
-            if (cleanupPackagesResponse.QueryExecutionId) {
-                await waitForQueryCompletion(cleanupPackagesResponse.QueryExecutionId);
+            if (!response.QueryExecutionId) {
+                throw new Error(`Failed to get QueryExecutionId for CTAS for ${targetTable}`);
             }
-        } catch (e) {
-            console.log("No existing packages table to clean up");
+            await waitForQueryCompletion(response.QueryExecutionId);
         }
 
-        try {
-            const cleanupObjectsResponse = await athenaClient.send(
-                new StartQueryExecutionCommand({
-                    QueryString: cleanupObjectsQuery,
-                    ResultConfiguration: {
-                        OutputLocation: `s3://${targetBucket}/athena-results/`,
-                    },
-                }),
-            );
-            if (cleanupObjectsResponse.QueryExecutionId) {
-                await waitForQueryCompletion(cleanupObjectsResponse.QueryExecutionId);
-            }
-        } catch (e) {
-            console.log("No existing objects table to clean up");
+        // Find representative views for each table type
+        const packagesView = sourceTables.find(t => t.Name?.includes('packages-view'))?.Name;
+        const entriesView = sourceTables.find(t => t.Name?.includes('objects-view'))?.Name;
+
+        // Create package_revision table if needed
+        if (packagesView && !(await tableExists('package_revision'))) {
+            console.log('Creating package_revision table using CTAS from', packagesView);
+            const revisionSchema = `
+                WITH (
+                    format = 'PARQUET',
+                    write_compression = 'SNAPPY',
+                    location = 's3://${targetBucket}/package_revision/',
+                    table_type = 'ICEBERG',
+                    is_external = false
+                )
+                PARTITIONED BY (
+                    registry,
+                    bucket(8, pkg_name),
+                    bucket(8, top_hash)
+                )`;
+            await createTableWithCTAS('package_revision', packagesView, revisionSchema);
         }
 
-        // Create tables if they don't exist
-        const createPackagesQuery = `
-            CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_packages"
-            WITH (
-                format = 'PARQUET',
-                write_compression = 'SNAPPY',
-                location = 's3://${targetBucket}/merged/packages/',
-                table_type = 'ICEBERG',
-                is_external = false
-            )
-            AS SELECT
-                CAST(NULL AS VARCHAR) as pkg_name,
-                CAST(NULL AS VARCHAR) as top_hash,
-                CAST(NULL AS VARCHAR) as timestamp,
-                CAST(NULL AS VARCHAR) as message,
-                CAST(NULL AS VARCHAR) as user_meta,
-                CAST(NULL AS VARCHAR) as source_bucket
-            WHERE false
-        `;
-
-        const createObjectsQuery = `
-            CREATE TABLE IF NOT EXISTS "${databaseName}"."titanic_merged_objects"
-            WITH (
-                format = 'PARQUET',
-                write_compression = 'SNAPPY',
-                location = 's3://${targetBucket}/merged/objects/',
-                table_type = 'ICEBERG',
-                is_external = false
-            )
-            AS SELECT
-                CAST(NULL AS VARCHAR) as pkg_name,
-                CAST(NULL AS VARCHAR) as top_hash,
-                CAST(NULL AS VARCHAR) as timestamp,
-                CAST(NULL AS VARCHAR) as logical_key,
-                CAST(NULL AS VARCHAR) as physical_key,
-                CAST(NULL AS BIGINT) as size,
-                CAST(NULL AS ROW(type VARCHAR, value VARCHAR)) as hash,
-                CAST(NULL AS VARCHAR) as meta,
-                CAST(NULL AS VARCHAR) as source_bucket
-            WHERE false
-        `;
-
-        // Create packages table
-        const createPackagesResponse = await athenaClient.send(
-            new StartQueryExecutionCommand({
-                QueryString: createPackagesQuery,
-                ResultConfiguration: {
-                    OutputLocation: `s3://${targetBucket}/athena-results/`,
-                },
-            }),
-        );
-
-        if (!createPackagesResponse.QueryExecutionId) {
-            throw new Error("Failed to get QueryExecutionId for create packages table");
+        // Create package_tag table if needed
+        if (packagesView && !(await tableExists('package_tag'))) {
+            console.log('Creating package_tag table using CTAS from', packagesView);
+            const tagSchema = `
+                WITH (
+                    format = 'PARQUET',
+                    write_compression = 'SNAPPY',
+                    location = 's3://${targetBucket}/package_tag/',
+                    table_type = 'ICEBERG',
+                    is_external = false
+                )
+                PARTITIONED BY (
+                    registry,
+                    tag_name,
+                    bucket(8, pkg_name)
+                )`;
+            await createTableWithCTAS('package_tag', packagesView, tagSchema);
         }
 
-        await waitForQueryCompletion(createPackagesResponse.QueryExecutionId);
-
-        // Create objects table
-        const createObjectsResponse = await athenaClient.send(
-            new StartQueryExecutionCommand({
-                QueryString: createObjectsQuery,
-                ResultConfiguration: {
-                    OutputLocation: `s3://${targetBucket}/athena-results/`,
-                },
-            }),
-        );
-
-        if (!createObjectsResponse.QueryExecutionId) {
-            throw new Error("Failed to get QueryExecutionId for create objects table");
+        // Create package_entry table if needed
+        if (entriesView && !(await tableExists('package_entry'))) {
+            console.log('Creating package_entry table using CTAS from', entriesView);
+            const entrySchema = `
+                WITH (
+                    format = 'PARQUET',
+                    write_compression = 'SNAPPY',
+                    location = 's3://${targetBucket}/package_entry/',
+                    table_type = 'ICEBERG',
+                    is_external = false
+                )
+                PARTITIONED BY (
+                    registry,
+                    bucket(64, physical_key)
+                )`;
+            await createTableWithCTAS('package_entry', entriesView, entrySchema);
         }
-
-        await waitForQueryCompletion(createObjectsResponse.QueryExecutionId);
 
         // Check for empty source tables
         if (sourceTables.length === 0) {
             return {
-                message: "Created merged table (no source tables found)",
+                message: "Created tables (no source tables found)",
                 numTables: 0,
             };
         }
@@ -295,8 +305,8 @@ export async function handler(
         // Execute merge queries
         console.log(
             "Starting merge operations for",
-            sourceTables.length,
-            "tables",
+            mergeQueries.length,
+            "queries",
         );
         
         // Execute each merge query sequentially
@@ -326,7 +336,7 @@ export async function handler(
         }
 
         return {
-            message: "Merge queries started successfully",
+            message: "Merge queries completed successfully",
             numTables: sourceTables.length,
         };
     } catch (error) {
