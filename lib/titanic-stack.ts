@@ -5,9 +5,9 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import * as glue from "aws-cdk-lib/aws-glue";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
-import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as events from "aws-cdk-lib/aws-events";
+import * as targets from "aws-cdk-lib/aws-events-targets";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
-import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import * as path from "path";
 
 dotenv.config();
@@ -28,19 +28,8 @@ export class TitanicStack extends cdk.Stack {
             autoDeleteObjects: true,
         });
 
-        // Create SQS queue
-        const mergeQueue = new sqs.Queue(this, "MergeQueue", {
-            visibilityTimeout: cdk.Duration.seconds(900),
-            retentionPeriod: cdk.Duration.days(14),
-        });
-
         // Create merge tables Lambda
         const mergeLambda = new lambda.NodejsFunction(this, "MergeTables", {
-            events: [
-                new SqsEventSource(mergeQueue, {
-                    batchSize: 1,
-                }),
-            ],
             entry: path.join(__dirname, "merge-tables.ts"),
             handler: "handler",
             runtime: Runtime.NODEJS_18_X,
@@ -55,10 +44,24 @@ export class TitanicStack extends cdk.Stack {
                 DATABASE_NAME: props.quiltDatabaseName,
                 TARGET_BUCKET: titanicBucket.bucketName,
                 LAMBDA_TIMEOUT: (props.lambdaTimeout || 15000).toString(),
-                QUEUE_URL: mergeQueue.queueUrl,
                 QUILT_READ_POLICY_ARN: props.quiltReadPolicyArn,
             },
         });
+
+        // Create EventBridge rule to route package events to Lambda
+        const packageEventRule = new events.Rule(this, "PackageEventRule", {
+            description: "Route package revision events to merge tables Lambda",
+            eventPattern: {
+                source: ["com.quiltdata"],
+                detailType: ["package-revision", "package-tag", "package-entry"],
+                detail: {
+                    type: ["created", "updated"],
+                }
+            },
+        });
+
+        // Add Lambda as target for EventBridge rule
+        packageEventRule.addTarget(new targets.LambdaFunction(mergeLambda));
 
         // Grant Lambda permissions
         mergeLambda.addToRolePolicy(
@@ -95,7 +98,6 @@ export class TitanicStack extends cdk.Stack {
         );
 
         titanicBucket.grantReadWrite(mergeLambda);
-        mergeQueue.grantConsumeMessages(mergeLambda);
 
         // Grant read access to source buckets via the provided policy
         mergeLambda.role?.addManagedPolicy(

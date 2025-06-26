@@ -1,4 +1,4 @@
-import { Context, SQSEvent } from "aws-lambda";
+import { Context, EventBridgeEvent } from "aws-lambda";
 import { mockClient } from "aws-sdk-client-mock";
 
 jest.setTimeout(30000); // Increase timeout to 30 seconds
@@ -9,10 +9,30 @@ import {
     QueryExecutionState,
     StartQueryExecutionCommand,
 } from "@aws-sdk/client-athena";
-import { handler } from "../lib/merge-tables";
+import { handler } from "./merge-tables";
+import { PackageEventDetail } from "./shared/types";
 
 const glueMock = mockClient(GlueClient);
 const athenaMock = mockClient(AthenaClient);
+
+// Helper to create EventBridge event
+const createEventBridgeEvent = (bucket: string = "test-bucket"): EventBridgeEvent<string, PackageEventDetail> => ({
+    version: "0",
+    id: "test-event-id",
+    "detail-type": "package-revision", 
+    source: "com.quiltdata",
+    account: "012345678901",
+    time: "2025-04-25T14:46:51Z",
+    region: "us-east-2",
+    resources: [],
+    detail: {
+        version: "0.1",
+        type: "created",
+        bucket,
+        handle: "test/2024-01-18",
+        topHash: "39cb81fc1a02d5487d982d9adfbfabf328e4fa07161813497f5571c35674def2"
+    }
+});
 
 describe("merge-tables lambda", () => {
     beforeEach(() => {
@@ -26,9 +46,7 @@ describe("merge-tables lambda", () => {
 
     it("should throw error if environment variables are missing", async () => {
         delete process.env.DATABASE_NAME;
-        const mockEvent: SQSEvent = {
-            Records: [],
-        };
+        const mockEvent = createEventBridgeEvent();
         await expect(handler(mockEvent, {} as Context)).rejects.toThrow(
             "Missing required environment variables",
         );
@@ -71,24 +89,7 @@ describe("merge-tables lambda", () => {
                 },
             });
 
-        const mockEvent: SQSEvent = {
-            Records: [{
-                messageId: "1",
-                receiptHandle: "handle",
-                body: "{}",
-                attributes: {
-                    ApproximateReceiveCount: "1",
-                    SentTimestamp: "1",
-                    SenderId: "sender",
-                    ApproximateFirstReceiveTimestamp: "1",
-                },
-                messageAttributes: {},
-                md5OfBody: "md5",
-                eventSource: "aws:sqs",
-                eventSourceARN: "arn:aws:sqs:region:account:queue",
-                awsRegion: "region",
-            }],
-        };
+        const mockEvent = createEventBridgeEvent();
         const result = await handler(mockEvent, {} as Context);
         expect(result).toEqual({
             message: "Created tables (no source tables found)",
@@ -100,12 +101,12 @@ describe("merge-tables lambda", () => {
         glueMock.on(GetTablesCommand).resolves({
             TableList: [
                 {
-                    Name: "bucket1_objects-view",
-                    StorageDescriptor: { Location: "s3://bucket1/objects" },
+                    Name: "test-bucket_objects-view",
+                    StorageDescriptor: { Location: "s3://test-bucket/objects" },
                 },
                 {
-                    Name: "bucket2_objects-view",
-                    StorageDescriptor: { Location: "s3://bucket2/objects" },
+                    Name: "test-bucket_packages-view",
+                    StorageDescriptor: { Location: "s3://test-bucket/packages" },
                 },
             ],
             NextToken: undefined,
@@ -123,46 +124,29 @@ describe("merge-tables lambda", () => {
             },
         });
 
-        const mockEvent: SQSEvent = {
-            Records: [{
-                messageId: "1",
-                receiptHandle: "handle",
-                body: "{}",
-                attributes: {
-                    ApproximateReceiveCount: "1",
-                    SentTimestamp: "1",
-                    SenderId: "sender",
-                    ApproximateFirstReceiveTimestamp: "1",
-                },
-                messageAttributes: {},
-                md5OfBody: "md5",
-                eventSource: "aws:sqs",
-                eventSourceARN: "arn:aws:sqs:region:account:queue",
-                awsRegion: "region",
-            }],
-        };
+        const mockEvent = createEventBridgeEvent();
         const result = await handler(mockEvent, {} as Context);
 
         expect(result).toEqual({
-            message: "Merge queries completed successfully",
-            numTables: 2,
+            message: "Merge operations completed: 3 successful queries",
+            numTables: 2, // Should find test-bucket_objects-view and test-bucket_packages-view
         });
     });
 
-    describe("table prefix filtering", () => {
-        it("should handle SQS events with table prefix", async () => {
+    describe("bucket-based filtering", () => {
+        it("should handle EventBridge events with bucket filtering", async () => {
             glueMock.on(GetTablesCommand).resolves({
                 TableList: [
                     {
-                        Name: "test_objects-view",
+                        Name: "test-bucket_objects-view",
                         StorageDescriptor: { Location: "s3://test/objects" },
                     },
                     {
-                        Name: "prod_objects-view",
+                        Name: "prod-bucket_objects-view",
                         StorageDescriptor: { Location: "s3://prod/objects" },
                     },
                     {
-                        Name: "dev_objects-view",
+                        Name: "dev-bucket_objects-view",
                         StorageDescriptor: {
                             Location: "s3://bucket/objects_all",
                         },
@@ -183,33 +167,16 @@ describe("merge-tables lambda", () => {
                 },
             });
 
-            const sqsEvent: SQSEvent = {
-                Records: [{
-                    messageId: "1",
-                    receiptHandle: "handle",
-                    body: JSON.stringify({ table_prefix: "test" }),
-                    attributes: {
-                        ApproximateReceiveCount: "1",
-                        SentTimestamp: "1",
-                        SenderId: "sender",
-                        ApproximateFirstReceiveTimestamp: "1",
-                    },
-                    messageAttributes: {},
-                    md5OfBody: "md5",
-                    eventSource: "aws:sqs",
-                    eventSourceARN: "arn:aws:sqs:region:account:queue",
-                    awsRegion: "region",
-                }],
-            };
+            const eventBridgeEvent = createEventBridgeEvent("test-bucket");
 
-            const result = await handler(sqsEvent, {} as Context);
+            const result = await handler(eventBridgeEvent, {} as Context);
             expect(result).toEqual({
-                message: "Merge queries completed successfully",
-                numTables: 1, // Should find test_objects-view
+                message: "Merge operations completed: 1 successful queries",
+                numTables: 1, // Should find test-bucket_objects-view
             });
         });
 
-        it("should handle invalid table prefix gracefully", async () => {
+        it("should handle invalid bucket gracefully", async () => {
             glueMock.on(GetTablesCommand).resolves({
                 TableList: [
                     {
@@ -234,26 +201,9 @@ describe("merge-tables lambda", () => {
                 },
             });
 
-            const sqsEvent: SQSEvent = {
-                Records: [{
-                    messageId: "1",
-                    receiptHandle: "handle",
-                    body: JSON.stringify({ table_prefix: "nonexistent" }),
-                    attributes: {
-                        ApproximateReceiveCount: "1",
-                        SentTimestamp: "1",
-                        SenderId: "sender",
-                        ApproximateFirstReceiveTimestamp: "1",
-                    },
-                    messageAttributes: {},
-                    md5OfBody: "md5",
-                    eventSource: "aws:sqs",
-                    eventSourceARN: "arn:aws:sqs:region:account:queue",
-                    awsRegion: "region",
-                }],
-            };
+            const eventBridgeEvent = createEventBridgeEvent("nonexistent-bucket");
 
-            const result = await handler(sqsEvent, {} as Context);
+            const result = await handler(eventBridgeEvent, {} as Context);
             expect(result).toEqual({
                 message: "Created tables (no source tables found)",
                 numTables: 0,
@@ -281,35 +231,18 @@ describe("merge-tables lambda", () => {
             },
         });
 
-        const mockEvent: SQSEvent = {
-            Records: [{
-                messageId: "1",
-                receiptHandle: "handle",
-                body: "{}",
-                attributes: {
-                    ApproximateReceiveCount: "1",
-                    SentTimestamp: "1",
-                    SenderId: "sender",
-                    ApproximateFirstReceiveTimestamp: "1",
-                },
-                messageAttributes: {},
-                md5OfBody: "md5",
-                eventSource: "aws:sqs",
-                eventSourceARN: "arn:aws:sqs:region:account:queue",
-                awsRegion: "region",
-            }],
-        };
+        const mockEvent = createEventBridgeEvent();
         const result = await handler(mockEvent, {} as Context);
         expect(result).toBeDefined();
     });
 
-    it("should handle Athena query failures", async () => {
+    it("should handle Athena query failures gracefully", async () => {
         // Mock tables response with a view table to ensure merge is attempted
         glueMock.on(GetTablesCommand).resolves({
             TableList: [
                 {
-                    Name: "table1-view",
-                    StorageDescriptor: { Location: "s3://bucket/table1" },
+                    Name: "test-bucket_objects-view",
+                    StorageDescriptor: { Location: "s3://test-bucket/table1" },
                 },
             ],
             NextToken: undefined,
@@ -338,27 +271,14 @@ describe("merge-tables lambda", () => {
             },
         });
 
-        // Test that the Athena error is propagated
-        const mockEvent: SQSEvent = {
-            Records: [{
-                messageId: "1",
-                receiptHandle: "handle",
-                body: "{}",
-                attributes: {
-                    ApproximateReceiveCount: "1",
-                    SentTimestamp: "1",
-                    SenderId: "sender",
-                    ApproximateFirstReceiveTimestamp: "1",
-                },
-                messageAttributes: {},
-                md5OfBody: "md5",
-                eventSource: "aws:sqs",
-                eventSourceARN: "arn:aws:sqs:region:account:queue",
-                awsRegion: "region",
-            }],
-        };
-        await expect(handler(mockEvent, {} as Context)).rejects.toThrow(
-            "Athena error",
-        );
+        // Test that the Athena error is handled gracefully and processing continues
+        const mockEvent = createEventBridgeEvent();
+        const result = await handler(mockEvent, {} as Context);
+        
+        // Should complete with 0 successful queries due to table creation/insert failures
+        expect(result).toEqual({
+            message: "Merge operations completed: 0 successful queries",
+            numTables: 1, // Should find the source table but fail to process it
+        });
     });
 });

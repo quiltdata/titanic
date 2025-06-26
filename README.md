@@ -167,7 +167,6 @@ CDK_DEFAULT_REGION=$AWS_DEFAULT_REGION
 CDK_BOOTSTRAP=aws://$CDK_DEFAULT_ACCOUNT/$CDK_DEFAULT_REGION
 CDK_DEFAULT_EMAIL=your-email@example.com
 QUEUE_NAME=YourQueueName
-QUEUE_URL=https://sqs.$AWS_DEFAULT_REGION.amazonaws.com/$CDK_DEFAULT_ACCOUNT/$QUEUE_NAME
 QUILT_CATALOG_DOMAIN=your-catalog-domain
 QUILT_DATABASE_NAME=your-database-name
 QUILT_READ_POLICY_ARN=arn:aws:iam::your-account-id:policy/your-policy-name

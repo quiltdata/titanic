@@ -7,9 +7,11 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf cdk.out */{*.js,*.d.ts}",
-    "cdk": "npm run test && npx cdk deploy --require-approval never && npm run sqs",
+    "cdk": "npm run test && npx cdk deploy --require-approval never && npm run event:bake",
     "lint": "eslint . --ext .ts --fix",
-    "sqs": "aws sqs send-message --queue-url https://sqs.us-east-2.amazonaws.com/712023778557/TitanicStack-MergeQueue67A32F45-BDM8VFbtEJtN --message-body '{\"table_prefix\": \"quilt-bake\"}'",
+    "event:all": "aws events put-events --entries file://doc/event-all.json",
+    "event:bake": "aws events put-events --entries file://doc/event-quilt-bake.json",
+    "event:staff": "aws events put-events --entries file://doc/event-staff.json",
     "test": "jest",
     "watch": "tsc -w"
   },
