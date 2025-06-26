@@ -128,7 +128,7 @@ describe("merge-tables lambda", () => {
         const result = await handler(mockEvent, {} as Context);
 
         expect(result).toEqual({
-            message: "Merge queries completed successfully",
+            message: "Merge operations completed: 3 successful queries",
             numTables: 2, // Should find test-bucket_objects-view and test-bucket_packages-view
         });
     });
@@ -171,7 +171,7 @@ describe("merge-tables lambda", () => {
 
             const result = await handler(eventBridgeEvent, {} as Context);
             expect(result).toEqual({
-                message: "Merge queries completed successfully",
+                message: "Merge operations completed: 1 successful queries",
                 numTables: 1, // Should find test-bucket_objects-view
             });
         });
@@ -236,7 +236,7 @@ describe("merge-tables lambda", () => {
         expect(result).toBeDefined();
     });
 
-    it("should handle Athena query failures", async () => {
+    it("should handle Athena query failures gracefully", async () => {
         // Mock tables response with a view table to ensure merge is attempted
         glueMock.on(GetTablesCommand).resolves({
             TableList: [
@@ -271,10 +271,14 @@ describe("merge-tables lambda", () => {
             },
         });
 
-        // Test that the Athena error is propagated
+        // Test that the Athena error is handled gracefully and processing continues
         const mockEvent = createEventBridgeEvent();
-        await expect(handler(mockEvent, {} as Context)).rejects.toThrow(
-            "Athena error",
-        );
+        const result = await handler(mockEvent, {} as Context);
+        
+        // Should complete with 0 successful queries due to table creation/insert failures
+        expect(result).toEqual({
+            message: "Merge operations completed: 0 successful queries",
+            numTables: 1, // Should find the source table but fail to process it
+        });
     });
 });

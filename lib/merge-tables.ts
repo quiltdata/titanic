@@ -75,7 +75,16 @@ export async function handler(
         const tableManager = new TableManager(databaseName, targetBucket, useS3Table);
 
         // Ensure all required tables exist
-        await tableManager.ensureTablesExist(sourceTables);
+        try {
+            await tableManager.ensureTablesExist(sourceTables);
+        } catch (error) {
+            const err = error as Error;
+            console.error("Error ensuring tables exist:", {
+                error: err.message,
+                stack: err.stack,
+            });
+            // Continue with insert operations even if some table creation failed
+        }
 
         // Check for empty source tables
         if (sourceTables.length === 0) {
@@ -91,17 +100,34 @@ export async function handler(
         console.log(`Executed ${queryCount} queries successfully`);
 
         return {
-            message: "Merge queries completed successfully",
+            message: `Merge operations completed: ${queryCount} successful queries`,
             numTables: sourceTables.length,
         };
     } catch (error) {
         const err = error as Error;
+        const isS3AccessError = err.message.toLowerCase().includes('access denied') ||
+                               err.message.toLowerCase().includes('accessdenied') ||
+                               err.message.toLowerCase().includes('no such bucket') ||
+                               err.message.toLowerCase().includes('forbidden') ||
+                               err.message.toLowerCase().includes('403');
+
         console.error("Error merging tables:", {
             error: err.message,
             stack: err.stack,
             databaseName,
             targetBucket,
+            isS3AccessError,
+            eventDetails: event.detail,
         });
+
+        if (isS3AccessError) {
+            console.error("S3 access error detected. This may be due to insufficient permissions or missing buckets.");
+            console.error("Consider checking:");
+            console.error("1. Lambda execution role permissions for S3 buckets");
+            console.error("2. Bucket existence and access policies");
+            console.error("3. Cross-account access configurations");
+        }
+
         throw err;
     }
 }

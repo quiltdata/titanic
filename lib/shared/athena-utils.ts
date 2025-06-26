@@ -62,22 +62,48 @@ export async function tableExists(databaseName: string, tableName: string): Prom
 
 export async function executeQuery(query: string, targetBucket: string): Promise<void> {
     console.log("Executing query:", query);
-    const queryResponse = await athenaClient.send(
-        new StartQueryExecutionCommand({
-            QueryString: query,
-            ResultConfiguration: {
-                OutputLocation: `s3://${targetBucket}/athena-results/`,
-            },
-        }),
-    );
+    
+    try {
+        const queryResponse = await athenaClient.send(
+            new StartQueryExecutionCommand({
+                QueryString: query,
+                ResultConfiguration: {
+                    OutputLocation: `s3://${targetBucket}/athena-results/`,
+                },
+            }),
+        );
 
-    if (!queryResponse.QueryExecutionId) {
-        throw new Error("Failed to get QueryExecutionId for query");
+        if (!queryResponse.QueryExecutionId) {
+            throw new Error("Failed to get QueryExecutionId for query");
+        }
+
+        console.log("Query started with execution ID:", queryResponse.QueryExecutionId);
+        await waitForQueryCompletion(queryResponse.QueryExecutionId);
+        console.log("Query completed successfully");
+    } catch (error) {
+        const err = error as Error;
+        const isS3AccessError = err.message.toLowerCase().includes('access denied') ||
+                               err.message.toLowerCase().includes('accessdenied') ||
+                               err.message.toLowerCase().includes('no such bucket') ||
+                               err.message.toLowerCase().includes('forbidden') ||
+                               err.message.toLowerCase().includes('403');
+
+        console.error("Query execution failed:", {
+            error: err.message,
+            query: query.substring(0, 200) + (query.length > 200 ? '...' : ''),
+            targetBucket,
+            isS3AccessError,
+        });
+
+        if (isS3AccessError) {
+            console.error("S3 access error during query execution. This may indicate:");
+            console.error("- Missing permissions to read from source buckets");
+            console.error("- Missing permissions to write to target bucket");
+            console.error("- Non-existent buckets referenced in the query");
+        }
+
+        throw err;
     }
-
-    console.log("Query started with execution ID:", queryResponse.QueryExecutionId);
-    await waitForQueryCompletion(queryResponse.QueryExecutionId);
-    console.log("Query completed successfully");
 }
 
 /**
