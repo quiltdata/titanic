@@ -1,7 +1,7 @@
 import { PackageRevisionTable } from "./package-revision";
 
-describe("Runtime Table Configuration", () => {
-    describe("PackageRevisionTable as Iceberg table (default)", () => {
+describe("Table Schema Configuration", () => {
+    describe("Iceberg mode (default)", () => {
         it("should generate CREATE TABLE with WITH clause by default", () => {
             const table = new PackageRevisionTable();
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", false);
@@ -27,8 +27,8 @@ describe("Runtime Table Configuration", () => {
         });
     });
 
-    describe("PackageRevisionTable as S3 table", () => {
-        it("should generate CREATE TABLE with partitioning when S3 mode enabled", () => {
+    describe("S3 Tables mode", () => {
+        it("should generate CREATE TABLE with partitioning when S3 Tables mode enabled", () => {
             const table = new PackageRevisionTable();
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", true);
             
@@ -41,7 +41,7 @@ describe("Runtime Table Configuration", () => {
     });
 
     describe("Schema generation", () => {
-        it("should correctly combine base schema with partitioning clause for S3 tables", () => {
+        it("should correctly combine base schema with partitioning clause for S3 Tables", () => {
             const table = new PackageRevisionTable();
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", true);
             
@@ -50,7 +50,7 @@ describe("Runtime Table Configuration", () => {
             expect(schema).not.toContain("WITH (");
         });
 
-        it("should return schema with WITH clause for Iceberg tables", () => {
+        it("should return schema with WITH clause for Iceberg mode", () => {
             const table = new PackageRevisionTable();
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", false);
             
@@ -61,7 +61,7 @@ describe("Runtime Table Configuration", () => {
             expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/package_revision/'");
         });
 
-        it("should handle undefined useS3Table parameter as Iceberg (default)", () => {
+        it("should handle undefined useS3Table parameter as Iceberg mode (default)", () => {
             const table = new PackageRevisionTable();
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
@@ -71,17 +71,17 @@ describe("Runtime Table Configuration", () => {
             expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/package_revision/'");
         });
 
-        it("should correctly generate S3 table with partitions but no WITH clause", () => {
+        it("should correctly generate S3 Tables with partitions but no WITH clause", () => {
             const table = new PackageRevisionTable();
             const s3Schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", true);
             const icebergSchema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", false);
             
-            // S3 table should have partitions but no WITH clause
+            // S3 Tables should have partitions but no WITH clause
             expect(s3Schema).toContain("PARTITIONED BY");
             expect(s3Schema).not.toContain("WITH (");
             expect(s3Schema).not.toContain("table_type = 'ICEBERG'");
             
-            // Iceberg table should have WITH clause but no partitions
+            // Iceberg mode should have WITH clause but no partitions
             expect(icebergSchema).not.toContain("PARTITIONED BY");
             expect(icebergSchema).toContain("WITH (");
             expect(icebergSchema).toContain("table_type = 'ICEBERG'");

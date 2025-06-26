@@ -56,7 +56,7 @@ export abstract class BaseTable {
     ): Promise<void> {
         const createQuery = this.getCompleteCreateTableSchema(databaseName, targetBucket, useS3Table);
         console.log(`Creating empty ${this.tableName} table with SQL:`, createQuery);
-        await executeQuery(createQuery, targetBucket);
+        await executeQuery(createQuery, targetBucket, databaseName, useS3Table);
     }
 
     /**
@@ -69,7 +69,7 @@ export abstract class BaseTable {
     ): Promise<void> {
         const ctasQuery = this.generateCtasQuery(databaseName, targetBucket, sourceView);
         console.log(`Creating ${this.tableName} table with CTAS:`, ctasQuery);
-        await executeQuery(ctasQuery, targetBucket);
+        await executeQuery(ctasQuery, targetBucket, databaseName, false); // CTAS is always for Iceberg
     }
 
     /**
@@ -157,7 +157,7 @@ AS ${selectQuery}`;
         const instance = new (this as any)();
         const query = instance.generateInsertQuery(context, sourceTableName);
         console.log(`Inserting into ${instance.tableName} with SQL:`, query);
-        await executeQuery(query, context.targetBucket);
+        await executeQuery(query, context.targetBucket, context.databaseName, context.useS3Table);
     }
 
     /**

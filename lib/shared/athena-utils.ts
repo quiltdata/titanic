@@ -60,18 +60,31 @@ export async function tableExists(databaseName: string, tableName: string): Prom
     return (tablesResponse.TableList || []).some(t => t.Name === tableName);
 }
 
-export async function executeQuery(query: string, targetBucket: string): Promise<void> {
+export async function executeQuery(
+    query: string, 
+    targetBucket: string, 
+    databaseName?: string, 
+    useS3Table: boolean = false
+): Promise<void> {
     console.log("Executing query:", query);
     
     try {
-        const queryResponse = await athenaClient.send(
-            new StartQueryExecutionCommand({
-                QueryString: query,
-                ResultConfiguration: {
-                    OutputLocation: `s3://${targetBucket}/athena-results/`,
-                },
-            }),
-        );
+        const queryExecutionCommand: StartQueryExecutionCommand = new StartQueryExecutionCommand({
+            QueryString: query,
+            ResultConfiguration: {
+                OutputLocation: `s3://${targetBucket}/athena-results/`,
+            },
+        });
+
+        // For S3 Tables, we need to specify the correct catalog and database
+        if (useS3Table && databaseName) {
+            queryExecutionCommand.input.QueryExecutionContext = {
+                Catalog: `s3tablescatalog/${targetBucket}`,
+                Database: databaseName,
+            };
+        }
+
+        const queryResponse = await athenaClient.send(queryExecutionCommand);
 
         if (!queryResponse.QueryExecutionId) {
             throw new Error("Failed to get QueryExecutionId for query");

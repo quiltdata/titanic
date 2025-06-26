@@ -115,7 +115,7 @@ describe("athena-utils", () => {
     });
 
     describe("executeQuery", () => {
-        it("should execute query successfully", async () => {
+        it("should execute query successfully for Iceberg tables", async () => {
             athenaMock
                 .on(StartQueryExecutionCommand)
                 .resolves({ QueryExecutionId: "test-id" })
@@ -126,13 +126,52 @@ describe("athena-utils", () => {
                     }
                 });
 
-            await expect(executeQuery("SELECT 1", "test-bucket")).resolves.toBeUndefined();
+            await expect(executeQuery("SELECT 1", "test-bucket", "test-db", false)).resolves.toBeUndefined();
+        });
+
+        it("should execute query successfully for S3 Tables with correct catalog", async () => {
+            athenaMock
+                .on(StartQueryExecutionCommand)
+                .resolves({ QueryExecutionId: "test-id" })
+                .on(GetQueryExecutionCommand)
+                .resolves({
+                    QueryExecution: {
+                        Status: { State: QueryExecutionState.SUCCEEDED }
+                    }
+                });
+
+            await expect(executeQuery("SELECT 1", "test-bucket", "quilt_titanic", true)).resolves.toBeUndefined();
+            
+            // Verify that the correct QueryExecutionContext was set for S3 Tables
+            const startQueryCall = athenaMock.commandCalls(StartQueryExecutionCommand)[0];
+            expect(startQueryCall.args[0].input.QueryExecutionContext).toEqual({
+                Catalog: "s3tablescatalog/test-bucket",
+                Database: "quilt_titanic"
+            });
+        });
+
+        it("should execute query with no context for Iceberg tables", async () => {
+            athenaMock
+                .on(StartQueryExecutionCommand)
+                .resolves({ QueryExecutionId: "test-id" })
+                .on(GetQueryExecutionCommand)
+                .resolves({
+                    QueryExecution: {
+                        Status: { State: QueryExecutionState.SUCCEEDED }
+                    }
+                });
+
+            await expect(executeQuery("SELECT 1", "test-bucket", "test-db", false)).resolves.toBeUndefined();
+            
+            // Verify that no QueryExecutionContext was set for Iceberg tables
+            const startQueryCall = athenaMock.commandCalls(StartQueryExecutionCommand)[0];
+            expect(startQueryCall.args[0].input.QueryExecutionContext).toBeUndefined();
         });
 
         it("should throw error when QueryExecutionId is missing", async () => {
             athenaMock.on(StartQueryExecutionCommand).resolves({});
 
-            await expect(executeQuery("SELECT 1", "test-bucket")).rejects.toThrow("Failed to get QueryExecutionId");
+            await expect(executeQuery("SELECT 1", "test-bucket", "test-db", false)).rejects.toThrow("Failed to get QueryExecutionId");
         });
     });
 });

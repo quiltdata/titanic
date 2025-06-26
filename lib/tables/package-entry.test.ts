@@ -55,7 +55,9 @@ describe("PackageEntryTable", () => {
             expect(executeQuery).toHaveBeenCalledTimes(1);
             expect(executeQuery).toHaveBeenCalledWith(
                 expect.stringContaining('CREATE TABLE "test-db"."package_entry"'),
-                "test-bucket"
+                "test-bucket",
+                "test-db",
+                false
             );
         });
     });
@@ -96,7 +98,9 @@ describe("PackageEntryTable", () => {
 
             expect(executeQuery).toHaveBeenCalledWith(
                 expect.stringContaining('INSERT INTO "test-db"."package_entry"'),
-                "test-bucket"
+                "test-bucket",
+                "test-db",
+                false
             );
         });
     });

@@ -51,7 +51,7 @@ describe("TableManager", () => {
             expect(MockedPackageEntryTable.ensureExists).not.toHaveBeenCalled();
         });
 
-        it("should pass useS3Table=true when configured", async () => {
+        it("should configure S3 Tables mode when useS3Table=true", async () => {
             const s3TableManager = new TableManager("test-db", "test-bucket", true);
             const sourceTables: Table[] = [
                 { Name: "test_packages-view" }
@@ -175,7 +175,7 @@ describe("TableManager", () => {
             );
         });
 
-        it("should pass useS3Table=true in context when configured", async () => {
+        it("should configure S3 Tables mode in context when useS3Table=true", async () => {
             const s3TableManager = new TableManager("test-db", "test-bucket", true);
             const sourceTables: Table[] = [
                 { Name: "test_bucket_packages-view" }

@@ -202,6 +202,7 @@ source .env
 - **Format**: AWS S3 Tables service format
 - **Benefits**: Built-in partitioning, AWS-managed optimization
 - **Setup**: `USE_S3_TABLE=true`
+- **Database**: Uses hardcoded `quilt_titanic` database name (required by S3 Tables Catalog)
 
 ### Migration Between Modes
 
@@ -225,8 +226,8 @@ npm install
 1. Set environment variables:
 
 ```bash
-export QUILT_DATABASE_NAME=your_database_name  # Default: userathenadatabase
-export CDK_DEFAULT_ACCOUNT=your_aws_account_id
+export QUILT_DATABASE_NAME=your_database_name  # For Iceberg tables (Default: userathenadatabase)
+export CDK_DEFAULT_ACCOUNT=your_aws_account_id  # S3 Tables use hardcoded "quilt_titanic" database
 export CDK_DEFAULT_REGION=your_aws_region
 ```
 

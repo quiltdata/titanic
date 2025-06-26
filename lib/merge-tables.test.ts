@@ -69,7 +69,7 @@ describe("merge-tables lambda", () => {
         mockFs.writeFileSync.mockImplementation(() => {});
     });
 
-    describe("environment variable handling", () => {
+    describe("Mode-specific behavior", () => {
         it("should throw error if environment variables are missing", async () => {
             delete process.env.DATABASE_NAME;
             const mockEvent = createEventBridgeEvent();
@@ -78,7 +78,7 @@ describe("merge-tables lambda", () => {
             );
         });
 
-        it("should use S3 Tables mode when USE_S3_TABLE=true", async () => {
+        it("should configure S3 Tables mode when USE_S3_TABLE=true", async () => {
             process.env.USE_S3_TABLE = "true";
             
             glueMock.on(GetTablesCommand).resolves({
@@ -105,8 +105,35 @@ describe("merge-tables lambda", () => {
             expect(result?.message).toContain("2 tables successful, 0 failed, 3 total queries");
         });
 
-        it("should use Iceberg mode when USE_S3_TABLE=false or undefined", async () => {
+        it("should configure Iceberg mode when USE_S3_TABLE=false", async () => {
             process.env.USE_S3_TABLE = "false";
+            
+            glueMock.on(GetTablesCommand).resolves({
+                TableList: [
+                    { Name: "test-bucket_packages-view" },
+                    { Name: "test-bucket_objects-view" },
+                ],
+            });
+
+            athenaMock.on(StartQueryExecutionCommand).resolves({
+                QueryExecutionId: "query-123",
+            });
+
+            athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
+                },
+            });
+
+            const mockEvent = createEventBridgeEvent();
+            const result = await handler(mockEvent, {} as Context);
+
+            expect(result?.message).toContain("Merge operations completed");
+            expect(result?.message).toContain("2 tables successful, 0 failed, 3 total queries");
+        });
+
+        it("should default to Iceberg mode when USE_S3_TABLE is undefined", async () => {
+            delete process.env.USE_S3_TABLE;
             
             glueMock.on(GetTablesCommand).resolves({
                 TableList: [

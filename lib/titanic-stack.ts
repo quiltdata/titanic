@@ -25,6 +25,14 @@ export class TitanicStack extends cdk.Stack {
 
         // Check if we should use S3 Tables
         const useS3Table = process.env.USE_S3_TABLE === "true";
+        
+        // Determine database name based on mode
+        let databaseName = props.quiltDatabaseName;
+        
+        // For Iceberg mode only, allow override with QUILT_DATABASE_NAME environment variable
+        if (!useS3Table && process.env.QUILT_DATABASE_NAME) {
+            databaseName = process.env.QUILT_DATABASE_NAME;
+        }
 
         // Create bucket based on table type
         let titanicBucket: s3.Bucket;
@@ -35,6 +43,15 @@ export class TitanicStack extends cdk.Stack {
             // Create S3 Table Bucket for S3 Tables
             tableBucket = new s3tables.TableBucket(this, "TitanicTableBucket", {
                 tableBucketName: `titanic-tables-${this.account}-${this.region}`,
+            });
+            
+            // Create the quilt_titanic database for S3 Tables
+            new glue.CfnDatabase(this, "QuiltTitanicDatabase", {
+                catalogId: this.account,
+                databaseInput: {
+                    name: databaseName,
+                    description: "Database for Quilt Titanic S3 Tables",
+                },
             });
             
             // Also create a regular S3 bucket for Athena results and other storage
@@ -68,7 +85,7 @@ export class TitanicStack extends cdk.Stack {
                 ],
             },
             environment: {
-                DATABASE_NAME: props.quiltDatabaseName,
+                DATABASE_NAME: databaseName,
                 TARGET_BUCKET: targetBucketName,
                 LAMBDA_TIMEOUT: (props.lambdaTimeout || 15000).toString(),
                 QUILT_READ_POLICY_ARN: props.quiltReadPolicyArn,
@@ -97,8 +114,8 @@ export class TitanicStack extends cdk.Stack {
                 actions: ["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
                 resources: [
                     `arn:aws:glue:${this.region}:${this.account}:catalog`,
-                    `arn:aws:glue:${this.region}:${this.account}:database/${props.quiltDatabaseName}`,
-                    `arn:aws:glue:${this.region}:${this.account}:table/${props.quiltDatabaseName}/*`,
+                    `arn:aws:glue:${this.region}:${this.account}:database/${databaseName}`,
+                    `arn:aws:glue:${this.region}:${this.account}:table/${databaseName}/*`,
                 ],
             }),
         );
