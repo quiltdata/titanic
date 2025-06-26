@@ -40,16 +40,71 @@ describe("merge-tables lambda", () => {
         process.env.DATABASE_NAME = "test-db";
         process.env.TARGET_BUCKET = "test-bucket";
         process.env.LAMBDA_TIMEOUT = "5000";
+        delete process.env.USE_S3_TABLE; // Default to Iceberg mode
         glueMock.reset();
         athenaMock.reset();
     });
 
-    it("should throw error if environment variables are missing", async () => {
-        delete process.env.DATABASE_NAME;
-        const mockEvent = createEventBridgeEvent();
-        await expect(handler(mockEvent, {} as Context)).rejects.toThrow(
-            "Missing required environment variables",
-        );
+    describe("environment variable handling", () => {
+        it("should throw error if environment variables are missing", async () => {
+            delete process.env.DATABASE_NAME;
+            const mockEvent = createEventBridgeEvent();
+            await expect(handler(mockEvent, {} as Context)).rejects.toThrow(
+                "Missing required environment variables DATABASE_NAME or TARGET_BUCKET",
+            );
+        });
+
+        it("should use S3 Tables mode when USE_S3_TABLE=true", async () => {
+            process.env.USE_S3_TABLE = "true";
+            
+            glueMock.on(GetTablesCommand).resolves({
+                TableList: [
+                    { Name: "test-bucket_packages-view" },
+                    { Name: "test-bucket_objects-view" },
+                ],
+            });
+
+            athenaMock.on(StartQueryExecutionCommand).resolves({
+                QueryExecutionId: "query-123",
+            });
+
+            athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
+                },
+            });
+
+            const mockEvent = createEventBridgeEvent();
+            const result = await handler(mockEvent, {} as Context);
+
+            expect(result?.message).toContain("successful queries");
+        });
+
+        it("should use Iceberg mode when USE_S3_TABLE=false or undefined", async () => {
+            process.env.USE_S3_TABLE = "false";
+            
+            glueMock.on(GetTablesCommand).resolves({
+                TableList: [
+                    { Name: "test-bucket_packages-view" },
+                    { Name: "test-bucket_objects-view" },
+                ],
+            });
+
+            athenaMock.on(StartQueryExecutionCommand).resolves({
+                QueryExecutionId: "query-123",
+            });
+
+            athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
+                },
+            });
+
+            const mockEvent = createEventBridgeEvent();
+            const result = await handler(mockEvent, {} as Context);
+
+            expect(result?.message).toContain("successful queries");
+        });
     });
 
     it("should handle empty table list gracefully", async () => {

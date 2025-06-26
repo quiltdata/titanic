@@ -3,10 +3,12 @@
 DROP TABLE IF EXISTS package_revision;
 DROP TABLE IF EXISTS package_tag;
 DROP TABLE IF EXISTS package_entry;
-DROP TABLE IF EXISTS package_revision_entry;
 
+---
+--- CREATE alternatives
+---
 
--- Create Iceberg tables with the proper schema and partitioning
+-- S3_Tables: Uses explicit Create Tables + Partitions
 
 CREATE TABLE package_revision (
   registry     STRING,   
@@ -20,13 +22,6 @@ PARTITIONED BY (
   registry,
   bucket(8, pkg_name),
   bucket(8, top_hash)
-)
-WITH (
-  format = 'PARQUET',
-  write_compression = 'SNAPPY',
-  location = 's3://${targetBucket}/iceberg_catalog/',
-  table_type = 'ICEBERG',
-  is_external = false
 );
 
 CREATE TABLE package_tag (
@@ -39,16 +34,9 @@ PARTITIONED BY (
   registry,
   tag_name,
   bucket(8, pkg_name)
-)
-WITH (
-  format = 'PARQUET',
-  write_compression = 'SNAPPY',
-  location = 's3://${targetBucket}/iceberg_catalog/',
-  table_type = 'ICEBERG',
-  is_external = false
 );
 
-CREATE TABLE IF NOT EXISTS package_entry (
+CREATE TABLE package_entry (
   registry     STRING,    
   top_hash     STRING,
   logical_key  STRING,    
@@ -62,7 +50,70 @@ PARTITIONED BY (
   bucket(64, physical_key)
 );
 
--- Insert all four Iceberg tables for the `quilt-bake` registry
+-- Athena_Tables: Uses explicit CTAS
+
+CREATE TABLE package_revision
+WITH (
+  format = 'PARQUET',
+  write_compression = 'SNAPPY',
+  location = 's3://${targetBucket}/iceberg_catalog/package_revision',
+  table_type = 'ICEBERG',
+  is_external = false
+) AS
+SELECT
+  'quilt-bake' AS registry,
+  s.pkg_name,
+  s.top_hash,
+  from_unixtime(CAST(s.timestamp AS bigint)) AS timestamp,
+  s.message,
+  s.user_meta AS metadata
+FROM "AwsDataCatalog"."userathenadatabase-6fosfzznfasm"."quilt-bake_packages-view" s
+WHERE s.timestamp != 'latest';
+
+CREATE TABLE package_tag
+WITH (
+  format = 'PARQUET',
+  write_compression = 'SNAPPY',
+  location = 's3://${targetBucket}/iceberg_catalog/package_tag',
+  table_type = 'ICEBERG',
+  is_external = false
+) AS
+SELECT
+  'quilt-bake' AS registry,
+  s.pkg_name,
+  s.timestamp AS tag_name,
+  s.top_hash
+FROM "AwsDataCatalog"."userathenadatabase-6fosfzznfasm"."quilt-bake_packages-view" s
+WHERE s.timestamp = 'latest';
+
+CREATE TABLE package_entry
+WITH (
+  format = 'PARQUET',
+  write_compression = 'SNAPPY',
+  location = 's3://${targetBucket}/iceberg_catalog/package_entry',
+  table_type = 'ICEBERG',
+  is_external = false
+) AS
+SELECT
+  'quilt-bake' AS registry,
+  s.top_hash,
+  s.logical_key,
+  s.physical_key,
+  concat(
+    CASE s.hash.type
+      WHEN 'SHA256' THEN '1220'
+      WHEN 'sha2-256-chunked' THEN 'b150'
+      ELSE '0000'
+    END,
+    s.hash.value
+  ) AS multihash,
+  s.size,
+  s.meta AS metadata
+FROM "AwsDataCatalog"."userathenadatabase-6fosfzznfasm"."quilt-bake_objects-view" s;
+
+---
+--- INSERT examples
+---
 
 -- package_revision Write Policy: Immutable - only insert new rows, never update or delete
 INSERT INTO package_revision (registry, pkg_name, top_hash, timestamp, message, metadata)
@@ -123,7 +174,9 @@ LEFT JOIN package_entry t
 -- Insert only new entries that do not already exist in package_entry
 WHERE t.logical_key IS NULL;
 
+---
 --- SELECT examples
+---
 
 SELECT e.size, e.logical_key, e.physical_key, e.registry, e.multihash
 FROM package_entry e
