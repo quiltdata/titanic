@@ -169,3 +169,24 @@ export function validateQuery(query: string): { isValid: boolean; errors: string
 }
 
 export const sourceBucketFromTableName = (name: string) => name.replace(/_(objects|packages)-view$/, "");
+
+/**
+ * Drop all Titanic tables function
+ */
+export async function dropAllTitanicTables(databaseName: string, targetBucket: string): Promise<void> {
+    const tables = ['package_revision', 'package_tag', 'package_entry'];
+    console.log('Dropping all Titanic tables for clean deployment...');
+    
+    for (const tableName of tables) {
+        try {
+            const query = `DROP TABLE IF EXISTS "${databaseName}"."${tableName}"`;
+            console.log(`Dropping table: ${query}`);
+            await executeQuery(query, targetBucket);
+            console.log(`Successfully dropped table ${tableName}`);
+        } catch (error) {
+            const err = error as Error;
+            console.log(`Note: Could not drop table ${tableName} (may not exist):`, err.message);
+            // Continue - table might not exist yet
+        }
+    }
+}

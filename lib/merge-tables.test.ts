@@ -2,6 +2,23 @@ import { Context, EventBridgeEvent } from "aws-lambda";
 import { mockClient } from "aws-sdk-client-mock";
 
 jest.setTimeout(30000); // Increase timeout to 30 seconds
+
+// Mock fs before any AWS SDK imports with a more complete implementation
+const originalFs = jest.requireActual('fs');
+jest.mock("fs", () => ({
+    ...originalFs,
+    existsSync: jest.fn(),
+    writeFileSync: jest.fn(),
+    promises: {
+        ...originalFs.promises,
+        readFile: jest.fn().mockResolvedValue(''),
+        writeFile: jest.fn().mockResolvedValue(undefined),
+        stat: jest.fn().mockResolvedValue({ isFile: () => true }),
+        readdir: jest.fn().mockResolvedValue([]),
+        access: jest.fn().mockResolvedValue(undefined),
+    },
+}));
+
 import { GetTablesCommand, GlueClient } from "@aws-sdk/client-glue";
 import {
     AthenaClient,
@@ -11,6 +28,9 @@ import {
 } from "@aws-sdk/client-athena";
 import { handler } from "./merge-tables";
 import { PackageEventDetail } from "./shared/types";
+import * as fs from "fs";
+
+const mockFs = fs as jest.Mocked<typeof fs>;
 
 const glueMock = mockClient(GlueClient);
 const athenaMock = mockClient(AthenaClient);
@@ -43,6 +63,10 @@ describe("merge-tables lambda", () => {
         delete process.env.USE_S3_TABLE; // Default to Iceberg mode
         glueMock.reset();
         athenaMock.reset();
+        
+        // Reset fs mocks
+        mockFs.existsSync.mockReturnValue(true); // Default: not first run
+        mockFs.writeFileSync.mockImplementation(() => {});
     });
 
     describe("environment variable handling", () => {

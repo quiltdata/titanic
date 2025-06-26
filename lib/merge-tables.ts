@@ -1,8 +1,11 @@
 import { Context, EventBridgeEvent } from "aws-lambda";
 import { GetTablesCommand, GetTablesCommandOutput } from "@aws-sdk/client-glue";
-import { glueClient } from "./shared/athena-utils";
+import { glueClient, dropAllTitanicTables } from "./shared/athena-utils";
 import { PackageEventDetail, HandlerResponse } from "./shared/types";
 import { TableManager } from "./tables/table-manager";
+import * as fs from "fs";
+
+const SENTINEL_FILE = '/tmp/tables-initialized';
 
 export async function handler(
     event: EventBridgeEvent<string, PackageEventDetail>,
@@ -24,6 +27,18 @@ export async function handler(
     }
 
     try {
+        // Check if this is first run after deployment
+        const isFirstRun = !fs.existsSync(SENTINEL_FILE);
+        
+        if (isFirstRun) {
+            console.log('First run after deployment detected, dropping existing tables...');
+            await dropAllTitanicTables(databaseName, targetBucket);
+            
+            // Create sentinel file to mark tables as initialized
+            fs.writeFileSync(SENTINEL_FILE, new Date().toISOString());
+            console.log('Created sentinel file, tables will not be dropped on subsequent runs');
+        }
+
         // Extract details from EventBridge event
         console.log("EventBridge event:", JSON.stringify(event, null, 2));
         const { bucket, handle, topHash } = event.detail;
