@@ -9,8 +9,9 @@
     "clean": "rm -rf cdk.out */{*.js,*.d.ts}",
     "cdk": "npm run test && npx cdk deploy --require-approval never && npm run event:bake",
     "lint": "eslint . --ext .ts --fix",
-    "event:bake": "aws events put-events --entries file://doc/bake-event.json",
-    "event:all": "aws events put-events --entries file://doc/all-event.json",
+    "event:all": "aws events put-events --entries file://doc/event-all.json",
+    "event:bake": "aws events put-events --entries file://doc/event-quilt-bake.json",
+    "event:staff": "aws events put-events --entries file://doc/event-staff.json",
     "test": "jest",
     "watch": "tsc -w"
   },
