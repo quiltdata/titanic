@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf cdk.out */{*.js,*.d.ts}",
-    "cdk": "npm run test && npx cdk deploy --require-approval never && npm run event:bake",
+    "cdk": "npm run test && npx cdk deploy --require-approval never && npm run event:all",
     "lint": "eslint . --ext .ts --fix",
     "event:all": "aws events put-events --entries file://doc/event-all.json",
     "event:bake": "aws events put-events --entries file://doc/event-quilt-bake.json",

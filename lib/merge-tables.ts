@@ -91,10 +91,11 @@ export async function handler(
 
         // Ensure all required tables exist
         try {
-            await tableManager.ensureTablesExist(sourceTables);
+            const { successfulTables, failedTables, totalTables } = await tableManager.ensureTablesExist(sourceTables);
+            console.log(`Ensured tables exist: ${successfulTables} successful, ${failedTables} failed out of ${totalTables}`);
         } catch (error) {
             const err = error as Error;
-            console.error("Error ensuring tables exist:", {
+            console.error("Unexpected error while ensuring tables exist:", {
                 error: err.message,
                 stack: err.stack,
             });
@@ -111,12 +112,24 @@ export async function handler(
 
         // Execute merge operations
         console.log("Starting merge operations for", sourceTables.length, "source tables");
-        const queryCount = await tableManager.executeInserts(sourceTables);
-        console.log(`Executed ${queryCount} queries successfully`);
+        const { successfulTables, failedTables, totalQueries } = await tableManager.executeInserts(sourceTables);
+        
+        console.log(`Insert operations summary:`);
+        console.log(`  - Source tables processed: ${sourceTables.length}`);
+        console.log(`  - Tables with successful operations: ${successfulTables}`);
+        console.log(`  - Tables with failed operations: ${failedTables}`);
+        console.log(`  - Total queries executed: ${totalQueries}`);
+        
+        if (failedTables > 0) {
+            console.warn(`⚠️ ${failedTables} tables had some failed operations. Check logs above for details.`);
+        }
 
         return {
-            message: `Merge operations completed: ${queryCount} successful queries`,
+            message: `Merge operations completed: ${successfulTables} tables successful, ${failedTables} failed, ${totalQueries} total queries`,
             numTables: sourceTables.length,
+            successfulTables,
+            failedTables,
+            totalQueries,
         };
     } catch (error) {
         const err = error as Error;

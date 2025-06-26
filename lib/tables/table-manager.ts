@@ -16,18 +16,26 @@ export class TableManager {
         this.useS3Table = useS3Table;
     }
 
-    async ensureTablesExist(sourceTables: Table[]): Promise<void> {
+    async ensureTablesExist(sourceTables: Table[]): Promise<{ successfulTables: number; failedTables: number; totalTables: number }> {
         // Find representative views for each table type
         const packagesView = sourceTables.find(t => t.Name?.includes('packages-view'))?.Name;
         const entriesView = sourceTables.find(t => t.Name?.includes('objects-view'))?.Name;
 
+        let successfulTables = 0;
+        let failedTables = 0;
+        let totalTables = 0;
+
         // Create tables if needed
         if (packagesView) {
+            totalTables += 2; // package_revision and package_tag
             try {
                 await PackageRevisionTable.ensureExists(this.databaseName, this.targetBucket, packagesView, this.useS3Table);
+                successfulTables++;
                 await PackageTagTable.ensureExists(this.databaseName, this.targetBucket, packagesView, this.useS3Table);
+                successfulTables++;
             } catch (error) {
                 const err = error as Error;
+                failedTables = totalTables - successfulTables;
                 console.error(`Failed to ensure package tables exist for view ${packagesView}:`, {
                     error: err.message,
                     stack: err.stack,
@@ -37,10 +45,13 @@ export class TableManager {
         }
 
         if (entriesView) {
+            totalTables += 1; // package_entry
             try {
                 await PackageEntryTable.ensureExists(this.databaseName, this.targetBucket, entriesView, this.useS3Table);
+                successfulTables++;
             } catch (error) {
                 const err = error as Error;
+                failedTables++;
                 console.error(`Failed to ensure entry table exists for view ${entriesView}:`, {
                     error: err.message,
                     stack: err.stack,
@@ -48,9 +59,11 @@ export class TableManager {
                 // Don't rethrow - continue with other tables
             }
         }
+
+        return { successfulTables, failedTables, totalTables };
     }
 
-    async executeInserts(sourceTables: Table[]): Promise<number> {
+    async executeInserts(sourceTables: Table[]): Promise<{ successfulTables: number; failedTables: number; totalQueries: number }> {
         let queryCount = 0;
         let successfulTables = 0;
         let failedTables = 0;
@@ -58,8 +71,11 @@ export class TableManager {
         for (const table of sourceTables) {
             if (!table.Name) continue;
 
+            let tableSuccessful = true;
+            let tableQueryCount = 0;
+            const registryName = sourceBucketFromTableName(table.Name);
+
             try {
-                const registryName = sourceBucketFromTableName(table.Name);
                 const context = createTableContext(
                     this.databaseName,
                     this.targetBucket,
@@ -73,10 +89,13 @@ export class TableManager {
                     // Handle package revisions and tags
                     try {
                         await PackageRevisionTable.insert(context, table.Name);
-                        queryCount++;
+                        tableQueryCount++;
+                        console.log(`✅ Successfully inserted package revisions from ${table.Name}`);
                     } catch (error) {
                         const err = error as Error;
-                        console.error(`Failed to insert package revisions from ${table.Name}:`, {
+                        tableQueryCount++; // Count the attempted operation
+                        tableSuccessful = false;
+                        console.error(`❌ Failed to insert package revisions from ${table.Name}:`, {
                             error: err.message,
                             registryName,
                             isS3AccessError: this.isS3AccessError(err),
@@ -85,10 +104,13 @@ export class TableManager {
 
                     try {
                         await PackageTagTable.insert(context, table.Name);
-                        queryCount++;
+                        tableQueryCount++;
+                        console.log(`✅ Successfully inserted package tags from ${table.Name}`);
                     } catch (error) {
                         const err = error as Error;
-                        console.error(`Failed to insert package tags from ${table.Name}:`, {
+                        tableQueryCount++; // Count the attempted operation
+                        tableSuccessful = false;
+                        console.error(`❌ Failed to insert package tags from ${table.Name}:`, {
                             error: err.message,
                             registryName,
                             isS3AccessError: this.isS3AccessError(err),
@@ -98,10 +120,13 @@ export class TableManager {
                     // Handle package entries
                     try {
                         await PackageEntryTable.insert(context, table.Name);
-                        queryCount++;
+                        tableQueryCount++;
+                        console.log(`✅ Successfully inserted package entries from ${table.Name}`);
                     } catch (error) {
                         const err = error as Error;
-                        console.error(`Failed to insert package entries from ${table.Name}:`, {
+                        tableQueryCount++; // Count the attempted operation
+                        tableSuccessful = false;
+                        console.error(`❌ Failed to insert package entries from ${table.Name}:`, {
                             error: err.message,
                             registryName,
                             isS3AccessError: this.isS3AccessError(err),
@@ -109,11 +134,22 @@ export class TableManager {
                     }
                 }
 
-                successfulTables++;
+                // Only count as successful if ALL operations for this table succeeded
+                if (tableSuccessful && tableQueryCount > 0) {
+                    successfulTables++;
+                    console.log(`✅ All operations successful for table ${table.Name}`);
+                } else if (tableQueryCount === 0) {
+                    console.log(`⚠️ No operations executed for table ${table.Name} (may not match expected patterns)`);
+                } else {
+                    failedTables++;
+                    console.log(`❌ Some operations failed for table ${table.Name}`);
+                }
+
+                queryCount += tableQueryCount;
+
             } catch (error) {
                 const err = error as Error;
-                const registryName = sourceBucketFromTableName(table.Name);
-                console.error(`Failed to process table ${table.Name}:`, {
+                console.error(`❌ Failed to process table ${table.Name}:`, {
                     error: err.message,
                     registryName,
                     isS3AccessError: this.isS3AccessError(err),
@@ -131,7 +167,7 @@ export class TableManager {
             totalQueries: queryCount,
         });
 
-        return queryCount;
+        return { successfulTables, failedTables, totalQueries: queryCount };
     }
 
     /**

@@ -5,23 +5,25 @@ import { TitanicStack } from "./titanic-stack";
 describe("TitanicStack", () => {
     const originalEnv = process.env;
 
-    beforeEach(() => {
-        // Reset environment variables
-        process.env = { ...originalEnv };
-        delete process.env.USE_S3_TABLE;
-    });
-
     afterAll(() => {
         process.env = originalEnv;
     });
 
     describe("Iceberg mode (default)", () => {
-        const app = new cdk.App();
-        const stack = new TitanicStack(app, "TestStack", {
-            quiltDatabaseName: "test-database",
-            quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
+        let template: Template;
+
+        beforeAll(() => {
+            // Reset environment variables for Iceberg mode
+            process.env = { ...originalEnv };
+            delete process.env.USE_S3_TABLE;
+            
+            const app = new cdk.App();
+            const stack = new TitanicStack(app, "TestStack", {
+                quiltDatabaseName: "test-database",
+                quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
+            });
+            template = Template.fromStack(stack);
         });
-        const template = Template.fromStack(stack);
 
         it("creates a single S3 bucket for Iceberg mode", () => {
             template.hasResource("AWS::S3::Bucket", {
@@ -44,19 +46,53 @@ describe("TitanicStack", () => {
                 },
             });
         });
+
+        it("creates Lambda with required Athena permissions (Iceberg mode)", () => {
+            const policies = template.findResources("AWS::IAM::Policy");
+            const policy = Object.values(policies)[0] as any;
+            const statements = policy.Properties.PolicyDocument.Statement;
+            
+            // Check Athena permissions
+            expect(statements).toContainEqual(
+                expect.objectContaining({
+                    Action: [
+                        "athena:StartQueryExecution",
+                        "athena:GetQueryExecution",
+                        "athena:GetWorkGroup",
+                        "athena:BatchGetQueryExecution"
+                    ],
+                    Effect: "Allow",
+                    Resource: {
+                        "Fn::Join": ["", ["arn:aws:athena:", {"Ref": "AWS::Region"}, ":", {"Ref": "AWS::AccountId"}, ":workgroup/primary"]]
+                    }
+                })
+            );
+
+            // Check S3 bucket location permission (should be standalone in Iceberg mode)
+            expect(statements).toContainEqual(
+                expect.objectContaining({
+                    Action: "s3:GetBucketLocation",
+                    Effect: "Allow"
+                })
+            );
+        });
     });
 
     describe("S3 Tables mode", () => {
-        const app = new cdk.App();
-        
-        // Set environment variable for S3 Tables mode
-        process.env.USE_S3_TABLE = "true";
-        
-        const stack = new TitanicStack(app, "S3TablesStack", {
-            quiltDatabaseName: "test-database",
-            quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
+        let template: Template;
+
+        beforeAll(() => {
+            // Set environment variable for S3 Tables mode
+            process.env = { ...originalEnv };
+            process.env.USE_S3_TABLE = "true";
+            
+            const app = new cdk.App();
+            const stack = new TitanicStack(app, "S3TablesStack", {
+                quiltDatabaseName: "test-database",
+                quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
+            });
+            template = Template.fromStack(stack);
         });
-        const template = Template.fromStack(stack);
 
         it("creates both S3 TableBucket and regular S3 bucket", () => {
             // Should create regular S3 bucket
@@ -100,6 +136,36 @@ describe("TitanicStack", () => {
                         "s3tables:DeleteTable",
                         "s3tables:ListTables",
                     ]),
+                    Effect: "Allow"
+                })
+            );
+        });
+
+        it("creates Lambda with required Athena permissions (S3 Tables mode)", () => {
+            const policies = template.findResources("AWS::IAM::Policy");
+            const policy = Object.values(policies)[0] as any;
+            const statements = policy.Properties.PolicyDocument.Statement;
+            
+            // Check Athena permissions
+            expect(statements).toContainEqual(
+                expect.objectContaining({
+                    Action: [
+                        "athena:StartQueryExecution",
+                        "athena:GetQueryExecution",
+                        "athena:GetWorkGroup",
+                        "athena:BatchGetQueryExecution"
+                    ],
+                    Effect: "Allow",
+                    Resource: {
+                        "Fn::Join": ["", ["arn:aws:athena:", {"Ref": "AWS::Region"}, ":", {"Ref": "AWS::AccountId"}, ":workgroup/primary"]]
+                    }
+                })
+            );
+
+            // Check S3 bucket location permission (should be in array with S3 Tables actions)
+            expect(statements).toContainEqual(
+                expect.objectContaining({
+                    Action: expect.arrayContaining(["s3:GetBucketLocation"]),
                     Effect: "Allow"
                 })
             );
@@ -169,36 +235,6 @@ describe("TitanicStack", () => {
                             "Fn::Join": ["", expect.arrayContaining([":table/test-database/*"])]
                         })
                     ]
-                })
-            );
-        });
-
-        it("creates Lambda with required Athena permissions", () => {
-            const policies = template.findResources("AWS::IAM::Policy");
-            const policy = Object.values(policies)[0] as any;
-            const statements = policy.Properties.PolicyDocument.Statement;
-            
-            // Check Athena permissions
-            expect(statements).toContainEqual(
-                expect.objectContaining({
-                    Action: [
-                        "athena:StartQueryExecution",
-                        "athena:GetQueryExecution",
-                        "athena:GetWorkGroup",
-                        "athena:BatchGetQueryExecution"
-                    ],
-                    Effect: "Allow",
-                    Resource: {
-                        "Fn::Join": ["", ["arn:aws:athena:", {"Ref": "AWS::Region"}, ":", {"Ref": "AWS::AccountId"}, ":workgroup/primary"]]
-                    }
-                })
-            );
-
-            // Check S3 bucket location permission (it's now combined with S3 Tables permissions)
-            expect(statements).toContainEqual(
-                expect.objectContaining({
-                    Action: expect.arrayContaining(["s3:GetBucketLocation"]),
-                    Effect: "Allow"
                 })
             );
         });

@@ -101,7 +101,8 @@ describe("merge-tables lambda", () => {
             const mockEvent = createEventBridgeEvent();
             const result = await handler(mockEvent, {} as Context);
 
-            expect(result?.message).toContain("successful queries");
+            expect(result?.message).toContain("Merge operations completed");
+            expect(result?.message).toContain("2 tables successful, 0 failed, 3 total queries");
         });
 
         it("should use Iceberg mode when USE_S3_TABLE=false or undefined", async () => {
@@ -127,7 +128,8 @@ describe("merge-tables lambda", () => {
             const mockEvent = createEventBridgeEvent();
             const result = await handler(mockEvent, {} as Context);
 
-            expect(result?.message).toContain("successful queries");
+            expect(result?.message).toContain("Merge operations completed");
+            expect(result?.message).toContain("2 tables successful, 0 failed, 3 total queries");
         });
     });
 
@@ -207,8 +209,11 @@ describe("merge-tables lambda", () => {
         const result = await handler(mockEvent, {} as Context);
 
         expect(result).toEqual({
-            message: "Merge operations completed: 3 successful queries",
+            message: "Merge operations completed: 2 tables successful, 0 failed, 3 total queries",
             numTables: 2, // Should find test-bucket_objects-view and test-bucket_packages-view
+            successfulTables: 2,
+            failedTables: 0,
+            totalQueries: 3,
         });
     });
 
@@ -250,8 +255,11 @@ describe("merge-tables lambda", () => {
 
             const result = await handler(eventBridgeEvent, {} as Context);
             expect(result).toEqual({
-                message: "Merge operations completed: 1 successful queries",
+                message: "Merge operations completed: 1 tables successful, 0 failed, 1 total queries",
                 numTables: 1, // Should find test-bucket_objects-view
+                successfulTables: 1,
+                failedTables: 0,
+                totalQueries: 1,
             });
         });
 
@@ -356,8 +364,11 @@ describe("merge-tables lambda", () => {
         
         // Should complete with 0 successful queries due to table creation/insert failures
         expect(result).toEqual({
-            message: "Merge operations completed: 0 successful queries",
+            message: "Merge operations completed: 0 tables successful, 1 failed, 1 total queries",
             numTables: 1, // Should find the source table but fail to process it
+            successfulTables: 0,
+            failedTables: 1,
+            totalQueries: 1,
         });
     });
 });

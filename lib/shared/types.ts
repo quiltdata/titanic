@@ -12,6 +12,9 @@ export interface PackageEventDetail {
 export type HandlerResponse = {
     message: string;
     numTables: number;
+    successfulTables?: number;
+    failedTables?: number;
+    totalQueries?: number;
 } | undefined;
 
 // Table context for operations
