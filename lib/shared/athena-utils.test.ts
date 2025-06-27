@@ -130,6 +130,9 @@ describe("athena-utils", () => {
         });
 
         it("should execute query successfully for S3 Tables with correct catalog", async () => {
+            // Set environment variable for Athena results bucket
+            process.env.ATHENA_RESULTS_BUCKET = "athena-results-bucket";
+            
             athenaMock
                 .on(StartQueryExecutionCommand)
                 .resolves({ QueryExecutionId: "test-id" })
@@ -140,7 +143,9 @@ describe("athena-utils", () => {
                     }
                 });
 
-            await expect(executeQuery("SELECT 1", "test-bucket", "quilt_titanic", true)).resolves.toBeUndefined();
+            // Test with S3 Tables ARN
+            const s3TablesArn = "arn:aws:s3tables:us-east-1:123456789012:bucket/test-bucket";
+            await expect(executeQuery("SELECT 1", s3TablesArn, "quilt_titanic", true)).resolves.toBeUndefined();
             
             // Verify that the correct QueryExecutionContext was set for S3 Tables
             const startQueryCall = athenaMock.commandCalls(StartQueryExecutionCommand)[0];
@@ -148,9 +153,17 @@ describe("athena-utils", () => {
                 Catalog: "s3tablescatalog/test-bucket",
                 Database: "quilt_titanic"
             });
+            
+            // Verify that Athena results go to the separate bucket
+            expect(startQueryCall.args[0].input.ResultConfiguration?.OutputLocation).toBe(
+                "s3://athena-results-bucket/athena-results/"
+            );
+            
+            // Clean up
+            delete process.env.ATHENA_RESULTS_BUCKET;
         });
 
-        it("should execute query with no context for Iceberg tables", async () => {
+        it("should execute query with database context for Iceberg tables", async () => {
             athenaMock
                 .on(StartQueryExecutionCommand)
                 .resolves({ QueryExecutionId: "test-id" })
@@ -163,9 +176,16 @@ describe("athena-utils", () => {
 
             await expect(executeQuery("SELECT 1", "test-bucket", "test-db", false)).resolves.toBeUndefined();
             
-            // Verify that no QueryExecutionContext was set for Iceberg tables
+            // Verify that QueryExecutionContext was set with database for Iceberg tables
             const startQueryCall = athenaMock.commandCalls(StartQueryExecutionCommand)[0];
-            expect(startQueryCall.args[0].input.QueryExecutionContext).toBeUndefined();
+            expect(startQueryCall.args[0].input.QueryExecutionContext).toEqual({
+                Database: "test-db"
+            });
+            
+            // Verify that results go to the target bucket
+            expect(startQueryCall.args[0].input.ResultConfiguration?.OutputLocation).toBe(
+                "s3://test-bucket/athena-results/"
+            );
         });
 
         it("should throw error when QueryExecutionId is missing", async () => {

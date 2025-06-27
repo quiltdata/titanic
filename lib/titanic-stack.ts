@@ -27,8 +27,9 @@ export class TitanicStack extends cdk.Stack {
         // Check if we should use S3 Tables
         const useS3Table = process.env.USE_S3_TABLE === "true";
         
-        // Use the database name from props (already resolved in bin/titanic.ts)
-        const databaseName = props.quiltDatabaseName;
+        const databaseName = !useS3Table
+            ? process.env.QUILT_DATABASE_NAME || (() => { throw new Error("must set QUILT_DATABASE_NAME environment variable"); })()
+            : props.quiltDatabaseName;
 
         // Create bucket based on table type
         let titanicBucket: s3.Bucket;
@@ -121,6 +122,7 @@ export class TitanicStack extends cdk.Stack {
             environment: {
                 DATABASE_NAME: databaseName,
                 TARGET_BUCKET: targetBucketName,
+                ATHENA_RESULTS_BUCKET: titanicBucket.bucketName,
                 LAMBDA_TIMEOUT: (props.lambdaTimeout || 15000).toString(),
                 QUILT_READ_POLICY_ARN: props.quiltReadPolicyArn,
                 USE_S3_TABLE: useS3Table.toString(),

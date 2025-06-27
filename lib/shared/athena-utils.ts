@@ -69,20 +69,43 @@ export async function executeQuery(
     console.log("Executing query:", query);
     
     try {
+        // For S3 Tables, we need different handling
+        let resultsBucket: string;
+        let queryExecutionContext: any = {};
+        
+        if (useS3Table) {
+            // For S3 Tables, use the ATHENA_RESULTS_BUCKET for query results
+            resultsBucket = process.env.ATHENA_RESULTS_BUCKET || targetBucket;
+            
+            // Extract bucket name from S3 Tables ARN for catalog
+            // ARN format: arn:aws:s3tables:region:account:bucket/bucket-name
+            const bucketName = targetBucket.includes('arn:aws:s3tables:') 
+                ? targetBucket.split('/').pop() 
+                : targetBucket;
+            
+            if (databaseName && bucketName) {
+                queryExecutionContext = {
+                    Catalog: `s3tablescatalog/${bucketName}`,
+                    Database: databaseName,
+                };
+            }
+        } else {
+            // For regular Iceberg tables, use the target bucket directly
+            resultsBucket = targetBucket;
+            if (databaseName) {
+                queryExecutionContext = {
+                    Database: databaseName,
+                };
+            }
+        }
+
         const queryExecutionCommand: StartQueryExecutionCommand = new StartQueryExecutionCommand({
             QueryString: query,
+            QueryExecutionContext: queryExecutionContext,
             ResultConfiguration: {
-                OutputLocation: `s3://${targetBucket}/athena-results/`,
+                OutputLocation: `s3://${resultsBucket}/athena-results/`,
             },
         });
-
-        // For S3 Tables, we need to specify the correct catalog and database
-        if (useS3Table && databaseName) {
-            queryExecutionCommand.input.QueryExecutionContext = {
-                Catalog: `s3tablescatalog/${targetBucket}`,
-                Database: databaseName,
-            };
-        }
 
         const queryResponse = await athenaClient.send(queryExecutionCommand);
 
@@ -192,7 +215,7 @@ export async function dropAllTitanicTables(databaseName: string, targetBucket: s
     
     for (const tableName of tables) {
         try {
-            const query = `DROP TABLE IF EXISTS "${databaseName}"."${tableName}"`;
+            const query = `DROP TABLE IF EXISTS ${databaseName}.${tableName}`;
             console.log(`Dropping table: ${query}`);
             await executeQuery(query, targetBucket);
             console.log(`Successfully dropped table ${tableName}`);

@@ -4,8 +4,8 @@ import { TitanicStack } from "../lib/titanic-stack";
 
 const app = new cdk.App();
 
-// Determine database name - allow override with QUILT_DATABASE_NAME environment variable
-const databaseName = process.env.QUILT_DATABASE_NAME || "quilt_titanic";
+// Always pass the default database name - the stack will override if needed
+const databaseName = "quilt_titanic";
 
 new TitanicStack(app, "TitanicStack", {
     quiltDatabaseName: databaseName,

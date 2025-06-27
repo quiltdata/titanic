@@ -2,36 +2,119 @@ import * as cdk from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
 import { TitanicStack } from "./titanic-stack";
 
+// Test utilities
+const setupEnvironment = (overrides: Record<string, string> = {}) => {
+    process.env = {
+        NODE_ENV: "test",
+        ...overrides
+    };
+};
+
+const createStackTemplate = (
+    stackId: string,
+    props: any,
+    envOverrides: Record<string, string> = {}
+) => {
+    setupEnvironment(envOverrides);
+    const app = new cdk.App();
+    const stack = new TitanicStack(app, stackId, props);
+    return Template.fromStack(stack);
+};
+
+const findLambdaPolicy = (template: Template, actionToFind: string) => {
+    const policies = template.findResources("AWS::IAM::Policy");
+    return Object.values(policies).find((policy: any) =>
+        policy.Properties.PolicyDocument.Statement.some((stmt: any) =>
+            Array.isArray(stmt.Action) && stmt.Action.includes(actionToFind)
+        )
+    ) as any;
+};
+
+const findLambdaPolicyByKey = (template: Template, keyPattern: string) => {
+    const policies = template.findResources("AWS::IAM::Policy");
+    const lambdaPolicyEntry = Object.entries(policies).find(([key]) =>
+        key.includes("MergeTables") && key.includes("ServiceRole")
+    );
+    return lambdaPolicyEntry ? lambdaPolicyEntry[1] : Object.values(policies)[0];
+};
+
+const expectS3BucketLocationPermissions = (template: Template) => {
+    const policy = findLambdaPolicyByKey(template, "MergeTables");
+    expect(policy).toBeDefined();
+    const statements = policy.Properties.PolicyDocument.Statement;
+    
+    // Check for either a single action or an array containing the action
+    const hasS3BucketLocationPermission = statements.some((statement: any) => 
+        statement.Action === "s3:GetBucketLocation" || 
+        (Array.isArray(statement.Action) && statement.Action.includes("s3:GetBucketLocation"))
+    );
+    
+    expect(hasS3BucketLocationPermission).toBe(true);
+};
+
+const expectGluePermissions = (template: Template, expectedDatabaseName: string) => {
+    const policy = findLambdaPolicyByKey(template, "MergeTables");
+    expect(policy).toBeDefined();
+    const statements = policy.Properties.PolicyDocument.Statement;
+    
+    expect(statements).toContainEqual(
+        expect.objectContaining({
+            Effect: "Allow",
+            Action: ["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
+            Resource: [
+                expect.objectContaining({
+                    "Fn::Join": ["", expect.arrayContaining([":catalog"])]
+                }),
+                expect.objectContaining({
+                    "Fn::Join": ["", expect.arrayContaining([`:database/${expectedDatabaseName}`])]
+                }),
+                expect.objectContaining({
+                    "Fn::Join": ["", expect.arrayContaining([`:table/${expectedDatabaseName}/*`])]
+                })
+            ]
+        })
+    );
+};
+
+const expectAthenaPermissions = (template: Template) => {
+    const policy = findLambdaPolicy(template, "athena:StartQueryExecution");
+    const statements = policy.Properties.PolicyDocument.Statement;
+    
+    expect(statements).toContainEqual(
+        expect.objectContaining({
+            Action: [
+                "athena:StartQueryExecution",
+                "athena:GetQueryExecution",
+                "athena:GetWorkGroup",
+                "athena:BatchGetQueryExecution"
+            ],
+            Effect: "Allow",
+            Resource: {
+                "Fn::Join": ["", ["arn:aws:athena:", { "Ref": "AWS::Region" }, ":", { "Ref": "AWS::AccountId" }, ":workgroup/primary"]]
+            }
+        })
+    );
+};
+
 describe("TitanicStack", () => {
-    const originalEnv = process.env;
     const defaultStackProps = {
         quiltDatabaseName: "test-database",
         quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
     };
 
-    afterAll(() => {
-        process.env = originalEnv;
-    });
-
     describe("Shared functionality (mode-independent)", () => {
         describe.each([
-            { mode: "Iceberg", useS3Table: false, stackId: "SharedIcebergStack" },
-            { mode: "S3 Tables", useS3Table: true, stackId: "SharedS3TablesStack" }
-        ])("$mode mode", ({ mode, useS3Table, stackId }) => {
+            { mode: "Iceberg", useS3Table: false, stackId: "SharedIcebergStack", dbName: "test-database-env" },
+            { mode: "S3 Tables", useS3Table: true, stackId: "SharedS3TablesStack", dbName: "test-database" }
+        ])("$mode mode", ({ mode, useS3Table, stackId, dbName }) => {
             let template: Template;
 
             beforeAll(() => {
-                process.env = { ...originalEnv };
-                if (useS3Table) {
-                    process.env.USE_S3_TABLE = "true";
-                } else {
-                    delete process.env.USE_S3_TABLE;
-                }
-                delete process.env.QUILT_DATABASE_NAME; // Clear this to ensure clean test
-                
-                const app = new cdk.App();
-                const stack = new TitanicStack(app, stackId, defaultStackProps);
-                template = Template.fromStack(stack);
+                const envOverrides: Record<string, string> = useS3Table 
+                    ? { USE_S3_TABLE: "true" }
+                    : { QUILT_DATABASE_NAME: "test-database-env" };
+                    
+                template = createStackTemplate(stackId, defaultStackProps, envOverrides);
             });
 
             it("should create regular S3 bucket with correct properties", () => {
@@ -55,83 +138,29 @@ describe("TitanicStack", () => {
             });
 
             it("should grant required Athena permissions", () => {
-                const policies = template.findResources("AWS::IAM::Policy");
-                // Find the Lambda role policy (not the custom resource policy)
-                const lambdaPolicy = Object.values(policies).find((policy: any) => 
-                    policy.Properties.PolicyDocument.Statement.some((stmt: any) => 
-                        Array.isArray(stmt.Action) && stmt.Action.includes("athena:StartQueryExecution")
-                    )
-                ) as any;
-                const statements = lambdaPolicy.Properties.PolicyDocument.Statement;
-                
-                expect(statements).toContainEqual(
-                    expect.objectContaining({
-                        Action: [
-                            "athena:StartQueryExecution",
-                            "athena:GetQueryExecution",
-                            "athena:GetWorkGroup",
-                            "athena:BatchGetQueryExecution"
-                        ],
-                        Effect: "Allow",
-                        Resource: {
-                            "Fn::Join": ["", ["arn:aws:athena:", {"Ref": "AWS::Region"}, ":", {"Ref": "AWS::AccountId"}, ":workgroup/primary"]]
-                        }
-                    })
-                );
+                expectAthenaPermissions(template);
             });
 
             it("should grant required Glue permissions", () => {
-                const policies = template.findResources("AWS::IAM::Policy");
-                // Find the Lambda's IAM policy (not the custom resource policy)
-                const lambdaPolicyEntry = Object.entries(policies).find(([key, policy]: [string, any]) => 
-                    key.includes("MergeTables") && key.includes("ServiceRole")
-                );
-                const policy = lambdaPolicyEntry ? lambdaPolicyEntry[1] : Object.values(policies).find((p: any) => 
-                    p.Properties.PolicyDocument.Statement.some((stmt: any) => 
-                        stmt.Action && stmt.Action.includes("glue:GetTables")
-                    )
-                );
-                
-                expect(policy).toBeDefined();
-                const statements = policy!.Properties.PolicyDocument.Statement;
-                
-                expect(statements).toContainEqual(
-                    expect.objectContaining({
-                        Effect: "Allow",
-                        Action: ["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
-                        Resource: [
-                            expect.objectContaining({
-                                "Fn::Join": ["", expect.arrayContaining([":catalog"])]
-                            }),
-                            expect.objectContaining({
-                                "Fn::Join": ["", expect.arrayContaining([":database/test-database"])]
-                            }),
-                            expect.objectContaining({
-                                "Fn::Join": ["", expect.arrayContaining([":table/test-database/*"])]
-                            })
-                        ]
-                    })
-                );
+                expectGluePermissions(template, dbName);
+            });
+
+            it("should grant S3 bucket location permissions", () => {
+                expectS3BucketLocationPermissions(template);
             });
         });
 
         it("should support custom Lambda timeout configuration", () => {
-            // Test with Iceberg mode (default)
-            process.env = { ...originalEnv };
-            delete process.env.USE_S3_TABLE;
-            delete process.env.QUILT_DATABASE_NAME; // Clear this to ensure clean test
-            
-            const app = new cdk.App();
-            const stack = new TitanicStack(app, "CustomTimeoutStack", {
-                ...defaultStackProps,
-                lambdaTimeout: 10000,
-            });
-            const customTemplate = Template.fromStack(stack);
+            const customTemplate = createStackTemplate(
+                "CustomTimeoutStack", 
+                { ...defaultStackProps, lambdaTimeout: 10000 },
+                { QUILT_DATABASE_NAME: "test-database-env" }
+            );
 
             customTemplate.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        DATABASE_NAME: "test-database",
+                        DATABASE_NAME: "test-database-env",
                         LAMBDA_TIMEOUT: "10000",
                     },
                 },
@@ -143,14 +172,7 @@ describe("TitanicStack", () => {
         let template: Template;
 
         beforeAll(() => {
-            // Reset environment variables for Iceberg mode
-            process.env = { ...originalEnv };
-            delete process.env.USE_S3_TABLE;
-            delete process.env.QUILT_DATABASE_NAME; // Clear this to ensure clean test
-            
-            const app = new cdk.App();
-            const stack = new TitanicStack(app, "IcebergStack", defaultStackProps);
-            template = Template.fromStack(stack);
+            template = createStackTemplate("IcebergStack", defaultStackProps, { QUILT_DATABASE_NAME: "test-database" });
         });
 
         it("should not create S3 Tables resources", () => {
@@ -159,7 +181,6 @@ describe("TitanicStack", () => {
 
         it("should not create Glue database (assumes database already exists)", () => {
             template.resourceCountIs("AWS::Glue::Database", 0);
-            // For Iceberg mode, we assume the database already exists and just reference it
         });
 
         it("should configure Lambda function with Iceberg-specific settings", () => {
@@ -174,64 +195,27 @@ describe("TitanicStack", () => {
             });
         });
 
-        it("should grant S3 bucket location permissions (standalone)", () => {
-            const policies = template.findResources("AWS::IAM::Policy");
-            const policy = Object.values(policies)[0] as any;
-            const statements = policy.Properties.PolicyDocument.Statement;
-            
-            expect(statements).toContainEqual(
-                expect.objectContaining({
-                    Action: "s3:GetBucketLocation",
-                    Effect: "Allow"
-                })
-            );
-        });
-
         describe("Database name usage", () => {
-            it("should use the database name provided in props", () => {
-                process.env = { ...originalEnv };
-                delete process.env.USE_S3_TABLE;
-                delete process.env.QUILT_DATABASE_NAME;
-                
-                const stackPropsWithCustomDb = {
-                    quiltDatabaseName: "custom_test_db",
-                    quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
-                };
-                
-                const app = new cdk.App();
-                const stack = new TitanicStack(app, "IcebergCustomDbStack", stackPropsWithCustomDb);
-                const template = Template.fromStack(stack);
+            it("should use the database name provided in QUILT_DATABASE_NAME environment variable", () => {
+                const envTemplate = createStackTemplate(
+                    "IcebergEnvDbStack", 
+                    { ...defaultStackProps, quiltDatabaseName: "env_var_db_name" },
+                    { QUILT_DATABASE_NAME: "env_var_db_name" }
+                );
 
-                template.hasResourceProperties("AWS::Lambda::Function", {
+                envTemplate.hasResourceProperties("AWS::Lambda::Function", {
                     Environment: {
                         Variables: {
-                            DATABASE_NAME: "custom_test_db",
+                            DATABASE_NAME: "env_var_db_name",
                         },
                     },
                 });
             });
 
-            it("should use props.quiltDatabaseName regardless of QUILT_DATABASE_NAME environment variable", () => {
-                process.env = { ...originalEnv };
-                delete process.env.USE_S3_TABLE;
-                process.env.QUILT_DATABASE_NAME = "env_var_should_be_ignored";
-                
-                const stackPropsWithCustomDb = {
-                    quiltDatabaseName: "props_database_name",
-                    quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
-                };
-                
-                const app = new cdk.App();
-                const stack = new TitanicStack(app, "IcebergPropsDbStack", stackPropsWithCustomDb);
-                const template = Template.fromStack(stack);
-
-                template.hasResourceProperties("AWS::Lambda::Function", {
-                    Environment: {
-                        Variables: {
-                            DATABASE_NAME: "props_database_name",
-                        },
-                    },
-                });
+            it("should throw error if QUILT_DATABASE_NAME not set", () => {
+                expect(() => {
+                    createStackTemplate("IcebergNoDbStack", defaultStackProps);
+                }).toThrow("must set QUILT_DATABASE_NAME environment variable");
             });
         });
     });
@@ -240,19 +224,13 @@ describe("TitanicStack", () => {
         let template: Template;
 
         beforeAll(() => {
-            // Set environment variable for S3 Tables mode
-            process.env = { ...originalEnv };
-            process.env.USE_S3_TABLE = "true";
-            
-            const app = new cdk.App();
-            const stack = new TitanicStack(app, "S3TablesStack", defaultStackProps);
-            template = Template.fromStack(stack);
+            template = createStackTemplate("S3TablesStack", defaultStackProps, { USE_S3_TABLE: "true" });
         });
 
         it("should create S3 TableBucket in addition to regular S3 bucket", () => {
             template.hasResourceProperties("AWS::S3Tables::TableBucket", {
                 TableBucketName: {
-                    "Fn::Join": ["", ["titanic-tables-", {"Ref": "AWS::AccountId"}, "-", {"Ref": "AWS::Region"}]]
+                    "Fn::Join": ["", ["titanic-tables-", { "Ref": "AWS::AccountId" }, "-", { "Ref": "AWS::Region" }]]
                 }
             });
         });
@@ -270,47 +248,34 @@ describe("TitanicStack", () => {
         });
 
         it("should create Glue database for S3 Tables using custom resource", () => {
-            // Check for the custom resource that creates the Glue database
             const customResources = template.findResources("Custom::AWS");
             const customResourceKeys = Object.keys(customResources);
             expect(customResourceKeys.length).toBeGreaterThan(0);
-            
-            // Find the database creation custom resource
+
             const dbResource = Object.values(customResources).find(resource => {
                 const createAction = resource.Properties?.Create;
                 if (typeof createAction === 'string') return false;
-                
-                // Check if this is a Glue database creation action
-                return createAction && 
-                       createAction["Fn::Join"] && 
-                       JSON.stringify(createAction).includes("Glue") &&
-                       JSON.stringify(createAction).includes("createDatabase") &&
-                       JSON.stringify(createAction).includes("test-database");
+
+                return createAction &&
+                    createAction["Fn::Join"] &&
+                    JSON.stringify(createAction).includes("Glue") &&
+                    JSON.stringify(createAction).includes("createDatabase") &&
+                    JSON.stringify(createAction).includes("test-database");
             });
-            
+
             expect(dbResource).toBeDefined();
         });
 
         it("should grant required S3 Tables permissions", () => {
-            const policies = template.findResources("AWS::IAM::Policy");
-            // Find the Lambda's IAM policy (not the custom resource policy)
-            const lambdaPolicyEntry = Object.entries(policies).find(([key, policy]: [string, any]) => 
-                key.includes("MergeTables") && key.includes("ServiceRole")
-            );
-            const policy = lambdaPolicyEntry ? lambdaPolicyEntry[1] : Object.values(policies).find((p: any) => 
-                p.Properties.PolicyDocument.Statement.some((stmt: any) => 
-                    stmt.Action && stmt.Action.includes("s3tables:GetTable")
-                )
-            );
-            
+            const policy = findLambdaPolicyByKey(template, "MergeTables");
             expect(policy).toBeDefined();
-            const statements = policy!.Properties.PolicyDocument.Statement;
-            
+            const statements = policy.Properties.PolicyDocument.Statement;
+
             expect(statements).toContainEqual(
                 expect.objectContaining({
                     Action: expect.arrayContaining([
                         "s3tables:GetTable",
-                        "s3tables:CreateTable", 
+                        "s3tables:CreateTable",
                         "s3tables:PutTableData",
                         "s3tables:GetTableData",
                         "s3tables:UpdateTable",
@@ -322,45 +287,15 @@ describe("TitanicStack", () => {
             );
         });
 
-        it("should grant S3 bucket location permissions (within S3 Tables permissions)", () => {
-            const policies = template.findResources("AWS::IAM::Policy");
-            // Find the Lambda's IAM policy (not the custom resource policy)
-            const lambdaPolicyEntry = Object.entries(policies).find(([key, policy]: [string, any]) => 
-                key.includes("MergeTables") && key.includes("ServiceRole")
-            );
-            const policy = lambdaPolicyEntry ? lambdaPolicyEntry[1] : Object.values(policies).find((p: any) => 
-                p.Properties.PolicyDocument.Statement.some((stmt: any) => 
-                    stmt.Action && stmt.Action.includes("s3:GetBucketLocation")
-                )
-            );
-            
-            expect(policy).toBeDefined();
-            const statements = policy!.Properties.PolicyDocument.Statement;
-            
-            expect(statements).toContainEqual(
-                expect.objectContaining({
-                    Action: expect.arrayContaining(["s3:GetBucketLocation"]),
-                    Effect: "Allow"
-                })
-            );
-        });
-
         describe("Database name usage", () => {
             it("should use the database name provided in props", () => {
-                process.env = { ...originalEnv };
-                process.env.USE_S3_TABLE = "true";
-                process.env.QUILT_DATABASE_NAME = "env_var_should_be_ignored";
-                
-                const stackPropsWithCustomDb = {
-                    quiltDatabaseName: "s3_tables_db",
-                    quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
-                };
-                
-                const app = new cdk.App();
-                const stack = new TitanicStack(app, "S3TablesCustomDbStack", stackPropsWithCustomDb);
-                const template = Template.fromStack(stack);
+                const customTemplate = createStackTemplate(
+                    "S3TablesCustomDbStack",
+                    { ...defaultStackProps, quiltDatabaseName: "s3_tables_db" },
+                    { USE_S3_TABLE: "true", QUILT_DATABASE_NAME: "env_var_should_be_ignored" }
+                );
 
-                template.hasResourceProperties("AWS::Lambda::Function", {
+                customTemplate.hasResourceProperties("AWS::Lambda::Function", {
                     Environment: {
                         Variables: {
                             DATABASE_NAME: "s3_tables_db",
@@ -369,19 +304,18 @@ describe("TitanicStack", () => {
                 });
 
                 // Verify the custom resource for database creation uses the correct name
-                const customResources = template.findResources("Custom::AWS");
+                const customResources = customTemplate.findResources("Custom::AWS");
                 const dbResource = Object.values(customResources).find(resource => {
                     const createAction = resource.Properties?.Create;
                     if (typeof createAction === 'string') return false;
-                    
-                    // Check if this is a Glue database creation action with the correct name
-                    return createAction && 
-                           createAction["Fn::Join"] && 
-                           JSON.stringify(createAction).includes("Glue") &&
-                           JSON.stringify(createAction).includes("createDatabase") &&
-                           JSON.stringify(createAction).includes("s3_tables_db");
+
+                    return createAction &&
+                        createAction["Fn::Join"] &&
+                        JSON.stringify(createAction).includes("Glue") &&
+                        JSON.stringify(createAction).includes("createDatabase") &&
+                        JSON.stringify(createAction).includes("s3_tables_db");
                 });
-                
+
                 expect(dbResource).toBeDefined();
             });
         });

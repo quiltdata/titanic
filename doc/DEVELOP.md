@@ -59,8 +59,11 @@ interface TableInterface {
 #### S3 Tables (`USE_S3_TABLE=true`)
 - **Implementation**: Empty table creation + separate INSERT operations
 - **Benefits**: AWS-native optimization, built-in partitioning
-- **Storage**: S3 Tables service + regular S3 bucket
+- **Storage**: Dual-bucket architecture:
+  - S3 Tables bucket (ARN format) for table data
+  - Regular S3 bucket for Athena query results
 - **Partitioning**: Manual PARTITIONED BY clauses
+- **Athena Queries**: Uses `s3tablescatalog/{bucket-name}` catalog specification
 
 ### Error Handling Strategy
 
@@ -195,6 +198,9 @@ CDK_DEFAULT_ACCOUNT=123456789012
 CDK_DEFAULT_REGION=us-east-2
 QUILT_DATABASE_NAME=your_database
 
+# S3 Tables specific (when USE_S3_TABLE=true)
+ATHENA_RESULTS_BUCKET=athena-results-bucket  # Separate bucket for query results
+
 # Development/testing
 NODE_ENV=development
 AWS_PROFILE=your-profile
@@ -203,9 +209,11 @@ AWS_PROFILE=your-profile
 ### CDK Infrastructure
 The infrastructure is defined in TypeScript with:
 - **Lambda function** with configurable environment variables
-- **SQS queue** for event triggering
+- **EventBridge rule** for event triggering
 - **IAM roles** with minimal required permissions
 - **CloudWatch logs** for monitoring and debugging
+- **Dual S3 buckets** (S3 Tables mode): S3 Tables bucket + Athena results bucket
+- **Single S3 bucket** (Iceberg mode): Combined storage for tables and results
 
 ### Deployment Steps
 1. **Configure environment**: Set all required variables
@@ -224,11 +232,13 @@ Lambda logs include:
 - **Table mode indicators**: Which format is being used
 
 ### Debugging Tips
-1. **Check environment variables** in Lambda console
+1. **Check environment variables** in Lambda console (especially `ATHENA_RESULTS_BUCKET` for S3 Tables)
 2. **Verify source views** exist in Glue Data Catalog
 3. **Monitor Athena queries** in AWS console for SQL issues
 4. **Review IAM permissions** if access denied errors occur
 5. **Test with npm scripts** for isolated debugging
+6. **Validate S3 Tables ARN format** if using S3 Tables mode
+7. **Check dual-bucket setup** for S3 Tables deployments
 
 ### Performance Monitoring
 - **Query execution time**: Monitor Athena query performance
@@ -256,4 +266,38 @@ Lambda logs include:
 - **User feedback**: Clear error messages in responses
 - **Retry logic**: Appropriate retry strategies for transient failures
 
-This architecture enables reliable, scalable data lake table management with flexibility for future enhancements and table format evolution.
+### Athena Query Execution
+
+The system executes Athena queries differently based on table format:
+
+#### S3 Tables Query Structure
+```typescript
+{
+  QueryString: "DROP TABLE IF EXISTS ...",
+  QueryExecutionContext: {
+    Catalog: "s3tablescatalog/bucket-name",  // Extracted from S3 Tables ARN
+    Database: "database_name"
+  },
+  ResultConfiguration: {
+    OutputLocation: "s3://athena-results-bucket/athena-results/"  // Separate bucket
+  }
+}
+```
+
+#### Iceberg Query Structure
+```typescript
+{
+  QueryString: "DROP TABLE IF EXISTS ...",
+  QueryExecutionContext: {
+    Database: "database_name"  // No catalog specification needed
+  },
+  ResultConfiguration: {
+    OutputLocation: "s3://target-bucket/athena-results/"  // Same bucket as tables
+  }
+}
+```
+
+#### ARN Handling for S3 Tables
+- S3 Tables buckets use ARN format: `arn:aws:s3tables:region:account:bucket/bucket-name`
+- The system extracts the bucket name from the ARN for catalog specification
+- Query results are stored in a separate regular S3 bucket (`ATHENA_RESULTS_BUCKET`)

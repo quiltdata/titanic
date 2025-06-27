@@ -18,7 +18,7 @@ describe("bin/titanic", () => {
         process.env = originalEnv;
     });
 
-    it("should use default database name when QUILT_DATABASE_NAME is not set", () => {
+    it("should always use default database name regardless of QUILT_DATABASE_NAME environment variable", () => {
         delete process.env.QUILT_DATABASE_NAME;
         process.env.QUILT_READ_POLICY_ARN = "arn:aws:iam::123456789012:policy/test-policy";
 
@@ -36,19 +36,19 @@ describe("bin/titanic", () => {
         );
     });
 
-    it("should use QUILT_DATABASE_NAME environment variable when set", () => {
+    it("should always use default database name even when QUILT_DATABASE_NAME is set", () => {
         process.env.QUILT_DATABASE_NAME = "custom_database_name";
         process.env.QUILT_READ_POLICY_ARN = "arn:aws:iam::123456789012:policy/test-policy";
 
         // Import and execute the bin file
         require("../bin/titanic");
 
-        // Verify TitanicStack was called with the custom database name
+        // Verify TitanicStack was called with the default database name (not the environment variable)
         expect(mockTitanicStack).toHaveBeenCalledWith(
             expect.any(cdk.App),
             "TitanicStack",
             expect.objectContaining({
-                quiltDatabaseName: "custom_database_name",
+                quiltDatabaseName: "quilt_titanic",
                 quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
             })
         );
