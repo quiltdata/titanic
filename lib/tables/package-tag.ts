@@ -40,11 +40,11 @@ export class PackageTagTable extends BaseTable {
         const selectClause = this.generateSelectClause(context.registryName, 's');
         
         return `
-            INSERT INTO "${context.databaseName}"."${this.tableName}" (registry, pkg_name, tag_name, top_hash)
+            INSERT INTO "${context.targetDatabaseName}"."${this.tableName}" (registry, pkg_name, tag_name, top_hash)
             SELECT DISTINCT
               ${selectClause}
-            FROM "${context.databaseName}"."${sourceTableName}" s
-            LEFT JOIN "${context.databaseName}"."${this.tableName}" t
+            FROM "${context.sourceDatabaseName}"."${sourceTableName}" s
+            LEFT JOIN "${context.targetDatabaseName}"."${this.tableName}" t
               ON s.pkg_name = t.pkg_name
               AND s.timestamp = t.tag_name
               AND t.registry = '${context.registryName}'

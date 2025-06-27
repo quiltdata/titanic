@@ -6,12 +6,14 @@ import { TableContext, createTableContext } from "../shared/types";
 import { sourceBucketFromTableName } from "../shared/athena-utils";
 
 export class TableManager {
-    private databaseName: string;
+    private sourceDatabaseName: string;
+    private targetDatabaseName: string;
     private targetBucket: string;
     private useS3Table: boolean;
 
-    constructor(databaseName: string, targetBucket: string, useS3Table: boolean = false) {
-        this.databaseName = databaseName;
+    constructor(sourceDatabaseName: string, targetDatabaseName: string, targetBucket: string, useS3Table: boolean = false) {
+        this.sourceDatabaseName = sourceDatabaseName;
+        this.targetDatabaseName = targetDatabaseName;
         this.targetBucket = targetBucket;
         this.useS3Table = useS3Table;
     }
@@ -29,9 +31,9 @@ export class TableManager {
         if (packagesView) {
             totalTables += 2; // package_revision and package_tag
             try {
-                await PackageRevisionTable.ensureExists(this.databaseName, this.targetBucket, packagesView, this.useS3Table);
+                await PackageRevisionTable.ensureExists(this.targetDatabaseName, this.targetBucket, packagesView, this.useS3Table);
                 successfulTables++;
-                await PackageTagTable.ensureExists(this.databaseName, this.targetBucket, packagesView, this.useS3Table);
+                await PackageTagTable.ensureExists(this.targetDatabaseName, this.targetBucket, packagesView, this.useS3Table);
                 successfulTables++;
             } catch (error) {
                 const err = error as Error;
@@ -47,7 +49,7 @@ export class TableManager {
         if (entriesView) {
             totalTables += 1; // package_entry
             try {
-                await PackageEntryTable.ensureExists(this.databaseName, this.targetBucket, entriesView, this.useS3Table);
+                await PackageEntryTable.ensureExists(this.targetDatabaseName, this.targetBucket, entriesView, this.useS3Table);
                 successfulTables++;
             } catch (error) {
                 const err = error as Error;
@@ -77,7 +79,8 @@ export class TableManager {
 
             try {
                 const context = createTableContext(
-                    this.databaseName,
+                    this.sourceDatabaseName,
+                    this.targetDatabaseName,
                     this.targetBucket,
                     registryName,
                     this.useS3Table

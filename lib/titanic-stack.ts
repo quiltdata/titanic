@@ -27,14 +27,13 @@ export class TitanicStack extends cdk.Stack {
         // Check if we should use S3 Tables
         const useS3Table = process.env.USE_S3_TABLE === "true";
         
-        const databaseName = !useS3Table
-            ? process.env.QUILT_DATABASE_NAME || (() => { throw new Error("must set QUILT_DATABASE_NAME environment variable"); })()
-            : props.quiltDatabaseName;
-
-        // Create bucket based on table type
-        let titanicBucket: s3.Bucket;
-        let tableBucket: s3tables.TableBucket | undefined;
-        let targetBucketName: string;
+        // Source database (where views are) - always from QUILT_DATABASE_NAME
+        const sourceDatabaseName = process.env.QUILT_DATABASE_NAME || (() => { throw new Error("must set QUILT_DATABASE_NAME environment variable"); })();
+        
+        // Target database (where we write tables) - depends on USE_S3_TABLE
+        const targetDatabaseName = !useS3Table
+            ? sourceDatabaseName  // For Iceberg, read and write to same database
+            : props.quiltDatabaseName;  // For S3 Tables, write to quilt_titanic
 
         // Only create the database for S3 Tables case - for Iceberg, the database already exists
         if (useS3Table) {
@@ -46,25 +45,24 @@ export class TitanicStack extends cdk.Stack {
                     parameters: {
                         CatalogId: this.account,
                         DatabaseInput: {
-                            Name: databaseName,
+                            Name: targetDatabaseName,
                             Description: "Database for Quilt Titanic S3 Tables",
                         },
                     },
-                    physicalResourceId: cr.PhysicalResourceId.of(`glue-database-${databaseName}`),
+                    physicalResourceId: cr.PhysicalResourceId.of(`glue-database-${targetDatabaseName}`),
                     ignoreErrorCodesMatching: "AlreadyExistsException",
-                },
-                onUpdate: {
-                    service: "Glue", 
+                },                onUpdate: {
+                    service: "Glue",
                     action: "updateDatabase",
                     parameters: {
                         CatalogId: this.account,
-                        Name: databaseName,
+                        Name: targetDatabaseName,
                         DatabaseInput: {
-                            Name: databaseName,
+                            Name: targetDatabaseName,
                             Description: "Database for Quilt Titanic S3 Tables",
                         },
                     },
-                    physicalResourceId: cr.PhysicalResourceId.of(`glue-database-${databaseName}`),
+                    physicalResourceId: cr.PhysicalResourceId.of(`glue-database-${targetDatabaseName}`),
                     ignoreErrorCodesMatching: "EntityNotFoundException",
                 },
                 policy: cr.AwsCustomResourcePolicy.fromStatements([
@@ -76,36 +74,26 @@ export class TitanicStack extends cdk.Stack {
                         ],
                         resources: [
                             `arn:aws:glue:${this.region}:${this.account}:catalog`,
-                            `arn:aws:glue:${this.region}:${this.account}:database/${databaseName}`,
+                            `arn:aws:glue:${this.region}:${this.account}:database/${targetDatabaseName}`,
                         ],
                     }),
                 ]),
             });
         }
 
-        if (useS3Table) {
-            // Create S3 Table Bucket for S3 Tables
-            tableBucket = new s3tables.TableBucket(this, "TitanicTableBucket", {
-                tableBucketName: `titanic-tables-${this.account}-${this.region}`,
-            });
-            
-            // Also create a regular S3 bucket for Athena results and other storage
-            titanicBucket = new s3.Bucket(this, "TitanicBucket", {
-                removalPolicy: cdk.RemovalPolicy.DESTROY,
-                autoDeleteObjects: true,
-            });
-            
-            // Use the table bucket name for table operations
-            targetBucketName = tableBucket.tableBucketName;
-        } else {
-            // Create regular S3 bucket for Iceberg tables
-            titanicBucket = new s3.Bucket(this, "TitanicBucket", {
-                removalPolicy: cdk.RemovalPolicy.DESTROY,
-                autoDeleteObjects: true,
-            });
-            
-            targetBucketName = titanicBucket.bucketName;
-        }
+        // Always create both buckets for maximum flexibility
+        
+        // Regular S3 bucket for Athena results and Iceberg tables
+        const titanicBucket = new s3.Bucket(this, "TitanicBucket", {
+            bucketName: `titanic-${this.account}-${this.region}`,
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+            autoDeleteObjects: true,
+        });
+
+        // S3 Tables bucket for S3 Tables format
+        const tableBucket = new s3tables.TableBucket(this, "TitanicTableBucket", {
+            tableBucketName: `titanic-tables-${this.account}-${this.region}`,
+        });
 
         // Create merge tables Lambda
         const mergeLambda = new lambda.NodejsFunction(this, "MergeTables", {
@@ -120,9 +108,20 @@ export class TitanicStack extends cdk.Stack {
                 ],
             },
             environment: {
-                DATABASE_NAME: databaseName,
-                TARGET_BUCKET: targetBucketName,
+                // Source database to read from (always the same, where views are)
+                SOURCE_DATABASE_NAME: sourceDatabaseName,
+                
+                // Target database to write to (changes based on USE_S3_TABLE)
+                TARGET_DATABASE_NAME: targetDatabaseName,
+                
+                // Target buckets - Lambda chooses based on USE_S3_TABLE
+                TITANIC_BUCKET: titanicBucket.bucketName,
+                TITANIC_TABLES_BUCKET: tableBucket.tableBucketName,
+                
+                // Always use regular bucket for Athena results
                 ATHENA_RESULTS_BUCKET: titanicBucket.bucketName,
+                
+                // Configuration
                 LAMBDA_TIMEOUT: (props.lambdaTimeout || 15000).toString(),
                 QUILT_READ_POLICY_ARN: props.quiltReadPolicyArn,
                 USE_S3_TABLE: useS3Table.toString(),
@@ -150,8 +149,10 @@ export class TitanicStack extends cdk.Stack {
                 actions: ["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
                 resources: [
                     `arn:aws:glue:${this.region}:${this.account}:catalog`,
-                    `arn:aws:glue:${this.region}:${this.account}:database/${databaseName}`,
-                    `arn:aws:glue:${this.region}:${this.account}:table/${databaseName}/*`,
+                    `arn:aws:glue:${this.region}:${this.account}:database/${sourceDatabaseName}`,
+                    `arn:aws:glue:${this.region}:${this.account}:table/${sourceDatabaseName}/*`,
+                    `arn:aws:glue:${this.region}:${this.account}:database/${targetDatabaseName}`,
+                    `arn:aws:glue:${this.region}:${this.account}:table/${targetDatabaseName}/*`,
                 ],
             }),
         );
@@ -170,43 +171,36 @@ export class TitanicStack extends cdk.Stack {
             }),
         );
 
-        // Grant appropriate bucket permissions based on table type
-        if (useS3Table && tableBucket) {
-            // For S3 Tables, grant permissions to both the table bucket and regular bucket
-            mergeLambda.addToRolePolicy(
-                new iam.PolicyStatement({
-                    actions: [
-                        "s3:GetBucketLocation",
-                        "s3tables:GetTable",
-                        "s3tables:CreateTable",
-                        "s3tables:PutTableData",
-                        "s3tables:GetTableData",
-                        "s3tables:UpdateTable",
-                        "s3tables:DeleteTable",
-                        "s3tables:ListTables",
-                    ],
-                    resources: [
-                        tableBucket.tableBucketArn,
-                        `${tableBucket.tableBucketArn}/*`,
-                        titanicBucket.bucketArn,
-                        `${titanicBucket.bucketArn}/*`,
-                    ],
-                }),
-            );
-            
-            // Grant read/write to regular bucket for Athena results
-            titanicBucket.grantReadWrite(mergeLambda);
-        } else {
-            // For regular S3 bucket (Iceberg tables)
-            mergeLambda.addToRolePolicy(
-                new iam.PolicyStatement({
-                    actions: ["s3:GetBucketLocation"],
-                    resources: [titanicBucket.bucketArn],
-                }),
-            );
-            
-            titanicBucket.grantReadWrite(mergeLambda);
-        }
+        // Always grant permissions to both buckets since Lambda decides which to use
+        
+        // Regular S3 bucket permissions (always used for Athena results, also for Iceberg tables)
+        titanicBucket.grantReadWrite(mergeLambda);
+        mergeLambda.addToRolePolicy(
+            new iam.PolicyStatement({
+                actions: ["s3:GetBucketLocation"],
+                resources: [titanicBucket.bucketArn],
+            }),
+        );
+
+        // S3 Tables bucket permissions (used when USE_S3_TABLE=true)
+        mergeLambda.addToRolePolicy(
+            new iam.PolicyStatement({
+                actions: [
+                    "s3:GetBucketLocation",
+                    "s3tables:GetTable",
+                    "s3tables:CreateTable",
+                    "s3tables:PutTableData",
+                    "s3tables:GetTableData",
+                    "s3tables:UpdateTable",
+                    "s3tables:DeleteTable",
+                    "s3tables:ListTables",
+                ],
+                resources: [
+                    tableBucket.tableBucketArn,
+                    `${tableBucket.tableBucketArn}/*`,
+                ],
+            }),
+        );
 
         // Grant read access to source buckets via the provided policy
         mergeLambda.role?.addManagedPolicy(

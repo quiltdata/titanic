@@ -19,7 +19,8 @@ export type HandlerResponse = {
 
 // Table context for operations
 export interface TableContext {
-    databaseName: string;
+    sourceDatabaseName: string;    // Database to read from (where views are)
+    targetDatabaseName: string;    // Database to write to (depends on USE_S3_TABLE)
     targetBucket: string;
     registryName: string;
     useS3Table?: boolean;  // Runtime configuration: true = S3 table with partitions, false = Iceberg table with WITH clause
@@ -27,13 +28,15 @@ export interface TableContext {
 
 // Factory function for creating table contexts
 export function createTableContext(
-    databaseName: string,
+    sourceDatabaseName: string,
+    targetDatabaseName: string,
     targetBucket: string,
     registryName: string,
     useS3Table: boolean = false
 ): TableContext {
     return {
-        databaseName,
+        sourceDatabaseName,
+        targetDatabaseName,
         targetBucket,
         registryName,
         useS3Table,
@@ -59,8 +62,11 @@ export class TableContextValidator {
     static validateTableContext(context: Partial<TableContext>): ValidationResult {
         const errors: string[] = [];
 
-        if (!context.databaseName) {
-            errors.push("databaseName is required");
+        if (!context.sourceDatabaseName) {
+            errors.push("sourceDatabaseName is required");
+        }
+        if (!context.targetDatabaseName) {
+            errors.push("targetDatabaseName is required");
         }
         if (!context.targetBucket) {
             errors.push("targetBucket is required");

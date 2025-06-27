@@ -1,5 +1,6 @@
 import * as cdk from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
+import { Match } from "aws-cdk-lib/assertions";
 import { TitanicStack } from "./titanic-stack";
 
 // Test utilities
@@ -57,23 +58,29 @@ const expectGluePermissions = (template: Template, expectedDatabaseName: string)
     expect(policy).toBeDefined();
     const statements = policy.Properties.PolicyDocument.Statement;
     
-    expect(statements).toContainEqual(
-        expect.objectContaining({
-            Effect: "Allow",
-            Action: ["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
-            Resource: [
-                expect.objectContaining({
-                    "Fn::Join": ["", expect.arrayContaining([":catalog"])]
-                }),
-                expect.objectContaining({
-                    "Fn::Join": ["", expect.arrayContaining([`:database/${expectedDatabaseName}`])]
-                }),
-                expect.objectContaining({
-                    "Fn::Join": ["", expect.arrayContaining([`:table/${expectedDatabaseName}/*`])]
-                })
-            ]
-        })
+    // Find the Glue statement
+    const glueStatement = statements.find((statement: any) => 
+        Array.isArray(statement.Action) && 
+        statement.Action.includes("glue:GetTables")
     );
+    
+    expect(glueStatement).toBeDefined();
+    expect(glueStatement.Effect).toBe("Allow");
+    expect(glueStatement.Action).toEqual(["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"]);
+    
+    // Check that the resources include the expected database
+    const resources = glueStatement.Resource;
+    expect(resources).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+            "Fn::Join": ["", expect.arrayContaining([":catalog"])]
+        }),
+        expect.objectContaining({
+            "Fn::Join": ["", expect.arrayContaining([`:database/${expectedDatabaseName}`])]
+        }),
+        expect.objectContaining({
+            "Fn::Join": ["", expect.arrayContaining([`:table/${expectedDatabaseName}/*`])]
+        })
+    ]));
 };
 
 const expectAthenaPermissions = (template: Template) => {
@@ -111,7 +118,7 @@ describe("TitanicStack", () => {
 
             beforeAll(() => {
                 const envOverrides: Record<string, string> = useS3Table 
-                    ? { USE_S3_TABLE: "true" }
+                    ? { USE_S3_TABLE: "true", QUILT_DATABASE_NAME: "test-database-env" }
                     : { QUILT_DATABASE_NAME: "test-database-env" };
                     
                 template = createStackTemplate(stackId, defaultStackProps, envOverrides);
@@ -160,8 +167,12 @@ describe("TitanicStack", () => {
             customTemplate.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        DATABASE_NAME: "test-database-env",
+                        SOURCE_DATABASE_NAME: "test-database-env",
                         LAMBDA_TIMEOUT: "10000",
+                        USE_S3_TABLE: "false",
+                        TITANIC_BUCKET: Match.anyValue(),
+                        TITANIC_TABLES_BUCKET: Match.anyValue(),
+                        ATHENA_RESULTS_BUCKET: Match.anyValue(),
                     },
                 },
             });
@@ -175,8 +186,9 @@ describe("TitanicStack", () => {
             template = createStackTemplate("IcebergStack", defaultStackProps, { QUILT_DATABASE_NAME: "test-database" });
         });
 
-        it("should not create S3 Tables resources", () => {
-            template.resourceCountIs("AWS::S3Tables::TableBucket", 0);
+        it("should create both regular S3 bucket and S3 Tables bucket", () => {
+            template.resourceCountIs("AWS::S3::Bucket", 1); // Regular bucket
+            template.resourceCountIs("AWS::S3Tables::TableBucket", 1); // S3 Tables bucket
         });
 
         it("should not create Glue database (assumes database already exists)", () => {
@@ -187,9 +199,12 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        DATABASE_NAME: "test-database",
+                        SOURCE_DATABASE_NAME: "test-database",
                         USE_S3_TABLE: "false",
                         QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
+                        TITANIC_BUCKET: Match.anyValue(),
+                        TITANIC_TABLES_BUCKET: Match.anyValue(),
+                        ATHENA_RESULTS_BUCKET: Match.anyValue(),
                     },
                 },
             });
@@ -206,7 +221,11 @@ describe("TitanicStack", () => {
                 envTemplate.hasResourceProperties("AWS::Lambda::Function", {
                     Environment: {
                         Variables: {
-                            DATABASE_NAME: "env_var_db_name",
+                            SOURCE_DATABASE_NAME: "env_var_db_name",
+                            USE_S3_TABLE: "false",
+                            TITANIC_BUCKET: Match.anyValue(),
+                            TITANIC_TABLES_BUCKET: Match.anyValue(),
+                            ATHENA_RESULTS_BUCKET: Match.anyValue(),
                         },
                     },
                 });
@@ -224,7 +243,7 @@ describe("TitanicStack", () => {
         let template: Template;
 
         beforeAll(() => {
-            template = createStackTemplate("S3TablesStack", defaultStackProps, { USE_S3_TABLE: "true" });
+            template = createStackTemplate("S3TablesStack", defaultStackProps, { USE_S3_TABLE: "true", QUILT_DATABASE_NAME: "test-database-env" });
         });
 
         it("should create S3 TableBucket in addition to regular S3 bucket", () => {
@@ -239,9 +258,13 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        DATABASE_NAME: "test-database",
+                        SOURCE_DATABASE_NAME: "test-database-env",
+                        TARGET_DATABASE_NAME: "test-database",
                         USE_S3_TABLE: "true",
                         QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
+                        TITANIC_BUCKET: Match.anyValue(),
+                        TITANIC_TABLES_BUCKET: Match.anyValue(),
+                        ATHENA_RESULTS_BUCKET: Match.anyValue(),
                     },
                 },
             });
@@ -298,7 +321,12 @@ describe("TitanicStack", () => {
                 customTemplate.hasResourceProperties("AWS::Lambda::Function", {
                     Environment: {
                         Variables: {
-                            DATABASE_NAME: "s3_tables_db",
+                            SOURCE_DATABASE_NAME: "env_var_should_be_ignored",
+                            TARGET_DATABASE_NAME: "s3_tables_db",
+                            USE_S3_TABLE: "true",
+                            TITANIC_BUCKET: Match.anyValue(),
+                            TITANIC_TABLES_BUCKET: Match.anyValue(),
+                            ATHENA_RESULTS_BUCKET: Match.anyValue(),
                         },
                     },
                 });

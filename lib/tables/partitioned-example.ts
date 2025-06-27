@@ -44,9 +44,9 @@ export class PartitionedExampleTable extends BaseTable {
         const selectClause = this.generateSelectClause(context.registryName, 's');
         
         return `
-            INSERT INTO "${context.databaseName}"."${this.tableName}" (id, data, created_at)
+            INSERT INTO "${context.targetDatabaseName}"."${this.tableName}" (id, data, created_at)
             SELECT DISTINCT
               ${selectClause}
-            FROM "${context.databaseName}"."${sourceTableName}" s`;
+            FROM "${context.sourceDatabaseName}"."${sourceTableName}" s`;
     }
 }

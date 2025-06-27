@@ -57,8 +57,11 @@ const createEventBridgeEvent = (bucket: string = "test-bucket"): EventBridgeEven
 describe("merge-tables lambda", () => {
     beforeEach(() => {
         process.env.NODE_ENV = "test";
-        process.env.DATABASE_NAME = "test-db";
-        process.env.TARGET_BUCKET = "test-bucket";
+        process.env.SOURCE_DATABASE_NAME = "test-db";
+        process.env.TARGET_DATABASE_NAME = "test-db";
+        process.env.TITANIC_BUCKET = "test-bucket";
+        process.env.TITANIC_TABLES_BUCKET = "test-tables-bucket";
+        process.env.ATHENA_RESULTS_BUCKET = "test-bucket";
         process.env.LAMBDA_TIMEOUT = "5000";
         delete process.env.USE_S3_TABLE; // Default to Iceberg mode
         glueMock.reset();
@@ -71,10 +74,11 @@ describe("merge-tables lambda", () => {
 
     describe("Mode-specific behavior", () => {
         it("should throw error if environment variables are missing", async () => {
-            delete process.env.DATABASE_NAME;
+            delete process.env.SOURCE_DATABASE_NAME;
+            delete process.env.TARGET_DATABASE_NAME;
             const mockEvent = createEventBridgeEvent();
             await expect(handler(mockEvent, {} as Context)).rejects.toThrow(
-                "Missing required environment variables DATABASE_NAME or TARGET_BUCKET",
+                "Missing required environment variables: SOURCE_DATABASE_NAME, TARGET_DATABASE_NAME, TITANIC_BUCKET, or TITANIC_TABLES_BUCKET",
             );
         });
 

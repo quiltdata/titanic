@@ -44,11 +44,11 @@ export class PackageRevisionTable extends BaseTable {
         const selectClause = this.generateSelectClause(context.registryName, 's');
         
         return `
-            INSERT INTO "${context.databaseName}"."${this.tableName}" (registry, pkg_name, top_hash, timestamp, message, metadata)
+            INSERT INTO "${context.targetDatabaseName}"."${this.tableName}" (registry, pkg_name, top_hash, timestamp, message, metadata)
             SELECT DISTINCT
               ${selectClause}
-            FROM "${context.databaseName}"."${sourceTableName}" s
-            LEFT JOIN "${context.databaseName}"."${this.tableName}" t
+            FROM "${context.sourceDatabaseName}"."${sourceTableName}" s
+            LEFT JOIN "${context.targetDatabaseName}"."${this.tableName}" t
               ON s.pkg_name = t.pkg_name
               AND s.top_hash = t.top_hash
               AND t.registry = '${context.registryName}'

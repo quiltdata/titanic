@@ -53,11 +53,11 @@ export class PackageEntryTable extends BaseTable {
         const selectClause = this.generateSelectClause(context.registryName, 's');
         
         return `
-            INSERT INTO "${context.databaseName}"."${this.tableName}" (registry, top_hash, logical_key, physical_key, multihash, size, metadata)
+            INSERT INTO "${context.targetDatabaseName}"."${this.tableName}" (registry, top_hash, logical_key, physical_key, multihash, size, metadata)
             SELECT DISTINCT
               ${selectClause}
-            FROM "${context.databaseName}"."${sourceTableName}" s
-            LEFT JOIN "${context.databaseName}"."${this.tableName}" t
+            FROM "${context.sourceDatabaseName}"."${sourceTableName}" s
+            LEFT JOIN "${context.targetDatabaseName}"."${this.tableName}" t
               ON s.logical_key = t.logical_key
               AND s.meta = t.metadata
               AND s.top_hash = t.top_hash

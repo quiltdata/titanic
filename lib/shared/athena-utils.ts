@@ -69,15 +69,12 @@ export async function executeQuery(
     console.log("Executing query:", query);
     
     try {
-        // For S3 Tables, we need different handling
-        let resultsBucket: string;
+        // Always use the regular bucket for Athena results
+        const resultsBucket = process.env.ATHENA_RESULTS_BUCKET || process.env.TITANIC_BUCKET;
         let queryExecutionContext: any = {};
         
         if (useS3Table) {
-            // For S3 Tables, use the ATHENA_RESULTS_BUCKET for query results
-            resultsBucket = process.env.ATHENA_RESULTS_BUCKET || targetBucket;
-            
-            // Extract bucket name from S3 Tables ARN for catalog
+            // For S3 Tables, extract bucket name from ARN for catalog
             // ARN format: arn:aws:s3tables:region:account:bucket/bucket-name
             const bucketName = targetBucket.includes('arn:aws:s3tables:') 
                 ? targetBucket.split('/').pop() 
@@ -90,8 +87,7 @@ export async function executeQuery(
                 };
             }
         } else {
-            // For regular Iceberg tables, use the target bucket directly
-            resultsBucket = targetBucket;
+            // For regular Iceberg tables
             if (databaseName) {
                 queryExecutionContext = {
                     Database: databaseName,
@@ -148,6 +144,8 @@ export async function executeQuery(
 export async function executeQueryWithRetry(
     query: string, 
     targetBucket: string,
+    databaseName?: string,
+    useS3Table: boolean = false,
     maxRetries: number = 3,
     retryDelay: number = 1000
 ): Promise<void> {
@@ -155,7 +153,7 @@ export async function executeQueryWithRetry(
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            await executeQuery(query, targetBucket);
+            await executeQuery(query, targetBucket, databaseName, useS3Table);
             return; // Success, exit retry loop
         } catch (error) {
             lastError = error as Error;
@@ -209,7 +207,7 @@ export const sourceBucketFromTableName = (name: string) => name.replace(/_(objec
 /**
  * Drop all Titanic tables function
  */
-export async function dropAllTitanicTables(databaseName: string, targetBucket: string): Promise<void> {
+export async function dropAllTitanicTables(databaseName: string, targetBucket: string, useS3Table: boolean = false): Promise<void> {
     const tables = ['package_revision', 'package_tag', 'package_entry'];
     console.log('Dropping all Titanic tables for clean deployment...');
     
@@ -217,7 +215,7 @@ export async function dropAllTitanicTables(databaseName: string, targetBucket: s
         try {
             const query = `DROP TABLE IF EXISTS ${databaseName}.${tableName}`;
             console.log(`Dropping table: ${query}`);
-            await executeQuery(query, targetBucket);
+            await executeQuery(query, targetBucket, databaseName, useS3Table);
             console.log(`Successfully dropped table ${tableName}`);
         } catch (error) {
             const err = error as Error;

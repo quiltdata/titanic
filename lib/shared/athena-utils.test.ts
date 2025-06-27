@@ -164,6 +164,9 @@ describe("athena-utils", () => {
         });
 
         it("should execute query with database context for Iceberg tables", async () => {
+            // Set the environment variable for the test
+            process.env.ATHENA_RESULTS_BUCKET = "test-bucket";
+            
             athenaMock
                 .on(StartQueryExecutionCommand)
                 .resolves({ QueryExecutionId: "test-id" })
@@ -186,6 +189,9 @@ describe("athena-utils", () => {
             expect(startQueryCall.args[0].input.ResultConfiguration?.OutputLocation).toBe(
                 "s3://test-bucket/athena-results/"
             );
+            
+            // Clean up
+            delete process.env.ATHENA_RESULTS_BUCKET;
         });
 
         it("should throw error when QueryExecutionId is missing", async () => {

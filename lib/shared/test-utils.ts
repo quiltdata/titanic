@@ -13,7 +13,8 @@ export function createTestTableContext(
     overrides: Partial<TableContext> = {}
 ): TableContext {
     return createTableContext(
-        overrides.databaseName || "test-db",
+        overrides.sourceDatabaseName || "test-db",
+        overrides.targetDatabaseName || "test-db",
         overrides.targetBucket || "test-bucket", 
         overrides.registryName || "test_registry",
         overrides.useS3Table || false

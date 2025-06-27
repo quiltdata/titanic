@@ -157,7 +157,7 @@ AS ${selectQuery}`;
         const instance = new (this as any)();
         const query = instance.generateInsertQuery(context, sourceTableName);
         console.log(`Inserting into ${instance.tableName} with SQL:`, query);
-        await executeQuery(query, context.targetBucket, context.databaseName, context.useS3Table);
+        await executeQuery(query, context.targetBucket, context.targetDatabaseName, context.useS3Table);
     }
 
     /**
