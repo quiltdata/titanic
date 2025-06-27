@@ -9,6 +9,7 @@ import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
+import * as cr from "aws-cdk-lib/custom-resources";
 import * as path from "path";
 
 dotenv.config();
@@ -26,32 +27,65 @@ export class TitanicStack extends cdk.Stack {
         // Check if we should use S3 Tables
         const useS3Table = process.env.USE_S3_TABLE === "true";
         
-        // Determine database name based on mode
-        let databaseName = props.quiltDatabaseName;
-        
-        // For Iceberg mode only, allow override with QUILT_DATABASE_NAME environment variable
-        if (!useS3Table && process.env.QUILT_DATABASE_NAME) {
-            databaseName = process.env.QUILT_DATABASE_NAME;
-        }
+        // Use the database name from props (already resolved in bin/titanic.ts)
+        const databaseName = props.quiltDatabaseName;
 
         // Create bucket based on table type
         let titanicBucket: s3.Bucket;
         let tableBucket: s3tables.TableBucket | undefined;
         let targetBucketName: string;
 
+        // Only create the database for S3 Tables case - for Iceberg, the database already exists
+        if (useS3Table) {
+            // Create the database using a custom resource that handles existing databases
+            new cr.AwsCustomResource(this, "QuiltTitanicDatabase", {
+                onCreate: {
+                    service: "Glue",
+                    action: "createDatabase",
+                    parameters: {
+                        CatalogId: this.account,
+                        DatabaseInput: {
+                            Name: databaseName,
+                            Description: "Database for Quilt Titanic S3 Tables",
+                        },
+                    },
+                    physicalResourceId: cr.PhysicalResourceId.of(`glue-database-${databaseName}`),
+                    ignoreErrorCodesMatching: "AlreadyExistsException",
+                },
+                onUpdate: {
+                    service: "Glue", 
+                    action: "updateDatabase",
+                    parameters: {
+                        CatalogId: this.account,
+                        Name: databaseName,
+                        DatabaseInput: {
+                            Name: databaseName,
+                            Description: "Database for Quilt Titanic S3 Tables",
+                        },
+                    },
+                    physicalResourceId: cr.PhysicalResourceId.of(`glue-database-${databaseName}`),
+                    ignoreErrorCodesMatching: "EntityNotFoundException",
+                },
+                policy: cr.AwsCustomResourcePolicy.fromStatements([
+                    new iam.PolicyStatement({
+                        actions: [
+                            "glue:CreateDatabase",
+                            "glue:UpdateDatabase", 
+                            "glue:GetDatabase"
+                        ],
+                        resources: [
+                            `arn:aws:glue:${this.region}:${this.account}:catalog`,
+                            `arn:aws:glue:${this.region}:${this.account}:database/${databaseName}`,
+                        ],
+                    }),
+                ]),
+            });
+        }
+
         if (useS3Table) {
             // Create S3 Table Bucket for S3 Tables
             tableBucket = new s3tables.TableBucket(this, "TitanicTableBucket", {
                 tableBucketName: `titanic-tables-${this.account}-${this.region}`,
-            });
-            
-            // Create the quilt_titanic database for S3 Tables
-            new glue.CfnDatabase(this, "QuiltTitanicDatabase", {
-                catalogId: this.account,
-                databaseInput: {
-                    name: databaseName,
-                    description: "Database for Quilt Titanic S3 Tables",
-                },
             });
             
             // Also create a regular S3 bucket for Athena results and other storage
