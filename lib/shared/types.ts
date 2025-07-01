@@ -66,33 +66,3 @@ export class TableContextValidator {
         }
     }
 }
-
-// Environment configuration interface
-export interface EnvironmentConfig {
-    DATABASE_NAME: string;
-    TARGET_BUCKET: string;
-    USE_S3_TABLE?: string;  // "true" for S3 tables with partitions, "false" for Glue with WITH clause
-    LAMBDA_TIMEOUT?: string;
-    QUEUE_URL?: string;
-    QUILT_READ_POLICY_ARN?: string;
-}
-
-// Utility functions for validation
-export class ConfigValidator {
-    static validateEnvironment(): ValidationResult {
-        const errors: string[] = [];
-        
-        if (!process.env.DATABASE_NAME) {
-            errors.push("DATABASE_NAME environment variable is required");
-        }
-        
-        if (!process.env.TARGET_BUCKET) {
-            errors.push("TARGET_BUCKET environment variable is required");
-        }
-        
-        return {
-            isValid: errors.length === 0,
-            errors
-        };
-    }
-}

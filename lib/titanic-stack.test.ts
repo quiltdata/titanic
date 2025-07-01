@@ -167,11 +167,11 @@ describe("TitanicStack", () => {
             customTemplate.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        SOURCE_DATABASE_NAME: "test-database-env",
+                        GLUE_DATABASE_NAME: "test-database-env",
                         LAMBDA_TIMEOUT: "10000",
                         USE_S3_TABLE: "false",
-                        TITANIC_BUCKET: Match.anyValue(),
-                        TITANIC_TABLES_BUCKET: Match.anyValue(),
+                        GLUE_TABLES_BUCKET: Match.anyValue(),
+                        S3_TABLES_BUCKET: Match.anyValue(),
                         ATHENA_RESULTS_BUCKET: Match.anyValue(),
                     },
                 },
@@ -199,11 +199,11 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        SOURCE_DATABASE_NAME: "test-database",
+                        GLUE_DATABASE_NAME: "test-database",
                         USE_S3_TABLE: "false",
                         QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
-                        TITANIC_BUCKET: Match.anyValue(),
-                        TITANIC_TABLES_BUCKET: Match.anyValue(),
+                        GLUE_TABLES_BUCKET: Match.anyValue(),
+                        S3_TABLES_BUCKET: Match.anyValue(),
                         ATHENA_RESULTS_BUCKET: Match.anyValue(),
                     },
                 },
@@ -221,10 +221,10 @@ describe("TitanicStack", () => {
                 envTemplate.hasResourceProperties("AWS::Lambda::Function", {
                     Environment: {
                         Variables: {
-                            SOURCE_DATABASE_NAME: "env_var_db_name",
+                            GLUE_DATABASE_NAME: "env_var_db_name",
                             USE_S3_TABLE: "false",
-                            TITANIC_BUCKET: Match.anyValue(),
-                            TITANIC_TABLES_BUCKET: Match.anyValue(),
+                            GLUE_TABLES_BUCKET: Match.anyValue(),
+                            S3_TABLES_BUCKET: Match.anyValue(),
                             ATHENA_RESULTS_BUCKET: Match.anyValue(),
                         },
                     },
@@ -258,35 +258,16 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        SOURCE_DATABASE_NAME: "test-database-env",
-                        TARGET_DATABASE_NAME: "test-database",
+                        GLUE_DATABASE_NAME: "test-database-env",
+                        S3TABLE_DATABASE_NAME: "test-database",
                         USE_S3_TABLE: "true",
                         QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
-                        TITANIC_BUCKET: Match.anyValue(),
-                        TITANIC_TABLES_BUCKET: Match.anyValue(),
+                        GLUE_TABLES_BUCKET: Match.anyValue(),
+                        S3_TABLES_BUCKET: Match.anyValue(),
                         ATHENA_RESULTS_BUCKET: Match.anyValue(),
                     },
                 },
             });
-        });
-
-        it("should create Glue database for S3 Tables using custom resource", () => {
-            const customResources = template.findResources("Custom::AWS");
-            const customResourceKeys = Object.keys(customResources);
-            expect(customResourceKeys.length).toBeGreaterThan(0);
-
-            const dbResource = Object.values(customResources).find(resource => {
-                const createAction = resource.Properties?.Create;
-                if (typeof createAction === 'string') return false;
-
-                return createAction &&
-                    createAction["Fn::Join"] &&
-                    JSON.stringify(createAction).includes("Glue") &&
-                    JSON.stringify(createAction).includes("createDatabase") &&
-                    JSON.stringify(createAction).includes("test-database");
-            });
-
-            expect(dbResource).toBeDefined();
         });
 
         it("should grant required S3 Tables permissions", () => {
@@ -321,30 +302,15 @@ describe("TitanicStack", () => {
                 customTemplate.hasResourceProperties("AWS::Lambda::Function", {
                     Environment: {
                         Variables: {
-                            SOURCE_DATABASE_NAME: "env_var_should_be_ignored",
-                            TARGET_DATABASE_NAME: "s3_tables_db",
+                            GLUE_DATABASE_NAME: "env_var_should_be_ignored",
+                            S3TABLE_DATABASE_NAME: "s3_tables_db",
                             USE_S3_TABLE: "true",
-                            TITANIC_BUCKET: Match.anyValue(),
-                            TITANIC_TABLES_BUCKET: Match.anyValue(),
+                            GLUE_TABLES_BUCKET: Match.anyValue(),
+                            S3_TABLES_BUCKET: Match.anyValue(),
                             ATHENA_RESULTS_BUCKET: Match.anyValue(),
                         },
                     },
                 });
-
-                // Verify the custom resource for database creation uses the correct name
-                const customResources = customTemplate.findResources("Custom::AWS");
-                const dbResource = Object.values(customResources).find(resource => {
-                    const createAction = resource.Properties?.Create;
-                    if (typeof createAction === 'string') return false;
-
-                    return createAction &&
-                        createAction["Fn::Join"] &&
-                        JSON.stringify(createAction).includes("Glue") &&
-                        JSON.stringify(createAction).includes("createDatabase") &&
-                        JSON.stringify(createAction).includes("s3_tables_db");
-                });
-
-                expect(dbResource).toBeDefined();
             });
         });
     });

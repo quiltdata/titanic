@@ -13,22 +13,22 @@ export async function handler(
     context: Context,
 ): Promise<HandlerResponse> {
     const config = Config.create(); // Use factory method instead of getInstance
-    const glueDatabaseName = process.env.ICEBERG_DATABASE_NAME;
+    const glueDatabaseName = process.env.GLUE_DATABASE_NAME;
     const s3TableDatabaseName = process.env.S3TABLE_DATABASE_NAME;
-    const titanicBucket = process.env.TITANIC_BUCKET;
-    const titanicTablesBucket = process.env.TITANIC_TABLES_BUCKET;
+    const glueTablesBucket = process.env.GLUE_TABLES_BUCKET;
+    const s3TablesBucket = process.env.S3_TABLES_BUCKET;
     
     console.log("Environment variables:", {
         glueDatabaseName,
         s3TableDatabaseName,
-        titanicBucket,
-        titanicTablesBucket,
+        glueTablesBucket,
+        s3TablesBucket,
         configType: config.constructor.name,
     });
 
-    if (!glueDatabaseName || !s3TableDatabaseName || !titanicBucket || !titanicTablesBucket) {
+    if (!glueDatabaseName || !s3TableDatabaseName || !glueTablesBucket || !s3TablesBucket) {
         throw new Error(
-            "Missing required environment variables: ICEBERG_DATABASE_NAME, S3TABLE_DATABASE_NAME, TITANIC_BUCKET, or TITANIC_TABLES_BUCKET",
+            "Missing required environment variables: GLUE_DATABASE_NAME, S3TABLE_DATABASE_NAME, GLUE_TABLES_BUCKET, or S3_TABLES_BUCKET",
         );
     }
 

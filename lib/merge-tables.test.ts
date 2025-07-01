@@ -57,10 +57,10 @@ const createEventBridgeEvent = (bucket: string = "test-bucket"): EventBridgeEven
 describe("merge-tables lambda", () => {
     beforeEach(() => {
         process.env.NODE_ENV = "test";
-        process.env.ICEBERG_DATABASE_NAME = "test-db";
+        process.env.GLUE_DATABASE_NAME = "test-db";
         process.env.S3TABLE_DATABASE_NAME = "test-db";
-        process.env.TITANIC_BUCKET = "test-bucket";
-        process.env.TITANIC_TABLES_BUCKET = "test-tables-bucket";
+        process.env.GLUE_TABLES_BUCKET = "test-bucket";
+        process.env.S3_TABLES_BUCKET = "test-tables-bucket";
         process.env.ATHENA_RESULTS_BUCKET = "test-bucket";
         process.env.LAMBDA_TIMEOUT = "5000";
         delete process.env.USE_S3_TABLE; // Default to Glue mode
@@ -74,11 +74,11 @@ describe("merge-tables lambda", () => {
 
     describe("Mode-specific behavior", () => {
         it("should throw error if environment variables are missing", async () => {
-            delete process.env.ICEBERG_DATABASE_NAME;
+            delete process.env.GLUE_DATABASE_NAME;
             delete process.env.S3TABLE_DATABASE_NAME;
             const mockEvent = createEventBridgeEvent();
             await expect(handler(mockEvent, {} as Context)).rejects.toThrow(
-                "Missing required environment variables: ICEBERG_DATABASE_NAME, S3TABLE_DATABASE_NAME, TITANIC_BUCKET, or TITANIC_TABLES_BUCKET",
+                "Missing required environment variables: GLUE_DATABASE_NAME, S3TABLE_DATABASE_NAME, GLUE_TABLES_BUCKET, or S3_TABLES_BUCKET",
             );
         });
 
