@@ -53,7 +53,7 @@ const expectS3BucketLocationPermissions = (template: Template) => {
     expect(hasS3BucketLocationPermission).toBe(true);
 };
 
-const expectGluePermissions = (template: Template, expectedDatabaseName: string) => {
+const expectGluePermissions = (template: Template, expectedSourceDatabaseName: string) => {
     const policy = findLambdaPolicyByKey(template, "MergeTables");
     expect(policy).toBeDefined();
     const statements = policy.Properties.PolicyDocument.Statement;
@@ -68,17 +68,25 @@ const expectGluePermissions = (template: Template, expectedDatabaseName: string)
     expect(glueStatement.Effect).toBe("Allow");
     expect(glueStatement.Action).toEqual(["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"]);
     
-    // Check that the resources include the expected database
+    // Check that the resources include both source and target databases
     const resources = glueStatement.Resource;
     expect(resources).toEqual(expect.arrayContaining([
         expect.objectContaining({
             "Fn::Join": ["", expect.arrayContaining([":catalog"])]
         }),
+        // Source database (where views are read from)
         expect.objectContaining({
-            "Fn::Join": ["", expect.arrayContaining([`:database/${expectedDatabaseName}`])]
+            "Fn::Join": ["", expect.arrayContaining([`:database/${expectedSourceDatabaseName}`])]
         }),
         expect.objectContaining({
-            "Fn::Join": ["", expect.arrayContaining([`:table/${expectedDatabaseName}/*`])]
+            "Fn::Join": ["", expect.arrayContaining([`:table/${expectedSourceDatabaseName}/*`])]
+        }),
+        // Target database (where tables are written to) - always "quilt_titanic"
+        expect.objectContaining({
+            "Fn::Join": ["", expect.arrayContaining([":database/quilt_titanic"])]
+        }),
+        expect.objectContaining({
+            "Fn::Join": ["", expect.arrayContaining([":table/quilt_titanic/*"])]
         })
     ]));
 };
@@ -112,7 +120,7 @@ describe("TitanicStack", () => {
     describe("Shared functionality (mode-independent)", () => {
         describe.each([
             { mode: "Glue", useS3Table: false, stackId: "SharedGlueStack", dbName: "test-database-env" },
-            { mode: "S3 Tables", useS3Table: true, stackId: "SharedS3TablesStack", dbName: "test-database" }
+            { mode: "S3 Tables", useS3Table: true, stackId: "SharedS3TablesStack", dbName: "test-database-env" }
         ])("$mode mode", ({ mode, useS3Table, stackId, dbName }) => {
             let template: Template;
 
@@ -249,7 +257,7 @@ describe("TitanicStack", () => {
         it("should create S3 TableBucket in addition to regular S3 bucket", () => {
             template.hasResourceProperties("AWS::S3Tables::TableBucket", {
                 TableBucketName: {
-                    "Fn::Join": ["", ["titanic-tables-", { "Ref": "AWS::AccountId" }, "-", { "Ref": "AWS::Region" }]]
+                    "Fn::Join": ["", ["titanic-s3-tables-", { "Ref": "AWS::AccountId" }, "-", { "Ref": "AWS::Region" }]]
                 }
             });
         });
@@ -259,7 +267,7 @@ describe("TitanicStack", () => {
                 Environment: {
                     Variables: {
                         GLUE_DATABASE_NAME: "test-database-env",
-                        S3TABLE_DATABASE_NAME: "test-database",
+                        S3TABLE_DATABASE_NAME: "quilt_titanic", // This is the hardcoded constant
                         USE_S3_TABLE: "true",
                         QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
                         GLUE_TABLES_BUCKET: Match.anyValue(),
@@ -289,29 +297,6 @@ describe("TitanicStack", () => {
                     Effect: "Allow"
                 })
             );
-        });
-
-        describe("Database name usage", () => {
-            it("should use the database name provided in props", () => {
-                const customTemplate = createStackTemplate(
-                    "S3TablesCustomDbStack",
-                    { ...defaultStackProps, quiltDatabaseName: "s3_tables_db" },
-                    { USE_S3_TABLE: "true", QUILT_DATABASE_NAME: "env_var_should_be_ignored" }
-                );
-
-                customTemplate.hasResourceProperties("AWS::Lambda::Function", {
-                    Environment: {
-                        Variables: {
-                            GLUE_DATABASE_NAME: "env_var_should_be_ignored",
-                            S3TABLE_DATABASE_NAME: "s3_tables_db",
-                            USE_S3_TABLE: "true",
-                            GLUE_TABLES_BUCKET: Match.anyValue(),
-                            S3_TABLES_BUCKET: Match.anyValue(),
-                            ATHENA_RESULTS_BUCKET: Match.anyValue(),
-                        },
-                    },
-                });
-            });
         });
     });
 });

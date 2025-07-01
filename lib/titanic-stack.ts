@@ -34,19 +34,19 @@ export class TitanicStack extends cdk.Stack {
         // Always create both buckets for maximum flexibility
         
         // Regular S3 bucket for Athena results and Glue tables
-        const glueTablesBucket = new s3.Bucket(this, "GlueTablesBucket", {
-            bucketName: `titanic-${this.account}-${this.region}`,
+        const glueTablesBucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
+            bucketName: `titanic-glue-tables-${this.account}-${this.region}`,
             removalPolicy: cdk.RemovalPolicy.DESTROY,
             autoDeleteObjects: true,
         });
 
         // S3 Tables bucket for S3 Tables format
-        const s3TablesBucket = new s3tables.TableBucket(this, "S3TablesBucket", {
-            tableBucketName: `titanic-tables-${this.account}-${this.region}`,
+        const s3TablesBucket = new s3tables.TableBucket(this, "TitanicS3TablesBucket", {
+            tableBucketName: `titanic-s3-tables-${this.account}-${this.region}`,
         });
 
         // Create merge tables Lambda
-        const mergeLambda = new lambda.NodejsFunction(this, "MergeTables", {
+        const mergeLambda = new lambda.NodejsFunction(this, "TitanicMergeTables", {
             entry: path.join(__dirname, "merge-tables.ts"),
             handler: "handler",
             runtime: Runtime.NODEJS_18_X,
@@ -79,7 +79,7 @@ export class TitanicStack extends cdk.Stack {
         });
 
         // Create EventBridge rule to route package events to Lambda
-        const packageEventRule = new events.Rule(this, "PackageEventRule", {
+        const packageEventRule = new events.Rule(this, "TitanicUpdateEventRule", {
             description: "Route package revision events to merge tables Lambda",
             eventPattern: {
                 source: ["com.quiltdata"],
@@ -156,7 +156,7 @@ export class TitanicStack extends cdk.Stack {
         mergeLambda.role?.addManagedPolicy(
             iam.ManagedPolicy.fromManagedPolicyArn(
                 this,
-                "QuiltReadPolicy",
+                "TitanicGrantQuiltReadPolicy",
                 props.quiltReadPolicyArn
             )
         );

@@ -1,0 +1,106 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Tests",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"test"
+			],
+			"group": "test",
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "shared",
+				"showReuseMessage": true,
+				"clear": false
+			}
+		},
+		{
+			"label": "Run Tests (Watch Mode)",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"test",
+				"--",
+				"--watch"
+			],
+			"group": "test",
+			"isBackground": true,
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "shared",
+				"showReuseMessage": true,
+				"clear": false
+			}
+		},
+		{
+			"label": "Run Tests (Coverage)",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"test",
+				"--",
+				"--coverage"
+			],
+			"group": "test",
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "shared",
+				"showReuseMessage": true,
+				"clear": false
+			}
+		},
+		{
+			"label": "Run Specific Test File",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"test",
+				"--",
+				"${input:testFile}"
+			],
+			"group": "test",
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "shared",
+				"showReuseMessage": true,
+				"clear": false
+			}
+		}
+	],
+	"inputs": [
+		{
+			"id": "testFile",
+			"description": "Test file to run",
+			"default": "",
+			"type": "promptString"
+		}
+	]
+}
