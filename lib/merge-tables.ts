@@ -1,8 +1,9 @@
 import { Context, EventBridgeEvent } from "aws-lambda";
 import { GetTablesCommand, GetTablesCommandOutput } from "@aws-sdk/client-glue";
-import { glueClient, dropAllTitanicTables } from "./shared/athena-utils";
+import { glueClient, dropAllTitanicTables, } from "./shared/athena-utils";
 import { PackageEventDetail, HandlerResponse } from "./shared/types";
 import { TableManager } from "./tables/table-manager";
+import { Config } from "./shared/config";
 import * as fs from "fs";
 
 const SENTINEL_FILE = '/tmp/tables-initialized';
@@ -11,37 +12,36 @@ export async function handler(
     event: EventBridgeEvent<string, PackageEventDetail>,
     context: Context,
 ): Promise<HandlerResponse> {
-    const sourceDatabaseName = process.env.SOURCE_DATABASE_NAME;
-    const targetDatabaseName = process.env.TARGET_DATABASE_NAME;
+    const config = Config.create(); // Use factory method instead of getInstance
+    const glueDatabaseName = process.env.ICEBERG_DATABASE_NAME;
+    const s3TableDatabaseName = process.env.S3TABLE_DATABASE_NAME;
     const titanicBucket = process.env.TITANIC_BUCKET;
     const titanicTablesBucket = process.env.TITANIC_TABLES_BUCKET;
-    const useS3Table = process.env.USE_S3_TABLE === "true";
     
     console.log("Environment variables:", {
-        sourceDatabaseName,
-        targetDatabaseName,
+        glueDatabaseName,
+        s3TableDatabaseName,
         titanicBucket,
         titanicTablesBucket,
-        useS3Table,
+        configType: config.constructor.name,
     });
 
-    if (!sourceDatabaseName || !targetDatabaseName || !titanicBucket || !titanicTablesBucket) {
+    if (!glueDatabaseName || !s3TableDatabaseName || !titanicBucket || !titanicTablesBucket) {
         throw new Error(
-            "Missing required environment variables: SOURCE_DATABASE_NAME, TARGET_DATABASE_NAME, TITANIC_BUCKET, or TITANIC_TABLES_BUCKET",
+            "Missing required environment variables: ICEBERG_DATABASE_NAME, S3TABLE_DATABASE_NAME, TITANIC_BUCKET, or TITANIC_TABLES_BUCKET",
         );
     }
 
-    // Choose target bucket based on table format
-    const targetBucket = useS3Table ? titanicTablesBucket : titanicBucket;
+    // Choose target database and bucket based on config type
+    const targetDatabaseName = config.getWriteDatabaseName();
+    const targetBucket = config.getTablesBucket();
 
     try {
-        // Check if this is first run after deployment
+        // Check if this is first run after deployment and set in config
         const isFirstRun = !fs.existsSync(SENTINEL_FILE);
-        
         if (isFirstRun) {
             console.log('First run after deployment detected, dropping existing tables...');
-            await dropAllTitanicTables(targetDatabaseName, targetBucket, useS3Table);
-            
+            await dropAllTitanicTables(config);
             // Create sentinel file to mark tables as initialized
             fs.writeFileSync(SENTINEL_FILE, new Date().toISOString());
             console.log('Created sentinel file, tables will not be dropped on subsequent runs');
@@ -53,20 +53,20 @@ export async function handler(
         console.log("Event details:", { bucket, handle, topHash });
 
         // Get all tables in the database
-        console.log("Fetching tables from Glue database:", sourceDatabaseName);
+        console.log("Fetching tables from Glue database:", glueDatabaseName);
         let allTables = [];
         let nextToken = undefined;
 
         do {
             const tablesResponse: GetTablesCommandOutput = await glueClient.send(
                 new GetTablesCommand({
-                    DatabaseName: sourceDatabaseName,
+                    DatabaseName: glueDatabaseName,
                     NextToken: nextToken,
                 })
             );
             if (!tablesResponse.TableList) {
                 throw new Error(
-                    `Unable to list tables in database ${sourceDatabaseName}`,
+                    `Unable to list tables in database ${glueDatabaseName}`,
                 );
             }
             allTables.push(...tablesResponse.TableList);
@@ -95,7 +95,7 @@ export async function handler(
         console.log("Source tables found:", sourceTables.map((t) => t.Name));
 
         // Initialize table manager
-        const tableManager = new TableManager(sourceDatabaseName, targetDatabaseName, targetBucket, useS3Table);
+        const tableManager = new TableManager(config, glueDatabaseName, targetDatabaseName, targetBucket);
 
         // Ensure all required tables exist
         try {
@@ -150,7 +150,7 @@ export async function handler(
         console.error("Error merging tables:", {
             error: err.message,
             stack: err.stack,
-            sourceDatabaseName,
+            glueDatabaseName,
             targetBucket,
             isS3AccessError,
             eventDetails: event.detail,

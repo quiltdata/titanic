@@ -1,14 +1,22 @@
 import { executeQuery, tableExists } from "../shared/athena-utils";
 import { TableContext } from "../shared/types";
+import { Config, S3Config } from "../shared/config";
 
 /**
- * Abstract base class for Iceberg table operations
+ * Abstract base class for table operations
  * Provides common functionality for table creation and data insertion
+ * Uses the new Config architecture to handle both Glue and S3 table strategies
  */
 export abstract class BaseTable {
+    protected readonly config: Config;
+    
+    constructor(config: Config) {
+        this.config = config;
+    }
+    
     // Abstract properties that subclasses must implement
     protected abstract get tableName(): string;
-    protected abstract getCreateTableSchema(databaseName: string): string;
+    protected abstract getCreateTableSchema(): string;
     protected abstract getPartitioningClause(): string;
     protected abstract generateInsertQuery(context: TableContext, sourceTableName: string): string;
     
@@ -17,83 +25,77 @@ export abstract class BaseTable {
     protected abstract generateWhereClauseForCtas(sourceAlias: string): string;
 
     /**
-     * Ensure table exists using appropriate strategy based on table type
-     * S3 tables: CREATE empty table with partitions
-     * Iceberg tables: CTAS (CREATE TABLE AS SELECT) with initial data
+     * Ensure table exists using appropriate strategy based on config type
+     * S3Config: CREATE empty table with partitions immediately
+     * Config (Glue): Skip creation (will be created lazily before first INSERT)
      */
     static async ensureExists(
-        databaseName: string,
-        targetBucket: string,
-        sourceView: string,
-        useS3Table?: boolean
+        config: Config,
+        sourceView: string
     ): Promise<void> {
-        const instance = new (this as any)();
+        const instance = new (this as any)(config);
         
-        if (await tableExists(databaseName, instance.tableName)) {
+        if (await tableExists(config, instance.tableName)) {
             return;
         }
 
-        const shouldUseS3Table = useS3Table || false;
-        
-        if (shouldUseS3Table) {
-            // S3 table: create empty table with partitions
+        if (config.useS3Table) {
+            // S3 table: create empty table with partitions immediately
             console.log(`Creating ${instance.tableName} S3 table (empty, partitioned)`);
-            await instance.createEmptyTable(databaseName, targetBucket, true);
+            await instance.createEmptyTable();
         } else {
-            // Iceberg table: use CTAS to create with initial data
-            console.log(`Creating ${instance.tableName} Iceberg table using CTAS`);
-            await instance.createTableAsSelect(databaseName, targetBucket, sourceView);
+            // Glue table: skip creation - will be created lazily before first INSERT
+            console.log(`Skipping ${instance.tableName} Glue table creation (will be created lazily)`);
         }
     }
 
     /**
      * Create an empty table with the schema defined by the subclass (for S3 tables)
      */
-    private async createEmptyTable(
-        databaseName: string,
-        targetBucket: string,
-        useS3Table: boolean
-    ): Promise<void> {
-        const createQuery = this.getCompleteCreateTableSchema(databaseName, targetBucket, useS3Table);
+    private async createEmptyTable(): Promise<void> {
+        const createQuery = this.getCompleteCreateTableSchema();
         console.log(`Creating empty ${this.tableName} table with SQL:`, createQuery);
-        await executeQuery(createQuery, targetBucket, databaseName, useS3Table);
+        await executeQuery(createQuery, this.config);
     }
 
     /**
-     * Create table using CTAS (CREATE TABLE AS SELECT) for Iceberg tables
+     * Create table using CTAS for insert operations (lazy creation)
      */
-    private async createTableAsSelect(
-        databaseName: string,
-        targetBucket: string,
-        sourceView: string
+    private async createTableAsSelectForInsert(
+        context: TableContext,
+        sourceTableName: string
     ): Promise<void> {
-        const ctasQuery = this.generateCtasQuery(databaseName, targetBucket, sourceView);
-        console.log(`Creating ${this.tableName} table with CTAS:`, ctasQuery);
-        await executeQuery(ctasQuery, targetBucket, databaseName, false); // CTAS is always for Iceberg
+        const ctasQuery = this.generateCtasQueryForInsert(context, sourceTableName);
+        console.log(`Creating ${this.tableName} table with CTAS for insert:`, ctasQuery);
+        await executeQuery(ctasQuery, this.config);
     }
 
     /**
-     * Generate CTAS query for Iceberg tables
+     * Generate CTAS query for insert operations (lazy creation)
      */
-    protected generateCtasQuery(databaseName: string, targetBucket: string, sourceView: string): string {
-        const withClause = this.getWithClause(targetBucket);
-        const selectQuery = this.generateSelectForCtas(databaseName, sourceView);
+    protected generateCtasQueryForInsert(context: TableContext, sourceTableName: string): string {
+        const selectQuery = this.generateSelectForInsert(context, sourceTableName);
         
-        return `CREATE TABLE "${databaseName}"."${this.tableName}"${withClause}
-AS ${selectQuery}`;
+        // Use config to generate proper CREATE TABLE query
+        const columns = this.getCreateTableSchema().replace(/CREATE TABLE[^(]+\(/, '').replace(/\)\s*$/, '');
+        const createQuery = this.config.createTableQuery(this.tableName, columns);
+        
+        return `${createQuery.replace(/\)\s*$/, '')} AS ${selectQuery}`;
     }
 
     /**
-     * Generate the SELECT portion for CTAS using dedicated methods
+     * Generate the SELECT portion for CTAS during insert operations (lazy creation)
      */
-    protected generateSelectForCtas(databaseName: string, sourceView: string): string {
-        const registryName = this.extractRegistryFromSourceView(sourceView);
+    protected generateSelectForInsert(context: TableContext, sourceTableName: string): string {
         const sourceAlias = 's';
         
-        const selectClause = this.generateSelectClause(registryName, sourceAlias);
+        const selectClause = this.generateSelectClause(context.registryName, sourceAlias);
         const whereClause = this.generateWhereClauseForCtas(sourceAlias);
         
-        let query = `SELECT DISTINCT ${selectClause} FROM "${databaseName}"."${sourceView}" ${sourceAlias}`;
+        // Use config to format table names properly
+        const formattedSourceTable = this.config.formatTableName(sourceTableName);
+        
+        let query = `SELECT DISTINCT ${selectClause} FROM ${formattedSourceTable} ${sourceAlias}`;
         
         if (whereClause) {
             query += ` WHERE ${whereClause}`;
@@ -103,68 +105,42 @@ AS ${selectQuery}`;
     }
 
     /**
-     * Extract registry name from source view name
+     * Generate the complete CREATE TABLE schema using the new Config architecture
      */
-    private extractRegistryFromSourceView(sourceView: string): string {
-        // Extract registry from source view name (e.g., "bucket_name_packages-view" -> "bucket_name")
-        const match = sourceView.match(/^(.+?)_(?:packages|objects)-view$/);
-        return match ? match[1] : sourceView;
-    }
-
-    /**
-     * Generate the complete CREATE TABLE schema with conditional partitioning and WITH clause
-     * useS3Table=true: S3 table with partitions, no WITH clause
-     * useS3Table=false: Iceberg table with WITH clause, no partitions
-     */
-    protected getCompleteCreateTableSchema(databaseName: string, targetBucket: string, useS3Table?: boolean): string {
-        const baseSchema = this.getCreateTableSchema(databaseName);
-        const partitioningClause = this.getPartitioningClause();
-        
-        // Check runtime configuration, defaulting to false (Iceberg)
-        const shouldUseS3Table = useS3Table || false;
-        
-        let completeSchema = baseSchema.trim();
-        
-        if (shouldUseS3Table && partitioningClause) {
-            // S3 table: add partitioning, no WITH clause
-            completeSchema += `\n            ${partitioningClause}`;
-        } else {
-            // Iceberg table: add WITH clause, no partitioning
-            completeSchema += this.getWithClause(targetBucket);
-        }
-        
-        return completeSchema;
-    }
-
-    /**
-     * Generate the WITH clause for Iceberg table properties
-     */
-    protected getWithClause(targetBucket: string): string {
-        return `
-            WITH (
-                format = 'PARQUET',
-                write_compression = 'SNAPPY',
-                location = 's3://${targetBucket}/iceberg_catalog/${this.tableName}/',
-                table_type = 'ICEBERG',
-                is_external = false
-            )`;
+    protected getCompleteCreateTableSchema(): string {
+        const columns = this.getCreateTableSchema().replace(/CREATE TABLE[^(]+\(/, '').replace(/\)\s*$/, '');
+        return this.config.createTableQuery(this.tableName, columns);
     }
 
     /**
      * Insert data into the table using the query generated by the subclass
+     * For Glue tables: Create table using CTAS if it doesn't exist, then mark creation as done
+     * For S3 tables: Use regular INSERT (table should already exist)
      */
-    static async insert(context: TableContext, sourceTableName: string): Promise<void> {
-        const instance = new (this as any)();
+    static async insert(context: TableContext, sourceTableName: string, config: Config): Promise<void> {
+        const instance = new (this as any)(config);
+        
+        // Check if we need to create the table lazily (Glue tables)
+        if (!config.useS3Table) {
+            // Check if table exists - if not, create it using CTAS
+            if (!(await tableExists(config, instance.tableName))) {
+                console.log(`Creating ${instance.tableName} Glue table using CTAS on first run`);
+                await instance.createTableAsSelectForInsert(context, sourceTableName);
+                return; // CTAS already inserted the data, no need for separate INSERT
+            }
+        }
+        
+        // Regular INSERT for subsequent runs or S3 tables
         const query = instance.generateInsertQuery(context, sourceTableName);
         console.log(`Inserting into ${instance.tableName} with SQL:`, query);
-        await executeQuery(query, context.targetBucket, context.targetDatabaseName, context.useS3Table);
+        await executeQuery(query, config);
     }
 
     /**
      * Generate the static insert query (for backward compatibility)
      */
-    static generateInsertQuery(context: TableContext, sourceTableName: string): string {
-        const instance = new (this as any)();
+    static generateInsertQuery(context: TableContext, sourceTableName: string, config: Config): string {
+        const instance = new (this as any)(config);
         return instance.generateInsertQuery(context, sourceTableName);
     }
 }

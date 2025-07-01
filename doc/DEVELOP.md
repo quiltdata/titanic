@@ -8,9 +8,6 @@ This guide covers the internal architecture, development patterns, and extension
 - **doc/DEVELOP.md** (this file) - Developer architecture, patterns, and extension points
 - **doc/schema.sql** - Complete SQL schema reference for both table formats
 - **doc/schema.md** - Schema design decisions and motivation
-- **doc/CONTEXT_MANAGEMENT_REVIEW.md** - Context flow analysis and improvements
-
-**Deprecated**: `ARCHITECTURE.md`, `TABLE_CONFIGURATION.md`, `USE_S3_TABLE.md` have been consolidated into the above files.
 
 ## Architecture
 
@@ -50,14 +47,28 @@ interface TableInterface {
 
 ### Table Format Modes
 
-#### Iceberg Tables (`USE_S3_TABLE=false`)
-- **Implementation**: CREATE TABLE AS SELECT (CTAS) with Iceberg format
+There are two different types of buckets.
+
+- S3 Table Buckets store the Iceberg catalog directly in a special bucket
+- Standard buckets use the Glue Catalog to define the tables
+
+We always create one Titanic bucket for each.  
+S3 Table Buckets always write their Athena output on the standard bucket.
+We pass in the existing (source) database, which is also where we create Glue tables.
+
+On first run we drop both tables (if they exist),
+then create the tables.
+We always read from the existing views in the Glue Catalog,
+but may write the S3 Table Catalog if USE_S3_TABLE is set.
+
+#### Glue Tables (`USE_S3_TABLE=false`)
+- **Implementation**: CREATE TABLE AS SELECT (CTAS) with Glue catalog
 - **Benefits**: ACID transactions, schema evolution, time travel
-- **Storage**: Single S3 bucket with Iceberg metadata
-- **Partitioning**: Iceberg-managed with bucketing functions
+- **Storage**: Single S3 bucket with Glue metadata
+- **Partitioning**: Glue-managed with bucketing functions
 
 #### S3 Tables (`USE_S3_TABLE=true`)
-- **Implementation**: Empty table creation + separate INSERT operations
+- **Implementation**: Empty table creation + separate INSERT operations using AWS S3 Tables managed catalog
 - **Benefits**: AWS-native optimization, built-in partitioning
 - **Storage**: Dual-bucket architecture:
   - S3 Tables bucket (ARN format) for table data
@@ -75,10 +86,6 @@ The system implements a "continue on error" approach:
 4. **Individual Table Failures**: Track per-table failures, continue with other tables
 
 This ensures maximum data processing even when some sources are unavailable.
-
-### Context Management
-
-See [CONTEXT_MANAGEMENT_REVIEW.md](CONTEXT_MANAGEMENT_REVIEW.md) for detailed analysis of context flow improvements implemented in this refactor.
 
 ## Development Patterns
 
@@ -118,7 +125,7 @@ this.tables = [
 The test suite covers both table formats comprehensively:
 
 #### Test Structure
-- **Unit Tests**: Individual table classes with both S3 and Iceberg modes
+- **Unit Tests**: Individual table classes with both S3 and Glue modes
 - **Integration Tests**: TableManager operations with statistics validation
 - **Handler Tests**: End-to-end event processing with error scenarios
 
@@ -126,7 +133,7 @@ The test suite covers both table formats comprehensively:
 ```typescript
 describe('Table operations', () => {
   describe.each([
-    ['Iceberg', false],
+    ['Glue', false],
     ['S3 Tables', true]
   ])('%s mode', (modeName, useS3Table) => {
     // Test both formats with same assertions
@@ -213,7 +220,7 @@ The infrastructure is defined in TypeScript with:
 - **IAM roles** with minimal required permissions
 - **CloudWatch logs** for monitoring and debugging
 - **Dual S3 buckets** (S3 Tables mode): S3 Tables bucket + Athena results bucket
-- **Single S3 bucket** (Iceberg mode): Combined storage for tables and results
+- **Single S3 bucket** (Glue mode): Combined storage for tables and results
 
 ### Deployment Steps
 1. **Configure environment**: Set all required variables
@@ -255,7 +262,7 @@ Lambda logs include:
 - **Testable design**: Easy mocking and isolated testing
 
 ### SQL Generation
-- **Format-specific logic**: Clear separation between S3 and Iceberg SQL
+- **Format-specific logic**: Clear separation between S3 and Glue SQL
 - **Parameterized queries**: Safe registry and bucket name handling
 - **Consistent naming**: Predictable table and column naming conventions
 - **Partitioning strategy**: Optimized for query performance
@@ -284,7 +291,7 @@ The system executes Athena queries differently based on table format:
 }
 ```
 
-#### Iceberg Query Structure
+#### Glue Query Structure
 ```typescript
 {
   QueryString: "DROP TABLE IF EXISTS ...",
@@ -292,7 +299,7 @@ The system executes Athena queries differently based on table format:
     Database: "database_name"  // No catalog specification needed
   },
   ResultConfiguration: {
-    OutputLocation: "s3://target-bucket/athena-results/"  // Same bucket as tables
+    OutputLocation: "s3://target-bucket/athena-results/"  // Same bucket as Glue tables
   }
 }
 ```

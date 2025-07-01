@@ -28,14 +28,14 @@ export class TitanicStack extends cdk.Stack {
         const useS3Table = process.env.USE_S3_TABLE === "true";
         
         // Source database (where views are) - always from QUILT_DATABASE_NAME
-        const sourceDatabaseName = process.env.QUILT_DATABASE_NAME || (() => { throw new Error("must set QUILT_DATABASE_NAME environment variable"); })();
+        const glueDatabaseName = process.env.QUILT_DATABASE_NAME || (() => { throw new Error("must set QUILT_DATABASE_NAME environment variable"); })();
         
         // Target database (where we write tables) - depends on USE_S3_TABLE
         const targetDatabaseName = !useS3Table
-            ? sourceDatabaseName  // For Iceberg, read and write to same database
+            ? glueDatabaseName  // For Glue, read and write to same database
             : props.quiltDatabaseName;  // For S3 Tables, write to quilt_titanic
 
-        // Only create the database for S3 Tables case - for Iceberg, the database already exists
+        // Only create the database for S3 Tables case - for Glue, the database already exists
         if (useS3Table) {
             // Create the database using a custom resource that handles existing databases
             new cr.AwsCustomResource(this, "QuiltTitanicDatabase", {
@@ -83,7 +83,7 @@ export class TitanicStack extends cdk.Stack {
 
         // Always create both buckets for maximum flexibility
         
-        // Regular S3 bucket for Athena results and Iceberg tables
+        // Regular S3 bucket for Athena results and Glue tables
         const titanicBucket = new s3.Bucket(this, "TitanicBucket", {
             bucketName: `titanic-${this.account}-${this.region}`,
             removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -109,7 +109,7 @@ export class TitanicStack extends cdk.Stack {
             },
             environment: {
                 // Source database to read from (always the same, where views are)
-                SOURCE_DATABASE_NAME: sourceDatabaseName,
+                SOURCE_DATABASE_NAME: glueDatabaseName,
                 
                 // Target database to write to (changes based on USE_S3_TABLE)
                 TARGET_DATABASE_NAME: targetDatabaseName,
@@ -149,8 +149,8 @@ export class TitanicStack extends cdk.Stack {
                 actions: ["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
                 resources: [
                     `arn:aws:glue:${this.region}:${this.account}:catalog`,
-                    `arn:aws:glue:${this.region}:${this.account}:database/${sourceDatabaseName}`,
-                    `arn:aws:glue:${this.region}:${this.account}:table/${sourceDatabaseName}/*`,
+                    `arn:aws:glue:${this.region}:${this.account}:database/${glueDatabaseName}`,
+                    `arn:aws:glue:${this.region}:${this.account}:table/${glueDatabaseName}/*`,
                     `arn:aws:glue:${this.region}:${this.account}:database/${targetDatabaseName}`,
                     `arn:aws:glue:${this.region}:${this.account}:table/${targetDatabaseName}/*`,
                 ],
@@ -173,7 +173,7 @@ export class TitanicStack extends cdk.Stack {
 
         // Always grant permissions to both buckets since Lambda decides which to use
         
-        // Regular S3 bucket permissions (always used for Athena results, also for Iceberg tables)
+        // Regular S3 bucket permissions (always used for Athena results, also for Glue tables)
         titanicBucket.grantReadWrite(mergeLambda);
         mergeLambda.addToRolePolicy(
             new iam.PolicyStatement({

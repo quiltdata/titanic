@@ -1,4 +1,4 @@
-# Iceberg Table Schema 
+# Glue Table Schema 
 
 Draft 1a
 

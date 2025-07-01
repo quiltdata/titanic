@@ -2,21 +2,18 @@ import { Table } from "@aws-sdk/client-glue";
 import { PackageRevisionTable } from "./package-revision";
 import { PackageTagTable } from "./package-tag";
 import { PackageEntryTable } from "./package-entry";
+import { BaseTable } from "./base-table";
 import { TableContext, createTableContext } from "../shared/types";
 import { sourceBucketFromTableName } from "../shared/athena-utils";
+import { Config } from "../shared/config";
 
 export class TableManager {
-    private sourceDatabaseName: string;
-    private targetDatabaseName: string;
-    private targetBucket: string;
-    private useS3Table: boolean;
-
-    constructor(sourceDatabaseName: string, targetDatabaseName: string, targetBucket: string, useS3Table: boolean = false) {
-        this.sourceDatabaseName = sourceDatabaseName;
-        this.targetDatabaseName = targetDatabaseName;
-        this.targetBucket = targetBucket;
-        this.useS3Table = useS3Table;
-    }
+    constructor(
+        private config: Config, // Pass config as parameter
+        private glueDatabaseName: string,
+        private targetDatabaseName: string,
+        private targetBucket: string
+    ) {}
 
     async ensureTablesExist(sourceTables: Table[]): Promise<{ successfulTables: number; failedTables: number; totalTables: number }> {
         // Find representative views for each table type
@@ -31,9 +28,9 @@ export class TableManager {
         if (packagesView) {
             totalTables += 2; // package_revision and package_tag
             try {
-                await PackageRevisionTable.ensureExists(this.targetDatabaseName, this.targetBucket, packagesView, this.useS3Table);
+                await PackageRevisionTable.ensureExists(this.config, packagesView);
                 successfulTables++;
-                await PackageTagTable.ensureExists(this.targetDatabaseName, this.targetBucket, packagesView, this.useS3Table);
+                await PackageTagTable.ensureExists(this.config, packagesView);
                 successfulTables++;
             } catch (error) {
                 const err = error as Error;
@@ -49,7 +46,7 @@ export class TableManager {
         if (entriesView) {
             totalTables += 1; // package_entry
             try {
-                await PackageEntryTable.ensureExists(this.targetDatabaseName, this.targetBucket, entriesView, this.useS3Table);
+                await PackageEntryTable.ensureExists(this.config, entriesView);
                 successfulTables++;
             } catch (error) {
                 const err = error as Error;
@@ -78,20 +75,14 @@ export class TableManager {
             const registryName = sourceBucketFromTableName(table.Name);
 
             try {
-                const context = createTableContext(
-                    this.sourceDatabaseName,
-                    this.targetDatabaseName,
-                    this.targetBucket,
-                    registryName,
-                    this.useS3Table
-                );
+                const context = createTableContext(registryName);
 
                 const isPackagesView = table.Name.includes('packages-view');
 
                 if (isPackagesView) {
                     // Handle package revisions and tags
                     try {
-                        await PackageRevisionTable.insert(context, table.Name);
+                        await PackageRevisionTable.insert(context, table.Name, this.config);
                         tableQueryCount++;
                         console.log(`✅ Successfully inserted package revisions from ${table.Name}`);
                     } catch (error) {
@@ -106,7 +97,7 @@ export class TableManager {
                     }
 
                     try {
-                        await PackageTagTable.insert(context, table.Name);
+                        await PackageTagTable.insert(context, table.Name, this.config);
                         tableQueryCount++;
                         console.log(`✅ Successfully inserted package tags from ${table.Name}`);
                     } catch (error) {
@@ -122,7 +113,7 @@ export class TableManager {
                 } else if (table.Name.includes('objects-view')) {
                     // Handle package entries
                     try {
-                        await PackageEntryTable.insert(context, table.Name);
+                        await PackageEntryTable.insert(context, table.Name, this.config);
                         tableQueryCount++;
                         console.log(`✅ Successfully inserted package entries from ${table.Name}`);
                     } catch (error) {

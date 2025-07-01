@@ -12,16 +12,39 @@ import {
     waitForQueryCompletion, 
     tableExists, 
     executeQuery, 
+    executeQueryWithRetry,
+    dropAllTitanicTables,
+    validateQuery,
     sourceBucketFromTableName 
 } from "./athena-utils";
+import { Config, S3Config } from "./config";
 
 const glueMock = mockClient(GlueClient);
 const athenaMock = mockClient(AthenaClient);
 
 describe("athena-utils", () => {
+    let config: Config;
+    let s3Config: S3Config;
+
     beforeEach(() => {
         glueMock.reset();
         athenaMock.reset();
+        
+        config = Config.createTestInstance({
+            glueTablesBucket: 'test-glue-bucket',
+            s3TablesBucket: 'test-s3-bucket',
+            aws_region: 'us-east-1',
+            glueDatabaseName: 'test_glue_db',
+            s3TableDatabaseName: 'test_s3_db'
+        });
+
+        s3Config = S3Config.createTestInstance({
+            glueTablesBucket: 'test-glue-bucket',
+            s3TablesBucket: 'test-s3-bucket',
+            aws_region: 'us-east-1',
+            glueDatabaseName: 'test_glue_db',
+            s3TableDatabaseName: 'test_s3_db'
+        });
     });
 
     describe("sourceBucketFromTableName", () => {
@@ -45,7 +68,7 @@ describe("athena-utils", () => {
                 TableList: [{ Name: "package_revision" }]
             });
 
-            const result = await tableExists("test-db", "package_revision");
+            const result = await tableExists(config, "package_revision");
             expect(result).toBe(true);
         });
 
@@ -54,14 +77,14 @@ describe("athena-utils", () => {
                 TableList: []
             });
 
-            const result = await tableExists("test-db", "nonexistent_table");
+            const result = await tableExists(config, "nonexistent_table");
             expect(result).toBe(false);
         });
 
         it("should handle undefined TableList", async () => {
             glueMock.on(GetTablesCommand).resolves({});
 
-            const result = await tableExists("test-db", "package_revision");
+            const result = await tableExists(config, "package_revision");
             expect(result).toBe(false);
         });
     });
@@ -115,7 +138,7 @@ describe("athena-utils", () => {
     });
 
     describe("executeQuery", () => {
-        it("should execute query successfully for Iceberg tables", async () => {
+        it("should execute read query successfully", async () => {
             athenaMock
                 .on(StartQueryExecutionCommand)
                 .resolves({ QueryExecutionId: "test-id" })
@@ -126,47 +149,18 @@ describe("athena-utils", () => {
                     }
                 });
 
-            await expect(executeQuery("SELECT 1", "test-bucket", "test-db", false)).resolves.toBeUndefined();
-        });
-
-        it("should execute query successfully for S3 Tables with correct catalog", async () => {
-            // Set environment variable for Athena results bucket
-            process.env.ATHENA_RESULTS_BUCKET = "athena-results-bucket";
+            await expect(executeQuery("SELECT 1", config)).resolves.toBeUndefined();
             
-            athenaMock
-                .on(StartQueryExecutionCommand)
-                .resolves({ QueryExecutionId: "test-id" })
-                .on(GetQueryExecutionCommand)
-                .resolves({
-                    QueryExecution: {
-                        Status: { State: QueryExecutionState.SUCCEEDED }
-                    }
-                });
-
-            // Test with S3 Tables ARN
-            const s3TablesArn = "arn:aws:s3tables:us-east-1:123456789012:bucket/test-bucket";
-            await expect(executeQuery("SELECT 1", s3TablesArn, "quilt_titanic", true)).resolves.toBeUndefined();
-            
-            // Verify that the correct QueryExecutionContext was set for S3 Tables
             const startQueryCall = athenaMock.commandCalls(StartQueryExecutionCommand)[0];
             expect(startQueryCall.args[0].input.QueryExecutionContext).toEqual({
-                Catalog: "s3tablescatalog/test-bucket",
-                Database: "quilt_titanic"
+                Database: "test_glue_db"
             });
-            
-            // Verify that Athena results go to the separate bucket
-            expect(startQueryCall.args[0].input.ResultConfiguration?.OutputLocation).toBe(
-                "s3://athena-results-bucket/athena-results/"
-            );
-            
-            // Clean up
-            delete process.env.ATHENA_RESULTS_BUCKET;
+            expect(startQueryCall.args[0].input.ResultConfiguration).toEqual({
+                OutputLocation: "s3://test-glue-bucket/athena-results/"
+            });
         });
 
-        it("should execute query with database context for Iceberg tables", async () => {
-            // Set the environment variable for the test
-            process.env.ATHENA_RESULTS_BUCKET = "test-bucket";
-            
+        it("should execute write query successfully with correct database", async () => {
             athenaMock
                 .on(StartQueryExecutionCommand)
                 .resolves({ QueryExecutionId: "test-id" })
@@ -177,27 +171,106 @@ describe("athena-utils", () => {
                     }
                 });
 
-            await expect(executeQuery("SELECT 1", "test-bucket", "test-db", false)).resolves.toBeUndefined();
+            await expect(executeQuery("CREATE TABLE test AS SELECT 1", config)).resolves.toBeUndefined();
             
-            // Verify that QueryExecutionContext was set with database for Iceberg tables
             const startQueryCall = athenaMock.commandCalls(StartQueryExecutionCommand)[0];
             expect(startQueryCall.args[0].input.QueryExecutionContext).toEqual({
-                Database: "test-db"
+                Database: "test_glue_db" // For non-S3 config, write uses same as read
             });
+        });
+
+        it("should use S3 database for S3 table configuration", async () => {
+            athenaMock
+                .on(StartQueryExecutionCommand)
+                .resolves({ QueryExecutionId: "test-id" })
+                .on(GetQueryExecutionCommand)
+                .resolves({
+                    QueryExecution: {
+                        Status: { State: QueryExecutionState.SUCCEEDED }
+                    }
+                });
+
+            await expect(executeQuery("CREATE TABLE test AS SELECT 1", s3Config)).resolves.toBeUndefined();
             
-            // Verify that results go to the target bucket
+            const startQueryCall = athenaMock.commandCalls(StartQueryExecutionCommand)[0];
+            expect(startQueryCall.args[0].input.QueryExecutionContext).toEqual({
+                Database: "test_s3_db"
+            });
+        });
+
+        it("should execute query with correct result configuration", async () => {
+            athenaMock
+                .on(StartQueryExecutionCommand)
+                .resolves({ QueryExecutionId: "test-id" })
+                .on(GetQueryExecutionCommand)
+                .resolves({
+                    QueryExecution: {
+                        Status: { State: QueryExecutionState.SUCCEEDED }
+                    }
+                });
+
+            await expect(executeQuery("SELECT 1", config)).resolves.toBeUndefined();
+            
+            const startQueryCall = athenaMock.commandCalls(StartQueryExecutionCommand)[0];
             expect(startQueryCall.args[0].input.ResultConfiguration?.OutputLocation).toBe(
-                "s3://test-bucket/athena-results/"
+                "s3://test-glue-bucket/athena-results/"
             );
-            
-            // Clean up
-            delete process.env.ATHENA_RESULTS_BUCKET;
         });
 
         it("should throw error when QueryExecutionId is missing", async () => {
             athenaMock.on(StartQueryExecutionCommand).resolves({});
 
-            await expect(executeQuery("SELECT 1", "test-bucket", "test-db", false)).rejects.toThrow("Failed to get QueryExecutionId");
+            await expect(executeQuery("SELECT 1", config)).rejects.toThrow("Failed to get QueryExecutionId");
+        });
+    });
+
+    describe("validateQuery", () => {
+        it("should validate safe CREATE TABLE queries", () => {
+            const result = validateQuery("CREATE TABLE test AS SELECT * FROM source");
+            expect(result.isValid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it("should validate safe INSERT INTO queries", () => {
+            const result = validateQuery("INSERT INTO test SELECT * FROM source");
+            expect(result.isValid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it("should reject dangerous DROP queries", () => {
+            const result = validateQuery("SELECT * FROM test; DROP TABLE users");
+            expect(result.isValid).toBe(false);
+            expect(result.errors).toContainEqual(expect.stringContaining("dangerous SQL pattern"));
+        });
+
+        it("should reject queries without CREATE TABLE or INSERT INTO", () => {
+            const result = validateQuery("SELECT * FROM test");
+            expect(result.isValid).toBe(false);
+            expect(result.errors).toContain("Query must be a CREATE TABLE or INSERT INTO statement");
+        });
+    });
+
+    describe("executeQueryWithRetry", () => {
+        it("should retry failed queries", async () => {
+            athenaMock
+                .on(StartQueryExecutionCommand)
+                .rejectsOnce(new Error("Network error"))
+                .resolvesOnce({ QueryExecutionId: "test-id" })
+                .on(GetQueryExecutionCommand)
+                .resolves({
+                    QueryExecution: {
+                        Status: { State: QueryExecutionState.SUCCEEDED }
+                    }
+                });
+
+            await expect(executeQueryWithRetry("SELECT 1", config, 2, 10)).resolves.toBeUndefined();
+        });
+
+        it("should throw error after max retries", async () => {
+            athenaMock.on(StartQueryExecutionCommand).rejects(new Error("Network error"));
+
+            await expect(executeQueryWithRetry("SELECT 1", config, 2, 10))
+                .rejects.toThrow("Query failed after 2 attempts: Network error");
         });
     });
 });

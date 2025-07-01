@@ -111,7 +111,7 @@ describe("TitanicStack", () => {
 
     describe("Shared functionality (mode-independent)", () => {
         describe.each([
-            { mode: "Iceberg", useS3Table: false, stackId: "SharedIcebergStack", dbName: "test-database-env" },
+            { mode: "Glue", useS3Table: false, stackId: "SharedGlueStack", dbName: "test-database-env" },
             { mode: "S3 Tables", useS3Table: true, stackId: "SharedS3TablesStack", dbName: "test-database" }
         ])("$mode mode", ({ mode, useS3Table, stackId, dbName }) => {
             let template: Template;
@@ -179,11 +179,11 @@ describe("TitanicStack", () => {
         });
     });
 
-    describe("Iceberg mode (default)", () => {
+    describe("Glue mode (default)", () => {
         let template: Template;
 
         beforeAll(() => {
-            template = createStackTemplate("IcebergStack", defaultStackProps, { QUILT_DATABASE_NAME: "test-database" });
+            template = createStackTemplate("GlueStack", defaultStackProps, { QUILT_DATABASE_NAME: "test-database" });
         });
 
         it("should create both regular S3 bucket and S3 Tables bucket", () => {
@@ -195,7 +195,7 @@ describe("TitanicStack", () => {
             template.resourceCountIs("AWS::Glue::Database", 0);
         });
 
-        it("should configure Lambda function with Iceberg-specific settings", () => {
+        it("should configure Lambda function with Glue-specific settings", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
@@ -213,7 +213,7 @@ describe("TitanicStack", () => {
         describe("Database name usage", () => {
             it("should use the database name provided in QUILT_DATABASE_NAME environment variable", () => {
                 const envTemplate = createStackTemplate(
-                    "IcebergEnvDbStack", 
+                    "GlueEnvDbStack", 
                     { ...defaultStackProps, quiltDatabaseName: "env_var_db_name" },
                     { QUILT_DATABASE_NAME: "env_var_db_name" }
                 );
@@ -233,7 +233,7 @@ describe("TitanicStack", () => {
 
             it("should throw error if QUILT_DATABASE_NAME not set", () => {
                 expect(() => {
-                    createStackTemplate("IcebergNoDbStack", defaultStackProps);
+                    createStackTemplate("GlueNoDbStack", defaultStackProps);
                 }).toThrow("must set QUILT_DATABASE_NAME environment variable");
             });
         });

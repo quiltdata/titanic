@@ -47,6 +47,6 @@ export class PartitionedExampleTable extends BaseTable {
             INSERT INTO "${context.targetDatabaseName}"."${this.tableName}" (id, data, created_at)
             SELECT DISTINCT
               ${selectClause}
-            FROM "${context.sourceDatabaseName}"."${sourceTableName}" s`;
+            FROM "${context.glueDatabaseName}"."${sourceTableName}" s`;
     }
 }

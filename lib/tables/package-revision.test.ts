@@ -9,6 +9,7 @@ import {
 import { PackageRevisionTable } from "./package-revision";
 import { TableContext } from "../shared/types";
 import { createTestTableContext } from "../shared/test-utils";
+import { Config, S3Config } from "../shared/config";
 
 // Mock the athena-utils module
 jest.mock("../shared/athena-utils", () => {
@@ -29,79 +30,121 @@ const athenaMock = mockClient(AthenaClient);
 const { tableExists, executeQuery } = require("../shared/athena-utils");
 
 describe("PackageRevisionTable", () => {
-    beforeEach(() => {
-        glueMock.reset();
-        athenaMock.reset();
-        jest.clearAllMocks();
-    });
+    let mockConfig: Config;
+    
     beforeEach(() => {
         jest.clearAllMocks();
         glueMock.reset();
         athenaMock.reset();
+        
+        // Create a proper test config instance
+        mockConfig = Config.createTestInstance({
+            glueTablesBucket: "test-bucket",
+            glueDatabaseName: "test-db",
+            s3TablesBucket: "test-s3-bucket",
+            s3TableDatabaseName: "test-s3-db"
+        });
     });
 
     describe("ensureExists", () => {
         it("should skip creation when table already exists", async () => {
             tableExists.mockResolvedValue(true);
 
-            await PackageRevisionTable.ensureExists("test-db", "test-bucket", "source-view");
+            await PackageRevisionTable.ensureExists(mockConfig, "source-view");
 
-            expect(tableExists).toHaveBeenCalledWith("test-db", "package_revision");
+            expect(tableExists).toHaveBeenCalledWith(mockConfig, "package_revision");
             expect(athenaMock.calls()).toHaveLength(0);
         });
 
-        it("should create table when it does not exist", async () => {
+        it("should skip Glue table creation (lazy creation)", async () => {
             tableExists.mockResolvedValue(false);
             executeQuery.mockResolvedValue(undefined);
 
-            await PackageRevisionTable.ensureExists("test-db", "test-bucket", "source-view");
+            await PackageRevisionTable.ensureExists(mockConfig, "source-view");
 
-            expect(tableExists).toHaveBeenCalledWith("test-db", "package_revision");
-            expect(executeQuery).toHaveBeenCalledTimes(1);
-            expect(executeQuery).toHaveBeenCalledWith(
-                expect.stringContaining('CREATE TABLE "test-db"."package_revision"'),
-                "test-bucket",
-                "test-db",
-                false
-            );
+            expect(tableExists).toHaveBeenCalledWith(mockConfig, "package_revision");
+            expect(executeQuery).toHaveBeenCalledTimes(0); // Should skip creation for Glue tables
         });
 
-        it("should throw error when CREATE query fails", async () => {
+        it("should create S3 table immediately when it does not exist", async () => {
+            const s3Config = S3Config.createTestInstance({
+                glueTablesBucket: "test-bucket",
+                glueDatabaseName: "test-db",
+                s3TablesBucket: "test-s3-bucket",
+                s3TableDatabaseName: "test-s3-db"
+            });
             tableExists.mockResolvedValue(false);
-            executeQuery.mockRejectedValue(new Error("Query failed"));
+            executeQuery.mockResolvedValue(undefined);
 
-            await expect(
-                PackageRevisionTable.ensureExists("test-db", "test-bucket", "source-view")
-            ).rejects.toThrow("Query failed");
+            await PackageRevisionTable.ensureExists(s3Config, "source-view");
+
+            expect(tableExists).toHaveBeenCalledWith(s3Config, "package_revision");
+            expect(executeQuery).toHaveBeenCalledTimes(1);
+            expect(executeQuery).toHaveBeenCalledWith(
+                expect.stringContaining('CREATE TABLE test-s3-db.package_revision'),
+                s3Config
+            );
         });
     });
 
     describe("generateInsertQuery", () => {
         it("should generate correct INSERT query", () => {
             const context = createTestTableContext();
+            const config = Config.createTestInstance();
 
-            const query = PackageRevisionTable.generateInsertQuery(context, "source_table");
+            const query = PackageRevisionTable.generateInsertQuery(context, "source_table", config);
 
-            expect(query).toContain('INSERT INTO "test-db"."package_revision"');
+            expect(query).toContain('INSERT INTO "package_revision"');
             expect(query).toContain("'test_registry' AS registry");
-            expect(query).toContain('FROM "test-db"."source_table" s');
-            expect(query).toContain('LEFT JOIN "test-db"."package_revision" t');
+            expect(query).toContain('FROM "source_table" s');
+            expect(query).toContain('LEFT JOIN "package_revision" t');
             expect(query).toContain("s.timestamp != 'latest'");
         });
     });
 
     describe("insert", () => {
-        it("should execute insert query", async () => {
-            executeQuery.mockResolvedValue(undefined);
+        it("should create table with CTAS on first run for Glue tables", async () => {
             const context = createTestTableContext();
+            tableExists.mockResolvedValue(false);
+            executeQuery.mockResolvedValue(undefined);
 
-            await PackageRevisionTable.insert(context, "source_table");
+            await PackageRevisionTable.insert(context, "source_table", mockConfig);
+
+            expect(tableExists).toHaveBeenCalledWith(mockConfig, "package_revision");
+            expect(executeQuery).toHaveBeenCalledWith(
+                expect.stringContaining('CREATE TABLE "package_revision"'),
+                mockConfig
+            );
+        });
+
+        it("should execute regular insert when table exists", async () => {
+            const context = createTestTableContext();
+            tableExists.mockResolvedValue(true);
+            executeQuery.mockResolvedValue(undefined);
+
+            await PackageRevisionTable.insert(context, "source_table", mockConfig);
 
             expect(executeQuery).toHaveBeenCalledWith(
-                expect.stringContaining('INSERT INTO "test-db"."package_revision"'),
-                "test-bucket",
-                "test-db",
-                false
+                expect.stringContaining('INSERT INTO "package_revision"'),
+                mockConfig
+            );
+        });
+
+        it("should execute regular insert for S3 tables", async () => {
+            const s3Config = S3Config.createTestInstance({
+                glueTablesBucket: "test-bucket",
+                glueDatabaseName: "test-db", 
+                s3TablesBucket: "test-s3-bucket",
+                s3TableDatabaseName: "test-s3-db"
+            });
+            const context = createTestTableContext();
+            executeQuery.mockResolvedValue(undefined);
+
+            await PackageRevisionTable.insert(context, "source_table", s3Config);
+
+            expect(executeQuery).toHaveBeenCalledWith(
+                expect.stringContaining('INSERT INTO test-s3-db.package_revision'),
+                s3Config
             );
         });
     });

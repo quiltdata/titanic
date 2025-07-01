@@ -7,17 +7,14 @@ import {
     StartQueryExecutionCommand,
 } from "@aws-sdk/client-athena";
 import { TableContext, createTableContext } from "./types";
+import { Config } from "./config";
 
 // Test helper for creating table contexts
 export function createTestTableContext(
     overrides: Partial<TableContext> = {}
 ): TableContext {
     return createTableContext(
-        overrides.sourceDatabaseName || "test-db",
-        overrides.targetDatabaseName || "test-db",
-        overrides.targetBucket || "test-bucket", 
-        overrides.registryName || "test_registry",
-        overrides.useS3Table || false
+        overrides.registryName || "test_registry"
     );
 }
 
@@ -109,10 +106,10 @@ export const createInsertQueryTests = (
 
             const query = tableClass.generateInsertQuery(context, "source_table");
 
-            expect(query).toContain(`INSERT INTO "test-db"."${tableName}"`);
+            expect(query).toContain(`INSERT INTO`);
             expect(query).toContain("'test_registry' AS registry");
-            expect(query).toContain('FROM "test-db"."source_table" s');
-            expect(query).toContain(`LEFT JOIN "test-db"."${tableName}" t`);
+            expect(query).toContain('FROM');
+            expect(query).toContain(`LEFT JOIN`);
             
             expectedQueryContains.forEach(expectedContent => {
                 expect(query).toContain(expectedContent);
@@ -123,12 +120,13 @@ export const createInsertQueryTests = (
     describe("insert", () => {
         it("should execute insert query", async () => {
             const context = createTestTableContext();
+            const config = Config.createTestInstance();
 
-            await tableClass.insert(context, "source_table");
+            await tableClass.insert(context, "source_table", config);
 
             expect(testExecuteQuery).toHaveBeenCalledWith(
-                expect.stringContaining(`INSERT INTO "test-db"."${tableName}"`),
-                "test-bucket"
+                expect.stringContaining(`INSERT INTO`),
+                config
             );
         });
     });

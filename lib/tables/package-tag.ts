@@ -6,14 +6,12 @@ export class PackageTagTable extends BaseTable {
         return "package_tag";
     }
 
-    protected getCreateTableSchema(databaseName: string): string {
+    protected getCreateTableSchema(): string {
         return `
-            CREATE TABLE "${databaseName}"."${this.tableName}" (
               registry   STRING,      
               pkg_name   STRING,      
               tag_name   STRING,      
               top_hash   STRING       
-            )
         `;
     }
 
@@ -39,12 +37,16 @@ export class PackageTagTable extends BaseTable {
     protected generateInsertQuery(context: TableContext, sourceTableName: string): string {
         const selectClause = this.generateSelectClause(context.registryName, 's');
         
+        // Use config to format table names properly
+        const targetTable = this.config.formatTableName(this.tableName, true);
+        const sourceTable = this.config.formatTableName(sourceTableName);
+        
         return `
-            INSERT INTO "${context.targetDatabaseName}"."${this.tableName}" (registry, pkg_name, tag_name, top_hash)
+            INSERT INTO ${targetTable} (registry, pkg_name, tag_name, top_hash)
             SELECT DISTINCT
               ${selectClause}
-            FROM "${context.sourceDatabaseName}"."${sourceTableName}" s
-            LEFT JOIN "${context.targetDatabaseName}"."${this.tableName}" t
+            FROM ${sourceTable} s
+            LEFT JOIN ${targetTable} t
               ON s.pkg_name = t.pkg_name
               AND s.timestamp = t.tag_name
               AND t.registry = '${context.registryName}'

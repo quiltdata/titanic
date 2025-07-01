@@ -6,7 +6,7 @@ Automatically merges multiple AWS Glue tables into a single queryable table whil
 
 The system supports two table formats controlled by the `USE_S3_TABLE` environment variable:
 
-- **Iceberg Tables** (`USE_S3_TABLE=false`, default): Uses Apache Iceberg format for ACID transactions and schema evolution
+- **Glue Tables** (`USE_S3_TABLE=false`, default): Uses Glue catalog for ACID transactions and schema evolution
 - **S3 Tables** (`USE_S3_TABLE=true`): Uses AWS S3 Tables service with built-in partitioning and optimization
 
 ## Table Structure
@@ -17,117 +17,6 @@ The system creates and manages these tables based on the normalized schema:
 - **Package Revisions** (`package_revision`): Specific versions of logical packages
 - **Package Tags** (`package_tag`): Named versions (like `latest`) pointing to revisions
 - **Package Entries** (`package_entry`): Individual files within package revisions
-
-### Package Revision Schema
-
-```sql
-CREATE TABLE package_revision (
-    registry STRING,         -- Source bucket/registry
-    pkg_name STRING,         -- Package name
-    top_hash STRING,         -- Unique manifest identifier
-    timestamp TIMESTAMP,     -- When revision was created
-    message STRING,          -- Commit message
-    metadata STRING          -- User-defined package metadata
-)
-PARTITIONED BY (
-    registry,
-    bucket(8, pkg_name),
-    bucket(8, top_hash)
-);
-```
-
-### Package Tag Schema
-
-```sql
-CREATE TABLE package_tag (
-    registry STRING,         -- Source bucket/registry
-    pkg_name STRING,         -- Package name
-    tag_name STRING,         -- Tag name (e.g., 'latest')
-    top_hash STRING          -- Points to specific revision
-)
-PARTITIONED BY (
-    registry,
-    tag_name,
-    bucket(8, pkg_name)
-);
-```
-
-### Package Entry Schema
-
-```sql
-CREATE TABLE package_entry (
-    registry STRING,         -- Source bucket/registry
-    top_hash STRING,         -- Manifest this entry belongs to
-    logical_key STRING,      -- Logical file name in package
-    physical_key STRING,     -- Physical storage key
-    multihash STRING,        -- Content hash in multihash format
-    size BIGINT,            -- Object size in bytes
-    metadata STRING          -- User-defined object metadata
-)
-PARTITIONED BY (
-    registry,
-    bucket(64, physical_key)
-);
-```
-
-### Example Queries
-
-Query package revisions:
-
-```sql
--- Get latest package revisions by timestamp
-SELECT DISTINCT pkg_name, top_hash, timestamp 
-FROM package_revision
-WHERE registry = 'quilt-bake'
-ORDER BY timestamp DESC
-LIMIT 10;
-
--- Find packages from a specific registry
-SELECT * FROM package_revision 
-WHERE registry = 'my-bucket'
-LIMIT 10;
-
--- Time travel query (point-in-time view)
-SELECT * FROM package_revision 
-FOR SYSTEM_TIME AS OF TIMESTAMP '2025-04-14 12:00:00'
-WHERE pkg_name = 'my-package' AND registry = 'quilt-bake';
-```
-
-Query using tags and entries:
-
-```sql
--- Get entries for the latest version of a package
-SELECT e.size, e.logical_key, e.physical_key, e.registry, e.multihash
-FROM package_entry e
-JOIN package_tag t
-  ON e.top_hash = t.top_hash
-  AND e.registry = t.registry
-WHERE t.pkg_name = 'ernest/test_large'
-  AND t.registry = 'quilt-bake'
-  AND t.tag_name = 'latest'
-ORDER BY e.size ASC;
-
--- Join revisions and entries for a specific package
-SELECT r.pkg_name, r.message, e.logical_key, e.size
-FROM package_revision r
-JOIN package_entry e ON r.top_hash = e.top_hash AND r.registry = e.registry
-WHERE r.pkg_name = 'my-package' AND r.registry = 'quilt-bake'
-LIMIT 10;
-
--- Get total size of entries per package revision
-SELECT 
-  r.pkg_name,
-  r.top_hash,
-  r.timestamp,
-  COUNT(*) as num_entries,
-  SUM(e.size) as total_bytes
-FROM package_revision r
-JOIN package_entry e ON r.top_hash = e.top_hash AND r.registry = e.registry
-WHERE r.registry = 'quilt-bake'
-GROUP BY r.pkg_name, r.top_hash, r.timestamp
-ORDER BY total_bytes DESC
-LIMIT 10;
-```
 
 ## Schema Design
 
@@ -174,12 +63,12 @@ CDK_DEFAULT_ACCOUNT=your-account-id
 CDK_DEFAULT_REGION=$AWS_DEFAULT_REGION
 
 # Table Format Selection
-USE_S3_TABLE=false  # false = Iceberg (default), true = S3 Tables
+USE_S3_TABLE=false  # false = Glue (default), true = S3 Tables
 
 # Project Configuration
 QUEUE_NAME=YourQueueName
-QUILT_CATALOG_DOMAIN=your-catalog-domain
-QUILT_DATABASE_NAME=your-database-name
+QUILT_CATALOG_DOMAIN=your-stacks-catalog-dns
+QUILT_DATABASE_NAME=your-stacks-glue-database-name
 QUILT_READ_POLICY_ARN=arn:aws:iam::your-account-id:policy/your-policy-name
 ```
 
@@ -191,9 +80,9 @@ source .env
 
 ### Table Mode Selection
 
-#### Iceberg Tables (Default)
+#### Glue Tables (Default)
 - **Best for**: ACID transactions, schema evolution, time travel queries
-- **Format**: Apache Iceberg with Parquet storage
+- **Format**: Glue catalog with Parquet storage
 - **Benefits**: Full transactional support, efficient query performance
 - **Setup**: `USE_S3_TABLE=false` (default)
 
@@ -226,7 +115,7 @@ npm install
 1. Set environment variables:
 
 ```bash
-export QUILT_DATABASE_NAME=your_database_name  # For Iceberg tables (Default: userathenadatabase)
+export QUILT_DATABASE_NAME=your_database_name  # For Glue tables (Default: userathenadatabase)
 export CDK_DEFAULT_ACCOUNT=your_aws_account_id  # S3 Tables use hardcoded "quilt_titanic" database
 export CDK_DEFAULT_REGION=your_aws_region
 ```
@@ -248,18 +137,8 @@ npm run event:all
 # Process specific bucket (quilt-bake)
 npm run event:bake
 
-# Process test/staff bucket 
+# Process test/staff bucket (will error)
 npm run event:staff
-```
-
-Or send direct SQS messages:
-
-```bash
-# Process all buckets
-aws sqs send-message --queue-url $QUEUE_URL --message-body '{}'
-
-# Process specific bucket
-aws sqs send-message --queue-url $QUEUE_URL --message-body '{"bucket": "quilt-bake"}'
 ```
 
 ## Error Handling
@@ -302,7 +181,6 @@ For detailed development information, see [doc/DEVELOP.md](doc/DEVELOP.md).
 ### Reference Files
 - [doc/schema.sql](doc/schema.sql) - Complete SQL schema definitions for both table formats
 - [doc/schema.md](doc/schema.md) - Schema design motivation and decisions
-- [doc/CONTEXT_MANAGEMENT_REVIEW.md](doc/CONTEXT_MANAGEMENT_REVIEW.md) - Context flow improvements analysis
 
 ### Quick Commands
 

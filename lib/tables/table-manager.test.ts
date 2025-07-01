@@ -3,6 +3,7 @@ import { TableManager } from "./table-manager";
 import { PackageRevisionTable } from "./package-revision";
 import { PackageTagTable } from "./package-tag";
 import { PackageEntryTable } from "./package-entry";
+import { Config } from "../shared/config";
 
 // Mock all table classes
 jest.mock("./package-revision");
@@ -15,15 +16,20 @@ const MockedPackageEntryTable = jest.mocked(PackageEntryTable);
 
 describe("TableManager", () => {
     let tableManager: TableManager;
+    let mockConfig: Config;
 
     beforeEach(() => {
         jest.clearAllMocks();
-        tableManager = new TableManager("test-db", "target-db", "test-bucket", false);
+        mockConfig = Config.createTestInstance({
+            glueDatabaseName: "test-db",
+            glueTablesBucket: "test-bucket"
+        });
+        tableManager = new TableManager(mockConfig, "test-db", "target-db", "test-bucket");
     });
 
     describe("ensureTablesExist", () => {
         it("should create revision and tag tables when packages view exists", async () => {
-            const tableManager = new TableManager("test-db", "target-db", "test-bucket", false);
+            const tableManager = new TableManager(mockConfig, "test-db", "target-db", "test-bucket");
             const sourceTables: Table[] = [
                 { Name: "test_packages-view" }
             ];
@@ -37,22 +43,18 @@ describe("TableManager", () => {
             expect(result.successfulTables).toBe(2);
             expect(result.failedTables).toBe(0);
             expect(MockedPackageRevisionTable.ensureExists).toHaveBeenCalledWith(
-                "target-db", 
-                "test-bucket", 
-                "test_packages-view", 
-                false
+                mockConfig, 
+                "test_packages-view"
             );
             expect(MockedPackageTagTable.ensureExists).toHaveBeenCalledWith(
-                "target-db", 
-                "test-bucket", 
-                "test_packages-view", 
-                false
+                mockConfig, 
+                "test_packages-view"
             );
             expect(MockedPackageEntryTable.ensureExists).not.toHaveBeenCalled();
         });
 
         it("should configure S3 Tables mode when useS3Table=true", async () => {
-            const s3TableManager = new TableManager("test-db", "target-db", "test-bucket", true);
+            const s3TableManager = new TableManager(mockConfig, "test-db", "target-db", "test-bucket");
             const sourceTables: Table[] = [
                 { Name: "test_packages-view" }
             ];
@@ -66,16 +68,12 @@ describe("TableManager", () => {
             expect(result.successfulTables).toBe(2);
             expect(result.failedTables).toBe(0);
             expect(MockedPackageRevisionTable.ensureExists).toHaveBeenCalledWith(
-                "target-db", 
-                "test-bucket", 
-                "test_packages-view",
-                true
+                mockConfig, 
+                "test_packages-view"
             );
             expect(MockedPackageTagTable.ensureExists).toHaveBeenCalledWith(
-                "target-db", 
-                "test-bucket", 
-                "test_packages-view",
-                true
+                mockConfig, 
+                "test_packages-view"
             );
         });
 
@@ -93,10 +91,8 @@ describe("TableManager", () => {
             expect(result.successfulTables).toBe(1);
             expect(result.failedTables).toBe(0);
             expect(MockedPackageEntryTable.ensureExists).toHaveBeenCalledWith(
-                "target-db", 
-                "test-bucket", 
-                "test_objects-view", 
-                false
+                mockConfig, 
+                "test_objects-view"
             );
         });
 
@@ -117,23 +113,14 @@ describe("TableManager", () => {
     });
 });
 
-MockedPackageRevisionTable.ensureExists.mockImplementation((sourceDatabaseName, targetDatabaseName, sourceView, useS3Table) => {
-    if (typeof useS3Table !== "boolean") {
-        throw new Error(`Invalid useS3Table argument: ${useS3Table}`);
-    }
+MockedPackageRevisionTable.ensureExists.mockImplementation((config, sourceView) => {
     return Promise.resolve();
 });
 
-MockedPackageTagTable.ensureExists.mockImplementation((sourceDatabaseName, targetDatabaseName, sourceView, useS3Table) => {
-    if (typeof useS3Table !== "boolean") {
-        throw new Error(`Invalid useS3Table argument: ${useS3Table}`);
-    }
+MockedPackageTagTable.ensureExists.mockImplementation((config, sourceView) => {
     return Promise.resolve();
 });
 
-MockedPackageEntryTable.ensureExists.mockImplementation((sourceDatabaseName, targetDatabaseName, sourceView, useS3Table) => {
-    if (typeof useS3Table !== "boolean") {
-        throw new Error(`Invalid useS3Table argument: ${useS3Table}`);
-    }
+MockedPackageEntryTable.ensureExists.mockImplementation((config, sourceView) => {
     return Promise.resolve();
 });

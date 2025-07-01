@@ -6,9 +6,8 @@ export class PackageEntryTable extends BaseTable {
         return "package_entry";
     }
 
-    protected getCreateTableSchema(databaseName: string): string {
+    protected getCreateTableSchema(): string {
         return `
-            CREATE TABLE "${databaseName}"."${this.tableName}" (
               registry     STRING,    
               top_hash     STRING,
               logical_key  STRING,    
@@ -16,7 +15,6 @@ export class PackageEntryTable extends BaseTable {
               multihash   STRING,    
               size         BIGINT,    
               metadata    STRING        
-            )
         `;
     }
 
@@ -52,12 +50,16 @@ export class PackageEntryTable extends BaseTable {
     protected generateInsertQuery(context: TableContext, sourceTableName: string): string {
         const selectClause = this.generateSelectClause(context.registryName, 's');
         
+        // Use config to format table names properly
+        const targetTable = this.config.formatTableName(this.tableName, true);
+        const sourceTable = this.config.formatTableName(sourceTableName);
+        
         return `
-            INSERT INTO "${context.targetDatabaseName}"."${this.tableName}" (registry, top_hash, logical_key, physical_key, multihash, size, metadata)
+            INSERT INTO ${targetTable} (registry, top_hash, logical_key, physical_key, multihash, size, metadata)
             SELECT DISTINCT
               ${selectClause}
-            FROM "${context.sourceDatabaseName}"."${sourceTableName}" s
-            LEFT JOIN "${context.targetDatabaseName}"."${this.tableName}" t
+            FROM ${sourceTable} s
+            LEFT JOIN ${targetTable} t
               ON s.logical_key = t.logical_key
               AND s.meta = t.metadata
               AND s.top_hash = t.top_hash

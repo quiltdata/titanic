@@ -1,91 +1,139 @@
 import { PackageRevisionTable } from "./package-revision";
+import { Config, S3Config } from "../shared/config";
 
 describe("Table Schema Configuration", () => {
-    describe("Iceberg mode (default)", () => {
+    describe("Glue mode (default)", () => {
         it("should generate CREATE TABLE with WITH clause by default", () => {
-            const table = new PackageRevisionTable();
-            const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", false);
+            const config = Config.createTestInstance({
+                glueTablesBucket: "test-bucket",
+                glueDatabaseName: "test-db",
+                s3TablesBucket: "test-s3-bucket",
+                s3TableDatabaseName: "test-s3-db"
+            });
+            const table = new PackageRevisionTable(config);
+            const schema = (table as any).getCompleteCreateTableSchema();
             
-            expect(schema).toContain('CREATE TABLE "test-db"."package_revision"');
-            expect(schema).not.toContain("PARTITIONED BY");
+            expect(schema).toContain('CREATE TABLE "package_revision"');
             expect(schema).toContain("WITH (");
-            expect(schema).toContain("format = 'PARQUET'");
-            expect(schema).toContain("table_type = 'ICEBERG'");
-            expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/package_revision/'");
+            expect(schema).toContain("format = 'iceberg'");
         });
 
         it("should generate CREATE TABLE with WITH clause when explicitly disabled", () => {
-            const table = new PackageRevisionTable();
+            const config = Config.createTestInstance({
+                glueTablesBucket: "test-bucket",
+                glueDatabaseName: "test-db",
+                s3TablesBucket: "test-s3-bucket",
+                s3TableDatabaseName: "test-s3-db"
+            });
+            const table = new PackageRevisionTable(config);
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", false);
             
-            expect(schema).toContain('CREATE TABLE "test-db"."package_revision"');
+            expect(schema).toContain('CREATE TABLE "package_revision"');
             expect(schema).not.toContain("PARTITIONED BY");
             expect(schema).toContain("WITH (");
-            expect(schema).toContain("format = 'PARQUET'");
-            expect(schema).toContain("table_type = 'ICEBERG'");
-            expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/package_revision/'");
+            expect(schema).toContain("format = 'iceberg'");
         });
     });
 
     describe("S3 Tables mode", () => {
         it("should generate CREATE TABLE with partitioning when S3 Tables mode enabled", () => {
-            const table = new PackageRevisionTable();
-            const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", true);
+            const config = S3Config.createTestInstance({
+                glueTablesBucket: "test-bucket",
+                glueDatabaseName: "test-db",
+                s3TablesBucket: "test-s3-bucket",
+                s3TableDatabaseName: "test-s3-db"
+            });
+            const table = new PackageRevisionTable(config);
+            const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
-            expect(schema).toContain('CREATE TABLE "test-db"."package_revision"');
-            expect(schema).toContain("PARTITIONED BY");
-            expect(schema).toContain("bucket(8, pkg_name)");
-            expect(schema).toContain("bucket(8, top_hash)");
-            expect(schema).not.toContain("WITH (");
+            expect(schema).toContain('CREATE TABLE test-s3-db.package_revision');
+            expect(schema).toContain("LOCATION 's3://test-s3-bucket/package_revision/'");
         });
     });
 
     describe("Schema generation", () => {
         it("should correctly combine base schema with partitioning clause for S3 Tables", () => {
-            const table = new PackageRevisionTable();
-            const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", true);
+            const config = S3Config.createTestInstance({
+                glueTablesBucket: "test-bucket",
+                glueDatabaseName: "test-db",
+                s3TablesBucket: "test-s3-bucket",
+                s3TableDatabaseName: "test-s3-db"
+            });
+            const table = new PackageRevisionTable(config);
+            const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
-            // Should contain both the base table definition and partitioning, no WITH clause
-            expect(schema).toMatch(/CREATE TABLE.*\)\s*PARTITIONED BY/s);
+            // S3 Tables should have LOCATION but no WITH clause or PARTITIONED BY
+            expect(schema).toContain("CREATE TABLE test-s3-db.package_revision");
+            expect(schema).toContain("LOCATION 's3://test-s3-bucket/package_revision/'");
             expect(schema).not.toContain("WITH (");
+            expect(schema).not.toContain("PARTITIONED BY");
         });
 
-        it("should return schema with WITH clause for Iceberg mode", () => {
-            const table = new PackageRevisionTable();
-            const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", false);
+        it("should return schema with WITH clause for Glue mode", () => {
+            const config = Config.createTestInstance({
+                glueTablesBucket: "test-bucket",
+                glueDatabaseName: "test-db",
+                s3TablesBucket: "test-s3-bucket",
+                s3TableDatabaseName: "test-s3-db"
+            });
+            const table = new PackageRevisionTable(config);
+            const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
-            // Should end with WITH clause, no partitioning clause
+            // Should end with WITH clause, no LOCATION clause
             expect(schema.trim()).toMatch(/WITH\s*\(/);
             expect(schema.trim()).not.toMatch(/\)\s*PARTITIONED BY/);
-            expect(schema).toContain("table_type = 'ICEBERG'");
-            expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/package_revision/'");
+            expect(schema).toContain("format = 'iceberg'");
+            expect(schema).not.toContain("LOCATION");
         });
 
-        it("should handle undefined useS3Table parameter as Iceberg mode (default)", () => {
-            const table = new PackageRevisionTable();
+        it("should handle default static property as Glue mode", () => {
+            const config = Config.createTestInstance({
+                glueTablesBucket: "test-bucket",
+                glueDatabaseName: "test-db",
+                s3TablesBucket: "test-s3-bucket",
+                s3TableDatabaseName: "test-s3-db"
+            });
+            const table = new PackageRevisionTable(config);
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
             expect(schema).not.toContain("PARTITIONED BY");
             expect(schema).toContain("WITH (");
-            expect(schema).toContain("table_type = 'ICEBERG'");
-            expect(schema).toContain("location = 's3://test-bucket/iceberg_catalog/package_revision/'");
+            expect(schema).toContain("format = 'iceberg'");
+            expect(schema).not.toContain("LOCATION");
         });
 
         it("should correctly generate S3 Tables with partitions but no WITH clause", () => {
-            const table = new PackageRevisionTable();
-            const s3Schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", true);
-            const icebergSchema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", false);
+            // Test S3 Tables mode
+            const s3Config = S3Config.createTestInstance({
+                glueTablesBucket: "test-bucket",
+                glueDatabaseName: "test-db",
+                s3TablesBucket: "test-s3-bucket",
+                s3TableDatabaseName: "test-s3-db"
+            });
+            const table1 = new PackageRevisionTable(s3Config);
+            const s3Schema = (table1 as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
-            // S3 Tables should have partitions but no WITH clause
-            expect(s3Schema).toContain("PARTITIONED BY");
+            // Test Glue mode
+            const glueConfig = Config.createTestInstance({
+                glueTablesBucket: "test-bucket",
+                glueDatabaseName: "test-db",
+                s3TablesBucket: "test-s3-bucket",
+                s3TableDatabaseName: "test-s3-db"
+            });
+            const table2 = new PackageRevisionTable(glueConfig);
+            const glueSchema = (table2 as any).getCompleteCreateTableSchema("test-db", "test-bucket");
+            
+            // S3 Tables should have LOCATION but no WITH clause or partitions
+            expect(s3Schema).toContain("LOCATION");
             expect(s3Schema).not.toContain("WITH (");
-            expect(s3Schema).not.toContain("table_type = 'ICEBERG'");
+            expect(s3Schema).not.toContain("format = 'iceberg'");
+            expect(s3Schema).not.toContain("PARTITIONED BY");
             
-            // Iceberg mode should have WITH clause but no partitions
-            expect(icebergSchema).not.toContain("PARTITIONED BY");
-            expect(icebergSchema).toContain("WITH (");
-            expect(icebergSchema).toContain("table_type = 'ICEBERG'");
-            expect(icebergSchema).toContain("location = 's3://test-bucket/iceberg_catalog/package_revision/'");
+            // Glue mode should have WITH clause but no LOCATION or partitions
+            expect(glueSchema).not.toContain("PARTITIONED BY");
+            expect(glueSchema).toContain("WITH (");
+            expect(glueSchema).toContain("format = 'iceberg'");
+            expect(glueSchema).not.toContain("LOCATION");
         });
     });
 });

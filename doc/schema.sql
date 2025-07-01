@@ -50,7 +50,7 @@ PARTITIONED BY (
   bucket(64, physical_key)
 );
 
--- Athena_Tables: Uses explicit CTAS
+-- Glue_Tables: Uses explicit CTAS
 
 CREATE TABLE package_revision
 WITH (

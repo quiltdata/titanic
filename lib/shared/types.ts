@@ -17,29 +17,16 @@ export type HandlerResponse = {
     totalQueries?: number;
 } | undefined;
 
-// Table context for operations
+// Table context for operations - simplified to contain only runtime data
+// Configuration data (databases, buckets) should come from Config instead
 export interface TableContext {
-    sourceDatabaseName: string;    // Database to read from (where views are)
-    targetDatabaseName: string;    // Database to write to (depends on USE_S3_TABLE)
-    targetBucket: string;
-    registryName: string;
-    useS3Table?: boolean;  // Runtime configuration: true = S3 table with partitions, false = Iceberg table with WITH clause
+    registryName: string;  // Runtime data extracted from source table name
 }
 
 // Factory function for creating table contexts
-export function createTableContext(
-    sourceDatabaseName: string,
-    targetDatabaseName: string,
-    targetBucket: string,
-    registryName: string,
-    useS3Table: boolean = false
-): TableContext {
+export function createTableContext(registryName: string): TableContext {
     return {
-        sourceDatabaseName,
-        targetDatabaseName,
-        targetBucket,
         registryName,
-        useS3Table,
     };
 }
 
@@ -62,15 +49,6 @@ export class TableContextValidator {
     static validateTableContext(context: Partial<TableContext>): ValidationResult {
         const errors: string[] = [];
 
-        if (!context.sourceDatabaseName) {
-            errors.push("sourceDatabaseName is required");
-        }
-        if (!context.targetDatabaseName) {
-            errors.push("targetDatabaseName is required");
-        }
-        if (!context.targetBucket) {
-            errors.push("targetBucket is required");
-        }
         if (!context.registryName) {
             errors.push("registryName is required");
         }
@@ -93,7 +71,7 @@ export class TableContextValidator {
 export interface EnvironmentConfig {
     DATABASE_NAME: string;
     TARGET_BUCKET: string;
-    USE_S3_TABLE?: string;  // "true" for S3 tables with partitions, "false" for Iceberg with WITH clause
+    USE_S3_TABLE?: string;  // "true" for S3 tables with partitions, "false" for Glue with WITH clause
     LAMBDA_TIMEOUT?: string;
     QUEUE_URL?: string;
     QUILT_READ_POLICY_ARN?: string;

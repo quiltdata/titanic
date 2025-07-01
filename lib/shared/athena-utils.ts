@@ -5,6 +5,7 @@ import {
     StartQueryExecutionCommand,
 } from "@aws-sdk/client-athena";
 import { GlueClient, GetTablesCommand, GetTablesCommandOutput } from "@aws-sdk/client-glue";
+import { Config } from './config';
 
 export const glueClient = new GlueClient({
     maxAttempts: 3,
@@ -50,10 +51,10 @@ export async function waitForQueryCompletion(
     }
 }
 
-export async function tableExists(databaseName: string, tableName: string): Promise<boolean> {
+export async function tableExists(config: Config, tableName: string): Promise<boolean> {
     const tablesResponse: GetTablesCommandOutput = await glueClient.send(
         new GetTablesCommand({
-            DatabaseName: databaseName,
+            DatabaseName: config.getReadDatabaseName(),
             Expression: tableName,
         })
     );
@@ -61,39 +62,20 @@ export async function tableExists(databaseName: string, tableName: string): Prom
 }
 
 export async function executeQuery(
-    query: string, 
-    targetBucket: string, 
-    databaseName?: string, 
-    useS3Table: boolean = false
+    query: string,
+    config: Config
 ): Promise<void> {
     console.log("Executing query:", query);
-    
+
     try {
-        // Always use the regular bucket for Athena results
-        const resultsBucket = process.env.ATHENA_RESULTS_BUCKET || process.env.TITANIC_BUCKET;
-        let queryExecutionContext: any = {};
-        
-        if (useS3Table) {
-            // For S3 Tables, extract bucket name from ARN for catalog
-            // ARN format: arn:aws:s3tables:region:account:bucket/bucket-name
-            const bucketName = targetBucket.includes('arn:aws:s3tables:') 
-                ? targetBucket.split('/').pop() 
-                : targetBucket;
-            
-            if (databaseName && bucketName) {
-                queryExecutionContext = {
-                    Catalog: `s3tablescatalog/${bucketName}`,
-                    Database: databaseName,
-                };
-            }
-        } else {
-            // For regular Iceberg tables
-            if (databaseName) {
-                queryExecutionContext = {
-                    Database: databaseName,
-                };
-            }
-        }
+        const resultsBucket = config.getResultsBucket();
+        const databaseName = config.useS3Table
+            ? config.getWriteDatabaseName()
+            : config.getReadDatabaseName();
+
+        const queryExecutionContext: any = {
+            Database: databaseName,
+        };
 
         const queryExecutionCommand: StartQueryExecutionCommand = new StartQueryExecutionCommand({
             QueryString: query,
@@ -114,26 +96,10 @@ export async function executeQuery(
         console.log("Query completed successfully");
     } catch (error) {
         const err = error as Error;
-        const isS3AccessError = err.message.toLowerCase().includes('access denied') ||
-                               err.message.toLowerCase().includes('accessdenied') ||
-                               err.message.toLowerCase().includes('no such bucket') ||
-                               err.message.toLowerCase().includes('forbidden') ||
-                               err.message.toLowerCase().includes('403');
-
         console.error("Query execution failed:", {
             error: err.message,
-            query: query.substring(0, 200) + (query.length > 200 ? '...' : ''),
-            targetBucket,
-            isS3AccessError,
+            query: query.substring(0, 200) + (query.length > 200 ? "..." : ""),
         });
-
-        if (isS3AccessError) {
-            console.error("S3 access error during query execution. This may indicate:");
-            console.error("- Missing permissions to read from source buckets");
-            console.error("- Missing permissions to write to target bucket");
-            console.error("- Non-existent buckets referenced in the query");
-        }
-
         throw err;
     }
 }
@@ -142,10 +108,8 @@ export async function executeQuery(
  * Enhanced query execution with retry logic
  */
 export async function executeQueryWithRetry(
-    query: string, 
-    targetBucket: string,
-    databaseName?: string,
-    useS3Table: boolean = false,
+    query: string,
+    config: Config,
     maxRetries: number = 3,
     retryDelay: number = 1000
 ): Promise<void> {
@@ -153,7 +117,7 @@ export async function executeQueryWithRetry(
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            await executeQuery(query, targetBucket, databaseName, useS3Table);
+            await executeQuery(query, config);
             return; // Success, exit retry loop
         } catch (error) {
             lastError = error as Error;
@@ -207,20 +171,23 @@ export const sourceBucketFromTableName = (name: string) => name.replace(/_(objec
 /**
  * Drop all Titanic tables function
  */
-export async function dropAllTitanicTables(databaseName: string, targetBucket: string, useS3Table: boolean = false): Promise<void> {
+export async function dropAllTitanicTables(config: Config): Promise<void> {
     const tables = ['package_revision', 'package_tag', 'package_entry'];
     console.log('Dropping all Titanic tables for clean deployment...');
     
     for (const tableName of tables) {
         try {
-            const query = `DROP TABLE IF EXISTS ${databaseName}.${tableName}`;
+            const query = config.dropTableQuery(tableName);
             console.log(`Dropping table: ${query}`);
-            await executeQuery(query, targetBucket, databaseName, useS3Table);
+            await executeQuery(query, config);
             console.log(`Successfully dropped table ${tableName}`);
         } catch (error) {
             const err = error as Error;
             console.log(`Note: Could not drop table ${tableName} (may not exist):`, err.message);
-            // Continue - table might not exist yet
         }
     }
+
+    await config.createEmptyTables();
 }
+
+
