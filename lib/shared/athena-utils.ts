@@ -110,13 +110,27 @@ export class AthenaUtils {
      */
     async dropAllTitanicTables(): Promise<void> {
         const tables = ['package_revision', 'package_tag', 'package_entry'];
-        
-        for (const tableName of tables) {
+        await this.dropTablesIfExist(tables);
+    }
+
+    /**
+     * Drop specified tables if they exist
+     * This method provides better separation of concerns for table cleanup
+     */
+    async dropTablesIfExist(tableNames: string[]): Promise<void> {
+        for (const tableName of tableNames) {
             try {
-                await this.executeQuery(this.config.dropTableQuery(tableName));
+                const exists = await this.tableExists(tableName);
+                if (exists) {
+                    console.log(`Dropping existing table: ${tableName}`);
+                    await this.executeQuery(this.config.dropTableQuery(tableName));
+                    console.log(`✅ Successfully dropped table: ${tableName}`);
+                } else {
+                    console.log(`⏭️ Table ${tableName} does not exist, skipping drop`);
+                }
             } catch (error) {
-                // Ignore errors - table might not exist
-                console.log(`Could not drop table ${tableName} (may not exist)`);
+                // Log error but don't fail the entire operation
+                console.error(`❌ Failed to drop table ${tableName}:`, (error as Error).message);
             }
         }
     }

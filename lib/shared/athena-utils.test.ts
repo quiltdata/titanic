@@ -188,7 +188,16 @@ describe("AthenaUtils", () => {
     });
 
     describe("dropAllTitanicTables", () => {
-        it("should drop all tables", async () => {
+        it("should drop all tables when they exist", async () => {
+            // Mock tableExists to return true for all tables
+            glueMock.on(GetTablesCommand).resolves({
+                TableList: [
+                    { Name: "package_revision" },
+                    { Name: "package_tag" },
+                    { Name: "package_entry" }
+                ]
+            });
+            
             athenaMock.on(StartQueryExecutionCommand).resolves({
                 QueryExecutionId: "test-execution-id"
             });
@@ -200,12 +209,28 @@ describe("AthenaUtils", () => {
 
             await expect(athenaUtils.dropAllTitanicTables()).resolves.toBeUndefined();
             
-            // Should call executeQuery for each table
+            // Should call executeQuery for each table that exists
             expect(athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(3);
         });
 
+        it("should skip dropping tables when they don't exist", async () => {
+            // Mock tableExists to return false for all tables
+            glueMock.on(GetTablesCommand).resolves({
+                TableList: []
+            });
+
+            await expect(athenaUtils.dropAllTitanicTables()).resolves.toBeUndefined();
+            
+            // Should not call any DROP commands since tables don't exist
+            expect(athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(0);
+        });
+
         it("should handle errors when dropping tables", async () => {
-            athenaMock.on(StartQueryExecutionCommand).rejects(new Error("Table does not exist"));
+            // Mock tableExists to return true, but then fail on drop
+            glueMock.on(GetTablesCommand).resolves({
+                TableList: [{ Name: "package_revision" }]
+            });
+            athenaMock.on(StartQueryExecutionCommand).rejects(new Error("Drop failed"));
 
             // Should not throw error, just log it
             await expect(athenaUtils.dropAllTitanicTables()).resolves.toBeUndefined();

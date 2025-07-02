@@ -28,6 +28,8 @@ export abstract class BaseTable {
 
     /**
      * Ensure table exists using appropriate strategy based on config type
+     * This method is focused solely on table creation and is independent of table dropping.
+     * 
      * S3Config: CREATE empty table with partitions immediately
      * Config (Glue): Skip creation (will be created lazily before first INSERT)
      */

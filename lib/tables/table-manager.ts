@@ -19,6 +19,22 @@ export class TableManager {
         this.athenaUtils = new AthenaUtils(config);
     }
 
+    /**
+     * Drop tables if they exist - separate from table creation logic
+     * This should only be called when explicitly needed (e.g., during deployments)
+     * and is completely independent of the ensureTablesExist() method.
+     */
+    async dropTablesIfExist(): Promise<void> {
+        console.log("Dropping Titanic tables if they exist...");
+        await this.athenaUtils.dropTablesIfExist(['package_revision', 'package_tag', 'package_entry']);
+    }
+
+    /**
+     * Ensure tables exist based on source tables found
+     * This method always runs when needed, regardless of whether tables were dropped or not.
+     * It creates empty tables for S3 Tables mode, or prepares for lazy creation in Glue mode.
+     */
+
     async ensureTablesExist(sourceTables: Table[]): Promise<{ successfulTables: number; failedTables: number; totalTables: number }> {
         // Find representative views for each table type
         const packagesView = sourceTables.find(t => t.Name?.includes('packages-view'))?.Name;

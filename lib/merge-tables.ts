@@ -37,20 +37,23 @@ export async function handler(
     const targetBucket = config.getTablesBucket();
 
     try {
-        // Check if this is first run after deployment and set in config
-        const isFirstRun = !fs.existsSync(SENTINEL_FILE);
-        if (isFirstRun) {
-            console.log('First run after deployment detected, dropping existing tables...');
-            await athenaUtils.dropAllTitanicTables();
-            // Create sentinel file to mark tables as initialized
-            fs.writeFileSync(SENTINEL_FILE, new Date().toISOString());
-            console.log('Created sentinel file, tables will not be dropped on subsequent runs');
-        }
-
         // Extract details from EventBridge event
         console.log("EventBridge event:", JSON.stringify(event, null, 2));
         const { bucket, handle, topHash } = event.detail;
         console.log("Event details:", { bucket, handle, topHash });
+
+        // Initialize table manager early so we can reuse it
+        const tableManager = new TableManager(config, glueDatabaseName, targetDatabaseName, targetBucket);
+
+        // Check if this is first run after deployment - handle table dropping separately
+        const isFirstRun = !fs.existsSync(SENTINEL_FILE);
+        if (isFirstRun) {
+            console.log('First run after deployment detected, dropping existing tables if they exist...');
+            await tableManager.dropTablesIfExist();
+            // Create sentinel file to mark tables as initialized
+            fs.writeFileSync(SENTINEL_FILE, new Date().toISOString());
+            console.log('Created sentinel file, tables will not be dropped on subsequent runs');
+        }
 
         // Get all tables in the database
         console.log("Fetching tables from Glue database:", glueDatabaseName);
@@ -77,10 +80,7 @@ export async function handler(
 
         console.log("Source tables found:", sourceTables.map((t) => t.Name));
 
-        // Initialize table manager
-        const tableManager = new TableManager(config, glueDatabaseName, targetDatabaseName, targetBucket);
-
-        // Ensure all required tables exist
+        // Always ensure all required tables exist (independent of first run)
         try {
             const { successfulTables, failedTables, totalTables } = await tableManager.ensureTablesExist(sourceTables);
             console.log(`Ensured tables exist: ${successfulTables} successful, ${failedTables} failed out of ${totalTables}`);
