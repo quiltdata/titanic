@@ -25,8 +25,8 @@ export class TableManager {
      * and is completely independent of the ensureTablesExist() method.
      */
     async dropTablesIfExist(): Promise<void> {
-        console.log("Dropping Titanic tables if they exist...");
-        await this.athenaUtils.dropTablesIfExist(['package_revision', 'package_tag', 'package_entry']);
+        console.log(`🗑️ Dropping Titanic tables if they exist in target database: ${this.targetDatabaseName}`);
+        await this.athenaUtils.dropAllTitanicTables(this.targetDatabaseName);
     }
 
     /**
@@ -36,9 +36,17 @@ export class TableManager {
      */
 
     async ensureTablesExist(sourceTables: Table[]): Promise<{ successfulTables: number; failedTables: number; totalTables: number }> {
+        console.log(`📋 Ensuring tables exist in target database: ${this.targetDatabaseName}`);
+        console.log(`📋 Config type: ${this.config.constructor.name}, Target bucket: ${this.targetBucket}`);
+        
         // Find representative views for each table type
         const packagesView = sourceTables.find(t => t.Name?.includes('packages-view'))?.Name;
         const entriesView = sourceTables.find(t => t.Name?.includes('objects-view'))?.Name;
+
+        console.log(`📋 Found source views:`, {
+            packagesView: packagesView || 'NOT FOUND',
+            entriesView: entriesView || 'NOT FOUND'
+        });
 
         let successfulTables = 0;
         let failedTables = 0;
@@ -47,38 +55,64 @@ export class TableManager {
         // Create tables if needed
         if (packagesView) {
             totalTables += 2; // package_revision and package_tag
+            console.log(`📋 Processing package tables from view: ${packagesView}`);
+            
+            // Check if package_revision exists
             try {
+                const revisionExists = await this.athenaUtils.tableExists('package_revision', this.targetDatabaseName);
+                console.log(`📋 package_revision table ${revisionExists ? 'EXISTS' : 'NEEDS TO BE CREATED'}`);
+                
                 await PackageRevisionTable.ensureExists(this.config, packagesView);
                 successfulTables++;
-                await PackageTagTable.ensureExists(this.config, packagesView);
-                successfulTables++;
+                console.log(`✅ package_revision table ensured (${revisionExists ? 'existed' : 'created'})`);
             } catch (error) {
                 const err = error as Error;
-                failedTables = totalTables - successfulTables;
-                console.error(`Failed to ensure package tables exist for view ${packagesView}:`, {
+                failedTables++;
+                console.error(`❌ Failed to ensure package_revision table exists for view ${packagesView}:`, {
                     error: err.message,
                     stack: err.stack,
                 });
-                // Don't rethrow - continue with other tables
+            }
+
+            try {
+                const tagExists = await this.athenaUtils.tableExists('package_tag', this.targetDatabaseName);
+                console.log(`📋 package_tag table ${tagExists ? 'EXISTS' : 'NEEDS TO BE CREATED'}`);
+                
+                await PackageTagTable.ensureExists(this.config, packagesView);
+                successfulTables++;
+                console.log(`✅ package_tag table ensured (${tagExists ? 'existed' : 'created'})`);
+            } catch (error) {
+                const err = error as Error;
+                failedTables++;
+                console.error(`❌ Failed to ensure package_tag table exists for view ${packagesView}:`, {
+                    error: err.message,
+                    stack: err.stack,
+                });
             }
         }
 
         if (entriesView) {
             totalTables += 1; // package_entry
+            console.log(`📋 Processing entry table from view: ${entriesView}`);
+            
             try {
+                const entryExists = await this.athenaUtils.tableExists('package_entry', this.targetDatabaseName);
+                console.log(`📋 package_entry table ${entryExists ? 'EXISTS' : 'NEEDS TO BE CREATED'}`);
+                
                 await PackageEntryTable.ensureExists(this.config, entriesView);
                 successfulTables++;
+                console.log(`✅ package_entry table ensured (${entryExists ? 'existed' : 'created'})`);
             } catch (error) {
                 const err = error as Error;
                 failedTables++;
-                console.error(`Failed to ensure entry table exists for view ${entriesView}:`, {
+                console.error(`❌ Failed to ensure package_entry table exists for view ${entriesView}:`, {
                     error: err.message,
                     stack: err.stack,
                 });
-                // Don't rethrow - continue with other tables
             }
         }
 
+        console.log(`📋 Table existence summary: ${successfulTables} successful, ${failedTables} failed out of ${totalTables} total`);
         return { successfulTables, failedTables, totalTables };
     }
 

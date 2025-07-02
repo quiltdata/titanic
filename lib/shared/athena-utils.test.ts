@@ -46,6 +46,23 @@ describe("AthenaUtils", () => {
 
             const result = await athenaUtils.tableExists("package_revision");
             expect(result).toBe(true);
+            
+            // Verify it uses the default read database
+            const call = glueMock.commandCalls(GetTablesCommand)[0];
+            expect(call.args[0].input.DatabaseName).toBe("test_glue_db");
+        });
+
+        it("should return true when table exists with specified database", async () => {
+            glueMock.on(GetTablesCommand).resolves({
+                TableList: [{ Name: "package_revision" }]
+            });
+
+            const result = await athenaUtils.tableExists("package_revision", "custom_db");
+            expect(result).toBe(true);
+            
+            // Verify it uses the specified database
+            const call = glueMock.commandCalls(GetTablesCommand)[0];
+            expect(call.args[0].input.DatabaseName).toBe("custom_db");
         });
 
         it("should return false when table does not exist", async () => {
@@ -188,7 +205,7 @@ describe("AthenaUtils", () => {
     });
 
     describe("dropAllTitanicTables", () => {
-        it("should drop all tables when they exist", async () => {
+        it("should drop all tables when they exist with correct database context", async () => {
             // Mock tableExists to return true for all tables
             glueMock.on(GetTablesCommand).resolves({
                 TableList: [
@@ -207,10 +224,45 @@ describe("AthenaUtils", () => {
                 }
             });
 
+            await expect(athenaUtils.dropAllTitanicTables("target_db")).resolves.toBeUndefined();
+            
+            // Should call executeQuery for each table that exists with qualified names
+            expect(athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(3);
+            
+            // Verify the queries use fully qualified table names with target database
+            const calls = athenaMock.commandCalls(StartQueryExecutionCommand);
+            expect(calls[0].args[0].input.QueryString).toBe("DROP TABLE IF EXISTS target_db.package_revision");
+            expect(calls[1].args[0].input.QueryString).toBe("DROP TABLE IF EXISTS target_db.package_tag");
+            expect(calls[2].args[0].input.QueryString).toBe("DROP TABLE IF EXISTS target_db.package_entry");
+            
+            // Verify tableExists was called with the target database
+            const glueCalls = glueMock.commandCalls(GetTablesCommand);
+            expect(glueCalls[0].args[0].input.DatabaseName).toBe("target_db");
+        });
+
+        it("should use write database when no database specified", async () => {
+            glueMock.on(GetTablesCommand).resolves({
+                TableList: [{ Name: "package_revision" }]
+            });
+            
+            athenaMock.on(StartQueryExecutionCommand).resolves({
+                QueryExecutionId: "test-execution-id"
+            });
+            athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED }
+                }
+            });
+
             await expect(athenaUtils.dropAllTitanicTables()).resolves.toBeUndefined();
             
-            // Should call executeQuery for each table that exists
-            expect(athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(3);
+            // Verify the default write database is used
+            const glueCall = glueMock.commandCalls(GetTablesCommand)[0];
+            expect(glueCall.args[0].input.DatabaseName).toBe("test_glue_db"); // write database for config
+            
+            // Verify the query uses fully qualified table name with default database
+            const athenaCall = athenaMock.commandCalls(StartQueryExecutionCommand)[0];
+            expect(athenaCall.args[0].input.QueryString).toBe("DROP TABLE IF EXISTS test_glue_db.package_revision");
         });
 
         it("should skip dropping tables when they don't exist", async () => {
