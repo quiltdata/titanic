@@ -1,0 +1,12 @@
+import { PackageRevisionTable } from "./package-revision";
+import { createTableTestSuite } from "../shared/test-utils";
+
+describe("PackageRevisionTable", createTableTestSuite(
+    PackageRevisionTable,
+    "package_revision",
+    {
+        insertQueryContains: [
+            "s.timestamp != 'latest'"
+        ]
+    }
+));

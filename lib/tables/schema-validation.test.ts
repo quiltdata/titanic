@@ -191,7 +191,8 @@ describe('Schema Validation Tests', () => {
     describe('S3 Tables - INSERT Operations', () => {
         describe('package_revision S3 INSERT', () => {
             it('should generate INSERT SQL matching schema.sql patterns', () => {
-                const sql = PackageRevisionTable.generateInsertQuery(testContext, sourceTable, s3Config);
+                const table = new PackageRevisionTable(s3Config);
+                const sql = table.generateInsertQuery(testContext, sourceTable);
                 
                 expect(sql).toContain('INSERT INTO');
                 expect(sql).toContain('package_revision');
@@ -213,7 +214,8 @@ describe('Schema Validation Tests', () => {
 
         describe('package_tag S3 INSERT', () => {
             it('should generate INSERT SQL matching schema.sql patterns', () => {
-                const sql = PackageTagTable.generateInsertQuery(testContext, sourceTable, s3Config);
+                const table = new PackageTagTable(s3Config);
+                const sql = table.generateInsertQuery(testContext, sourceTable);
                 
                 expect(sql).toContain('INSERT INTO');
                 expect(sql).toContain('package_tag');
@@ -233,7 +235,8 @@ describe('Schema Validation Tests', () => {
 
         describe('package_entry S3 INSERT', () => {
             it('should generate INSERT SQL matching schema.sql patterns', () => {
-                const sql = PackageEntryTable.generateInsertQuery(testContext, sourceTable, s3Config);
+                const table = new PackageEntryTable(s3Config);
+                const sql = table.generateInsertQuery(testContext, sourceTable);
                 
                 expect(sql).toContain('INSERT INTO');
                 expect(sql).toContain('package_entry');
@@ -264,7 +267,8 @@ describe('Schema Validation Tests', () => {
     describe('Glue Tables - INSERT Operations', () => {
         describe('package_revision Glue INSERT', () => {
             it('should generate INSERT SQL matching schema.sql patterns', () => {
-                const sql = PackageRevisionTable.generateInsertQuery(testContext, sourceTable, glueConfig);
+                const table = new PackageRevisionTable(glueConfig);
+                const sql = table.generateInsertQuery(testContext, sourceTable);
                 
                 expect(sql).toContain('INSERT INTO');
                 expect(sql).toContain('package_revision');
@@ -286,7 +290,8 @@ describe('Schema Validation Tests', () => {
 
         describe('package_tag Glue INSERT', () => {
             it('should generate INSERT SQL matching schema.sql patterns', () => {
-                const sql = PackageTagTable.generateInsertQuery(testContext, sourceTable, glueConfig);
+                const table = new PackageTagTable(glueConfig);
+                const sql = table.generateInsertQuery(testContext, sourceTable);
                 
                 expect(sql).toContain('INSERT INTO');
                 expect(sql).toContain('package_tag');
@@ -306,7 +311,8 @@ describe('Schema Validation Tests', () => {
 
         describe('package_entry Glue INSERT', () => {
             it('should generate INSERT SQL matching schema.sql patterns', () => {
-                const sql = PackageEntryTable.generateInsertQuery(testContext, sourceTable, glueConfig);
+                const table = new PackageEntryTable(glueConfig);
+                const sql = table.generateInsertQuery(testContext, sourceTable);
                 
                 expect(sql).toContain('INSERT INTO');
                 expect(sql).toContain('package_entry');
@@ -390,7 +396,8 @@ describe('Schema Validation Tests', () => {
             const quiltContext = createTableContext('quilt-bake');
             const quiltSourceTable = '"AwsDataCatalog"."userathenadatabase-6fosfzznfasm"."quilt-bake_packages-view"';
             
-            const sql = PackageRevisionTable.generateInsertQuery(quiltContext, quiltSourceTable, glueConfig);
+            const table = new PackageRevisionTable(glueConfig);
+            const sql = table.generateInsertQuery(quiltContext, quiltSourceTable);
             
             expect(sql).toContain('INSERT INTO');
             expect(sql).toContain('package_revision');
@@ -400,21 +407,24 @@ describe('Schema Validation Tests', () => {
 
         it('should validate all tables support proper JOIN conditions for data integrity', () => {
             // package_revision: immutable - only insert new rows based on pkg_name + top_hash combination
-            const revisionSql = PackageRevisionTable.generateInsertQuery(testContext, sourceTable, glueConfig);
+            const revisionTable = new PackageRevisionTable(glueConfig);
+            const revisionSql = revisionTable.generateInsertQuery(testContext, sourceTable);
             expect(revisionSql).toContain('ON s.pkg_name = t.pkg_name');
             expect(revisionSql).toContain('AND s.top_hash = t.top_hash');
             expect(revisionSql).toContain('WHERE t.pkg_name IS NULL');
             expect(revisionSql).toContain("AND s.timestamp != 'latest'");
             
             // package_tag: mutable - insert or update based on tag/top_hash changes  
-            const tagSql = PackageTagTable.generateInsertQuery(testContext, sourceTable, glueConfig);
+            const tagTable = new PackageTagTable(glueConfig);
+            const tagSql = tagTable.generateInsertQuery(testContext, sourceTable);
             expect(tagSql).toContain('ON s.pkg_name = t.pkg_name');
             expect(tagSql).toContain('AND s.timestamp = t.tag_name');
             expect(tagSql).toContain("WHERE s.timestamp = 'latest'");
             expect(tagSql).toContain('AND (t.top_hash IS NULL OR s.top_hash != t.top_hash)');
             
             // package_entry: immutable - only insert new rows based on logical_key + metadata + top_hash combination
-            const entrySql = PackageEntryTable.generateInsertQuery(testContext, sourceTable, glueConfig);
+            const entryTable = new PackageEntryTable(glueConfig);
+            const entrySql = entryTable.generateInsertQuery(testContext, sourceTable);
             expect(entrySql).toContain('ON s.logical_key = t.logical_key');
             expect(entrySql).toContain('AND s.meta = t.metadata');
             expect(entrySql).toContain('AND s.top_hash = t.top_hash');

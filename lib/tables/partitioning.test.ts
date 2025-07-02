@@ -13,7 +13,7 @@ describe("Table Schema Configuration", () => {
             const table = new PackageRevisionTable(config);
             const schema = (table as any).getCompleteCreateTableSchema();
             
-            expect(schema).toContain('CREATE TABLE "package_revision"');
+            expect(schema).toContain('CREATE TABLE package_revision');
             expect(schema).toContain("WITH (");
             expect(schema).toContain("format = 'iceberg'");
         });
@@ -28,7 +28,7 @@ describe("Table Schema Configuration", () => {
             const table = new PackageRevisionTable(config);
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", false);
             
-            expect(schema).toContain('CREATE TABLE "package_revision"');
+            expect(schema).toContain('CREATE TABLE package_revision');
             expect(schema).not.toContain("PARTITIONED BY");
             expect(schema).toContain("WITH (");
             expect(schema).toContain("format = 'iceberg'");
@@ -46,7 +46,7 @@ describe("Table Schema Configuration", () => {
             const table = new PackageRevisionTable(config);
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
-            expect(schema).toContain('CREATE TABLE test-s3-db.package_revision');
+            expect(schema).toContain('CREATE TABLE package_revision');
             expect(schema).toContain("PARTITIONED BY");
             expect(schema).not.toContain("LOCATION");
         });
@@ -64,7 +64,7 @@ describe("Table Schema Configuration", () => {
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
             // S3 Tables should have PARTITIONED BY but no LOCATION or WITH clause
-            expect(schema).toContain("CREATE TABLE test-s3-db.package_revision");
+            expect(schema).toContain("CREATE TABLE package_revision");
             expect(schema).toContain("PARTITIONED BY");
             expect(schema).not.toContain("WITH (");
             expect(schema).not.toContain("LOCATION");

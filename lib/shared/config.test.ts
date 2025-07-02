@@ -65,7 +65,6 @@ describe('Config', () => {
     expect(config.getReadDatabaseName()).toBe('glue_db');
     expect(config.getWriteDatabaseName()).toBe('glue_db');
     expect(config.getTablesBucket()).toBe('');
-    expect(config.formatTableName('test_table')).toBe('"test_table"');
   });
 
   it('should return correct tables bucket for Glue config', () => {
@@ -100,8 +99,6 @@ describe('S3Config', () => {
     expect(config.getReadDatabaseName()).toBe('glue_db');
     expect(config.getWriteDatabaseName()).toBe('s3_db');
     expect(config.getTablesBucket()).toBe('s3-bucket');
-    expect(config.formatTableName('test_table', true)).toBe('s3_db.test_table');
-    expect(config.formatTableName('test_table', false)).toBe('glue_db.test_table');
   });
 
   it('should return correct S3 table catalog name', () => {
@@ -132,7 +129,7 @@ describe('S3Config', () => {
     });
 
     const createQuery = config.createTableQuery('test_table', 'id int, name string');
-    expect(createQuery).toContain('CREATE TABLE s3_db.test_table');
+    expect(createQuery).toContain('CREATE TABLE test_table');
     expect(createQuery).toContain("LOCATION 's3://s3-bucket/test_table/'");
 
     // S3Config inherits dropTableQuery from Config (no override)
@@ -155,13 +152,9 @@ describe('S3Config', () => {
     expect(config.getResultsBucket()).toBe('test-glue-bucket');
     expect(config.getTablesBucket()).toBe('test-glue-bucket');
 
-    // Test table formatting (Glue uses quotes)
-    expect(config.formatTableName('my_table')).toBe('"my_table"');
-    expect(config.formatTableName('my_table', true)).toBe('"my_table"');
-
     // Test SQL generation
     const createQuery = config.createTableQuery('my_table', 'col1 STRING, col2 INT');
-    expect(createQuery).toContain('CREATE TABLE "my_table"');
+    expect(createQuery).toContain('CREATE TABLE my_table');
     expect(createQuery).toContain('col1 STRING, col2 INT');
     expect(createQuery).toContain("WITH (format = 'iceberg')");
 
@@ -196,13 +189,9 @@ describe('S3Config', () => {
     expect(config.getResultsBucket()).toBe('test-glue-bucket'); // Always uses Glue bucket for Athena results
     expect(config.getTablesBucket()).toBe('test-s3-bucket'); // Overridden
 
-    // Test table formatting (S3 uses database.table format)
-    expect(config.formatTableName('my_table', false)).toBe('test_glue_db.my_table'); // read
-    expect(config.formatTableName('my_table', true)).toBe('test_s3_db.my_table'); // write
-
     // Test SQL generation (overridden)
     const createQuery = config.createTableQuery('my_table', 'col1 STRING, col2 INT');
-    expect(createQuery).toContain('CREATE TABLE test_s3_db.my_table');
+    expect(createQuery).toContain('CREATE TABLE my_table');
     expect(createQuery).toContain('col1 STRING, col2 INT');
     expect(createQuery).toContain("LOCATION 's3://test-s3-bucket/my_table/'");
 

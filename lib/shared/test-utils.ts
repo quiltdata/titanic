@@ -7,7 +7,8 @@ import {
     StartQueryExecutionCommand,
 } from "@aws-sdk/client-athena";
 import { TableContext, createTableContext } from "./types";
-import { Config } from "./config";
+import { Config, S3Config } from "./config";
+import { AthenaTest } from "./athena-test";
 
 // Test helper for creating table contexts
 export function createTestTableContext(
@@ -18,29 +19,9 @@ export function createTestTableContext(
     );
 }
 
-// Mock the athena-utils module - this setup should be used in all table tests
-export const mockAthenaUtils = () => {
-    jest.mock("../shared/athena-utils", () => {
-        const actualModule = jest.requireActual("../shared/athena-utils");
-        return {
-            ...actualModule,
-            glueClient: actualModule.glueClient,
-            athenaClient: actualModule.athenaClient,
-            tableExists: jest.fn(),
-            executeQuery: jest.fn(),
-        };
-    });
-};
-
 // Common mock clients
 export const glueMock = mockClient(GlueClient);
 export const athenaMock = mockClient(AthenaClient);
-
-// Helper to get mocked functions
-export const getMockedUtils = () => {
-    const { tableExists, executeQuery } = require("../shared/athena-utils");
-    return { tableExists, executeQuery };
-};
 
 // Common test setup
 export const setupTableTest = () => {
@@ -64,70 +45,156 @@ export const mockSuccessfulAthenaOperation = () => {
         });
 };
 
-// Common table existence test cases
-export const createTableExistenceTests = (
-    tableClass: any,
-    tableName: string,
-    testTableExists: any,
-    testExecuteQuery: any
-) => {
-    describe("ensureExists", () => {
-        it("should skip creation when table already exists", async () => {
-            testTableExists.mockResolvedValue(true);
+// Consolidated test setup for table classes
+export interface TableTestSetup {
+    mockConfig: Config;
+    s3Config: S3Config;
+    mockAthenaUtils: AthenaTest;
+}
 
-            await tableClass.ensureExists("test-db", "test-bucket", "source-view");
-
-            expect(testTableExists).toHaveBeenCalledWith("test-db", tableName);
-            expect(athenaMock.calls()).toHaveLength(0);
-        });
-
-        it("should create table when it does not exist", async () => {
-            testTableExists.mockResolvedValue(false);
-            mockSuccessfulAthenaOperation();
-
-            await tableClass.ensureExists("test-db", "test-bucket", "source-view");
-
-            expect(testTableExists).toHaveBeenCalledWith("test-db", tableName);
-            expect(athenaMock.calls()).toHaveLength(2);
-        });
+export function createTableTestSetup(): TableTestSetup {
+    const mockConfig = Config.createTestInstance({
+        glueTablesBucket: "test-bucket",
+        glueDatabaseName: "test-db",
+        s3TablesBucket: "test-s3-bucket",
+        s3TableDatabaseName: "test-s3-db"
     });
-};
 
-// Common insert query test cases
-export const createInsertQueryTests = (
-    tableClass: any,
+    const s3Config = S3Config.createTestInstance({
+        glueTablesBucket: "test-bucket",
+        glueDatabaseName: "test-db",
+        s3TablesBucket: "test-s3-bucket",
+        s3TableDatabaseName: "test-s3-db"
+    });
+
+    const mockAthenaUtils = AthenaTest.createTestInstance(mockConfig);
+
+    return { mockConfig, s3Config, mockAthenaUtils };
+}
+
+// Generic test suite for table classes
+export function createTableTestSuite(
+    TableClass: any,
     tableName: string,
-    expectedQueryContains: string[],
-    testExecuteQuery: any
-) => {
-    describe("generateInsertQuery", () => {
-        it(`should generate correct INSERT query for ${tableName}`, () => {
-            const context = createTestTableContext();
+    additionalQueryExpectations: {
+        insertQueryContains?: string[];
+        createTableContains?: string[];
+    } = {}
+) {
+    return () => {
+        let setup: TableTestSetup;
+        
+        beforeEach(() => {
+            setup = createTableTestSetup();
+        });
 
-            const query = tableClass.generateInsertQuery(context, "source_table");
+        describe("ensureExists", () => {
+            it("should skip creation when table already exists", async () => {
+                jest.spyOn(setup.mockAthenaUtils, 'tableExists').mockResolvedValue(true);
+                const executeQuerySpy = jest.spyOn(setup.mockAthenaUtils, 'executeQuery');
 
-            expect(query).toContain(`INSERT INTO`);
-            expect(query).toContain("'test_registry' AS registry");
-            expect(query).toContain('FROM');
-            expect(query).toContain(`LEFT JOIN`);
-            
-            expectedQueryContains.forEach(expectedContent => {
-                expect(query).toContain(expectedContent);
+                await TableClass.ensureExists(setup.mockConfig, "source-view", setup.mockAthenaUtils);
+
+                expect(setup.mockAthenaUtils.tableExists).toHaveBeenCalledWith(tableName);
+                expect(executeQuerySpy).not.toHaveBeenCalled();
+            });
+
+            it("should skip Glue table creation (lazy creation)", async () => {
+                jest.spyOn(setup.mockAthenaUtils, 'tableExists').mockResolvedValue(false);
+                const executeQuerySpy = jest.spyOn(setup.mockAthenaUtils, 'executeQuery');
+
+                await TableClass.ensureExists(setup.mockConfig, "source-view", setup.mockAthenaUtils);
+
+                expect(setup.mockAthenaUtils.tableExists).toHaveBeenCalledWith(tableName);
+                expect(executeQuerySpy).not.toHaveBeenCalled();
+            });
+
+            it("should create S3 table immediately when it does not exist", async () => {
+                jest.spyOn(setup.mockAthenaUtils, 'tableExists').mockResolvedValue(false);
+                const executeQuerySpy = jest.spyOn(setup.mockAthenaUtils, 'executeQuery').mockResolvedValue(undefined);
+
+                await TableClass.ensureExists(setup.s3Config, "source-view", setup.mockAthenaUtils);
+
+                expect(setup.mockAthenaUtils.tableExists).toHaveBeenCalledWith(tableName);
+                expect(executeQuerySpy).toHaveBeenCalledTimes(1);
+                expect(executeQuerySpy).toHaveBeenCalledWith(
+                    expect.stringContaining(`CREATE TABLE ${tableName}`)
+                );
+                
+                // Additional expectations for specific tables
+                if (additionalQueryExpectations.createTableContains) {
+                    additionalQueryExpectations.createTableContains.forEach(expectation => {
+                        expect(executeQuerySpy).toHaveBeenCalledWith(
+                            expect.stringContaining(expectation)
+                        );
+                    });
+                }
             });
         });
-    });
 
-    describe("insert", () => {
-        it("should execute insert query", async () => {
-            const context = createTestTableContext();
-            const config = Config.createTestInstance();
+        describe("generateInsertQuery", () => {
+            it("should generate correct INSERT query", () => {
+                const context = createTestTableContext();
+                const config = Config.createTestInstance({
+                    glueTablesBucket: "test-bucket",
+                    glueDatabaseName: "test-db",
+                    s3TablesBucket: "test-s3-bucket",
+                    s3TableDatabaseName: "test-s3-db"
+                });
+                const instance = new TableClass(context, config);
 
-            await tableClass.insert(context, "source_table", config);
+                const query = instance.generateInsertQuery(context, "source_table");
 
-            expect(testExecuteQuery).toHaveBeenCalledWith(
-                expect.stringContaining(`INSERT INTO`),
-                config
-            );
+                expect(query).toContain(`INSERT INTO ${tableName}`);
+                expect(query).toContain("'test_registry' AS registry");
+                expect(query).toContain('FROM source_table s');
+                expect(query).toContain(`LEFT JOIN ${tableName} t`);
+                
+                // Additional expectations for specific tables
+                if (additionalQueryExpectations.insertQueryContains) {
+                    additionalQueryExpectations.insertQueryContains.forEach(expectation => {
+                        expect(query).toContain(expectation);
+                    });
+                }
+            });
         });
-    });
-};
+
+        describe("insert", () => {
+            it("should create table with CTAS on first run for Glue tables", async () => {
+                const context = createTestTableContext();
+                jest.spyOn(setup.mockAthenaUtils, 'tableExists').mockResolvedValue(false);
+                const executeQuerySpy = jest.spyOn(setup.mockAthenaUtils, 'executeQuery').mockResolvedValue(undefined);
+
+                await TableClass.insert(context, "source_table", setup.mockConfig, setup.mockAthenaUtils);
+
+                expect(setup.mockAthenaUtils.tableExists).toHaveBeenCalledWith(tableName);
+                expect(executeQuerySpy).toHaveBeenCalledWith(
+                    expect.stringContaining(`CREATE TABLE ${tableName}`)
+                );
+            });
+
+            it("should execute regular insert when table exists", async () => {
+                const context = createTestTableContext();
+                jest.spyOn(setup.mockAthenaUtils, 'tableExists').mockResolvedValue(true);
+                const executeQuerySpy = jest.spyOn(setup.mockAthenaUtils, 'executeQuery').mockResolvedValue(undefined);
+
+                await TableClass.insert(context, "source_table", setup.mockConfig, setup.mockAthenaUtils);
+
+                expect(executeQuerySpy).toHaveBeenCalledWith(
+                    expect.stringContaining(`INSERT INTO ${tableName}`)
+                );
+            });
+
+            it("should execute regular insert for S3 tables", async () => {
+                const context = createTestTableContext();
+                const executeQuerySpy = jest.spyOn(setup.mockAthenaUtils, 'executeQuery').mockResolvedValue(undefined);
+
+                await TableClass.insert(context, "source_table", setup.s3Config, setup.mockAthenaUtils);
+
+                expect(executeQuerySpy).toHaveBeenCalledWith(
+                    expect.stringContaining(`INSERT INTO ${tableName}`)
+                );
+            });
+        });
+    };
+}

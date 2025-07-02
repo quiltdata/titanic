@@ -38,12 +38,12 @@ export class PackageRevisionTable extends BaseTable {
         return `${sourceAlias}.timestamp != 'latest'`;
     }
 
-    protected generateInsertQuery(context: TableContext, sourceTableName: string): string {
+    public generateInsertQuery(context: TableContext, sourceTableName: string): string {
         const selectClause = this.generateSelectClause(context.registryName, 's');
         
-        // Use config to format table names properly
-        const targetTable = this.config.formatTableName(this.tableName, true);
-        const sourceTable = this.config.formatTableName(sourceTableName);
+        // Use table names directly
+        const targetTable = this.tableName;
+        const sourceTable = sourceTableName;
         
         return `
             INSERT INTO ${targetTable} (registry, pkg_name, top_hash, timestamp, message, metadata)

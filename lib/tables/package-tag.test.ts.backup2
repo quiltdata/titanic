@@ -1,0 +1,12 @@
+import { PackageTagTable } from "./package-tag";
+import { createTableTestSuite } from "../shared/test-utils";
+
+describe("PackageTagTable", createTableTestSuite(
+    PackageTagTable,
+    "package_tag",
+    {
+        insertQueryContains: [
+            "s.timestamp = 'latest'"
+        ]
+    }
+));

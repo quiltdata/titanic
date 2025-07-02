@@ -65,7 +65,7 @@ export abstract class BaseTable {
             const columnDefs = Object.entries(columns)
                 .map(([name, type]) => `${name} ${type}`)
                 .join(', ');
-            const tableName = this.config.formatTableName(this.tableName, true);
+            const tableName = this.tableName;
             const partitioning = this.getPartitioningClause();
             return `
       CREATE TABLE ${tableName} (
@@ -121,8 +121,8 @@ export abstract class BaseTable {
         const selectClause = this.generateSelectClause(context.registryName, sourceAlias);
         const whereClause = this.generateWhereClauseForCtas(sourceAlias);
         
-        // Use config to format table names properly
-        const formattedSourceTable = this.config.formatTableName(sourceTableName);
+        // Use source table name directly
+        const formattedSourceTable = sourceTableName;
         
         let query = `SELECT DISTINCT ${selectClause} FROM ${formattedSourceTable} ${sourceAlias}`;
         
@@ -144,7 +144,7 @@ export abstract class BaseTable {
         
         if (this.config.useS3Table) {
             // For S3 tables, include partitioning clause
-            const tableName = this.config.formatTableName(this.tableName, true);
+            const tableName = this.tableName;
             const partitioning = this.getPartitioningClause();
             return `
       CREATE TABLE ${tableName} (
@@ -181,11 +181,5 @@ export abstract class BaseTable {
         await instance.athenaUtils.executeQuery(query);
     }
 
-    /**
-     * Generate the static insert query (for backward compatibility)
-     */
-    static generateInsertQuery(context: TableContext, sourceTableName: string, config: Config): string {
-        const instance = new (this as any)(config);
-        return instance.generateInsertQuery(context, sourceTableName);
-    }
+
 }

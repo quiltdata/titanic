@@ -47,13 +47,9 @@ export class Config {
     return this.glueTablesBucket;
   }
 
-  public formatTableName(tableName: string, isWrite: boolean = false): string {
-    return `"${tableName}"`;
-  }
-
   public createTableQuery(tableName: string, columns: string): string {
     return `
-      CREATE TABLE ${this.formatTableName(tableName, true)} (
+      CREATE TABLE ${tableName} (
         ${columns}
       ) WITH (format = 'iceberg')
     `;
@@ -105,14 +101,9 @@ export class S3Config extends Config {
     return this.s3TablesBucket;
   }
 
-  public formatTableName(tableName: string, isWrite: boolean = false): string {
-    const dbName = isWrite ? this.getWriteDatabaseName() : this.getReadDatabaseName();
-    return `${dbName}.${tableName}`;
-  }
-
   public createTableQuery(tableName: string, columns: string): string {
     return `
-      CREATE TABLE ${this.formatTableName(tableName, true)} (
+      CREATE TABLE ${tableName} (
         ${columns}
       ) LOCATION 's3://${this.getTablesBucket()}/${tableName}/'
     `;
