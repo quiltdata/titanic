@@ -4,7 +4,7 @@ import { PackageRevisionTable } from "./package-revision";
 import { PackageTagTable } from "./package-tag";
 import { PackageEntryTable } from "./package-entry";
 import { Config } from "../shared/config";
-import { AthenaUtils } from "../shared/athena-utils";
+import { AthenaTest } from "../shared/athena-test";
 
 // Mock all table classes
 jest.mock("./package-revision");
@@ -18,7 +18,7 @@ const MockedPackageEntryTable = jest.mocked(PackageEntryTable);
 describe("TableManager", () => {
     let tableManager: TableManager;
     let mockConfig: Config;
-    let mockAthenaUtils: AthenaUtils;
+    let mockAthenaUtils: AthenaTest;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -28,11 +28,13 @@ describe("TableManager", () => {
             glueTablesBucket: "test-bucket"
         });
         
-        // Create mock AthenaUtils instance
-        mockAthenaUtils = AthenaUtils.createTestInstance(mockConfig);
+        // Create mock AthenaUtils instance using the new AthenaTest class
+        mockAthenaUtils = AthenaTest.createTestInstance(mockConfig);
         
         // Mock tableExists to return false by default (tables don't exist)
-        jest.spyOn(mockAthenaUtils, 'tableExists').mockResolvedValue(false);
+        mockAthenaUtils.mockTableExists("package_revision", false);
+        mockAthenaUtils.mockTableExists("package_tag", false);
+        mockAthenaUtils.mockTableExists("package_entry", false);
         
         tableManager = TableManager.createTestInstance(mockConfig, "test-db", "target-db", "test-bucket", mockAthenaUtils);
     });

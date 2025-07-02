@@ -1,13 +1,14 @@
 import { GetTablesCommand } from "@aws-sdk/client-glue";
 import { GetQueryExecutionCommand, QueryExecutionState, StartQueryExecutionCommand } from "@aws-sdk/client-athena";
 import { AthenaUtils } from "./athena-utils";
+import { AthenaTest } from "./athena-test";
 import { Config, S3Config } from "./config";
 
 describe("AthenaUtils", () => {
     let config: Config;
     let s3Config: S3Config;
-    let athenaUtils: AthenaUtils;
-    let s3AthenaUtils: AthenaUtils;
+    let athenaUtils: AthenaTest;
+    let s3AthenaUtils: AthenaTest;
 
     beforeEach(() => {
         config = Config.createTestInstance({
@@ -27,14 +28,12 @@ describe("AthenaUtils", () => {
         });
 
         // Use test instances with internal mocked clients
-        athenaUtils = AthenaUtils.createTestInstance(config);
-        s3AthenaUtils = AthenaUtils.createTestInstance(s3Config);
+        athenaUtils = AthenaTest.createTestInstance(config);
+        s3AthenaUtils = AthenaTest.createTestInstance(s3Config);
         
         // Reset mocks before each test
-        athenaUtils.glueMock?.reset();
-        athenaUtils.athenaMock?.reset();
-        s3AthenaUtils.glueMock?.reset();
-        s3AthenaUtils.athenaMock?.reset();
+        athenaUtils.resetMocks();
+        s3AthenaUtils.resetMocks();
     });
 
     describe("tableExists", () => {

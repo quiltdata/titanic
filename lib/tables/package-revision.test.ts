@@ -2,11 +2,11 @@ import { PackageRevisionTable } from "./package-revision";
 import { TableContext } from "../shared/types";
 import { createTestTableContext } from "../shared/test-utils";
 import { Config, S3Config } from "../shared/config";
-import { AthenaUtils } from "../shared/athena-utils";
+import { AthenaTest } from "../shared/athena-test";
 
 describe("PackageRevisionTable", () => {
     let mockConfig: Config;
-    let mockAthenaUtils: AthenaUtils;
+    let mockAthenaUtils: AthenaTest;
     
     beforeEach(() => {
         // Create a proper test config instance
@@ -18,7 +18,7 @@ describe("PackageRevisionTable", () => {
         });
         
         // Create test instances with mocked AWS clients
-        mockAthenaUtils = AthenaUtils.createTestInstance(mockConfig);
+        mockAthenaUtils = AthenaTest.createTestInstance(mockConfig);
     });
 
     describe("ensureExists", () => {
