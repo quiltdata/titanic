@@ -32,7 +32,7 @@ export class AthenaUtils {
 
         const response = await this.athena.send(new StartQueryExecutionCommand({
             QueryString: query,
-            QueryExecutionContext: { Database: database },
+            QueryExecutionContext: this.config.getExecutionContext(),
             ResultConfiguration: { OutputLocation: outputLocation }
         }));
 

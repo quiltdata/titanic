@@ -6,5 +6,6 @@
         "revealOutput": "on-run",
         "revealWithFocus": "none",
         "clearOnRun": "terminal"
-    }
+    },
+    "testing.automaticallyOpenTestResults": "neverOpen"
 }

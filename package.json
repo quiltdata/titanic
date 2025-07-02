@@ -13,6 +13,7 @@
     "event:bake": "aws events put-events --entries file://doc/event-quilt-bake.json",
     "event:staff": "aws events put-events --entries file://doc/event-staff.json",
     "test": "jest",
+    "test:coverage": "jest --coverage",
     "watch": "tsc -w"
   },
   "devDependencies": {

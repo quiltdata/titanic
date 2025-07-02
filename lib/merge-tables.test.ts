@@ -402,4 +402,263 @@ describe("merge-tables lambda", () => {
             totalQueries: 1,
         });
     });
+
+    describe("S3Config-specific behavior", () => {
+        it("should use S3Config methods for database and bucket configuration", async () => {
+            process.env.USE_S3_TABLE = "true";
+            
+            glueMock.on(GetTablesCommand).resolves({
+                TableList: [
+                    { Name: "test-bucket_packages-view" },
+                    { Name: "test-bucket_objects-view" },
+                ],
+            });
+
+            athenaMock.on(StartQueryExecutionCommand).resolves({
+                QueryExecutionId: "query-123",
+            });
+
+            athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
+                },
+            });
+
+            const mockEvent = createEventBridgeEvent();
+            await handler(mockEvent, {} as Context);
+
+            // Verify that S3Config's getWriteDatabaseName was used (S3TABLE_DATABASE_NAME)
+            // and getTablesBucket was used (S3_TABLES_BUCKET)
+            const startQueryCalls = athenaMock.commandCalls(StartQueryExecutionCommand);
+            expect(startQueryCalls.length).toBeGreaterThan(0);
+            
+            // Check that queries use S3 database and execution context
+            const firstCall = startQueryCalls[0];
+            expect(firstCall.args[0].input.QueryExecutionContext?.Database).toBe("test-db"); // S3TABLE_DATABASE_NAME
+            
+            // Check that S3Config creates partitioned tables (instead of CTAS with LOCATION)
+            const createTableCalls = startQueryCalls.filter(call => 
+                call.args[0].input.QueryString?.includes("CREATE TABLE") &&
+                call.args[0].input.QueryString?.includes("PARTITIONED BY")
+            );
+            expect(createTableCalls.length).toBeGreaterThan(0);
+        });
+
+        it("should use S3Config getExecutionContext with Catalog parameter", async () => {
+            process.env.USE_S3_TABLE = "true";
+            
+            glueMock.on(GetTablesCommand).resolves({
+                TableList: [{ Name: "test-bucket_packages-view" }],
+            });
+
+            athenaMock.on(StartQueryExecutionCommand).resolves({
+                QueryExecutionId: "query-123",
+            });
+
+            athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
+                },
+            });
+
+            const mockEvent = createEventBridgeEvent();
+            await handler(mockEvent, {} as Context);
+
+            // Verify execution context includes both Catalog and Database for S3Config
+            const startQueryCalls = athenaMock.commandCalls(StartQueryExecutionCommand);
+            expect(startQueryCalls.length).toBeGreaterThan(0);
+            
+            const queryCall = startQueryCalls[0];
+            expect(queryCall.args[0].input.QueryExecutionContext).toEqual({
+                Database: "test-db", // S3Config uses s3TableDatabaseName
+                Catalog: "test-tables-bucket" // S3Config includes catalog in execution context
+            });
+        });
+
+        it("should generate S3-specific table creation queries with PARTITIONED BY", async () => {
+            process.env.USE_S3_TABLE = "true";
+            
+            glueMock.on(GetTablesCommand).resolves({
+                TableList: [{ Name: "test-bucket_packages-view" }],
+            });
+
+            athenaMock.on(StartQueryExecutionCommand).resolves({
+                QueryExecutionId: "query-123",
+            });
+
+            athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
+                },
+            });
+
+            const mockEvent = createEventBridgeEvent();
+            await handler(mockEvent, {} as Context);
+
+            // Check that S3Config uses partitioned table creation (not CTAS)
+            const startQueryCalls = athenaMock.commandCalls(StartQueryExecutionCommand);
+            const createTableCalls = startQueryCalls.filter(call => 
+                call.args[0].input.QueryString?.includes("CREATE TABLE") &&
+                call.args[0].input.QueryString?.includes("PARTITIONED BY")
+            );
+            expect(createTableCalls.length).toBeGreaterThan(0);
+            
+            // Verify the partitioned table creation
+            const createTableQuery = createTableCalls[0].args[0].input.QueryString;
+            expect(createTableQuery).toContain("PARTITIONED BY");
+        });
+
+        it("should use S3Config getResultsBucket for Athena results location", async () => {
+            process.env.USE_S3_TABLE = "true";
+            
+            glueMock.on(GetTablesCommand).resolves({
+                TableList: [{ Name: "test-bucket_packages-view" }],
+            });
+
+            athenaMock.on(StartQueryExecutionCommand).resolves({
+                QueryExecutionId: "query-123",
+            });
+
+            athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
+                },
+            });
+
+            const mockEvent = createEventBridgeEvent();
+            await handler(mockEvent, {} as Context);
+
+            // Verify that S3Config's getResultsBucket was used for query output location
+            const startQueryCalls = athenaMock.commandCalls(StartQueryExecutionCommand);
+            expect(startQueryCalls.length).toBeGreaterThan(0);
+            
+            const queryCall = startQueryCalls[0];
+            expect(queryCall.args[0].input.ResultConfiguration?.OutputLocation).toBe("s3://test-bucket/athena-results/");
+        });
+
+        it("should handle S3Config mode differences from Glue mode", async () => {
+            // Test S3 mode
+            process.env.USE_S3_TABLE = "true";
+            
+            glueMock.on(GetTablesCommand).resolves({
+                TableList: [{ Name: "test-bucket_packages-view" }],
+            });
+
+            athenaMock.on(StartQueryExecutionCommand).resolves({
+                QueryExecutionId: "s3-query-123",
+            });
+
+            athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED },
+                },
+            });
+
+            const mockEvent = createEventBridgeEvent();
+            const s3Result = await handler(mockEvent, {} as Context);
+
+            expect(s3Result?.message).toContain("Merge operations completed");
+
+            // Verify S3Config uses partitioned table creation
+            const s3QueryCalls = athenaMock.commandCalls(StartQueryExecutionCommand);
+            const s3PartitionedCalls = s3QueryCalls.filter(call => 
+                call.args[0].input.QueryString?.includes("PARTITIONED BY")
+            );
+            
+            expect(s3QueryCalls.length).toBeGreaterThan(0);
+            expect(s3PartitionedCalls.length).toBeGreaterThan(0);
+        });
+    });
+
+    describe("first run sentinel file handling", () => {
+        it("should handle first run when sentinel file doesn't exist", async () => {
+            // Mock sentinel file doesn't exist
+            mockFs.existsSync.mockReturnValue(false);
+
+            // Set up mocks for successful operation
+            glueMock.on(GetTablesCommand).resolves({ TableList: [] });
+            athenaMock.on(StartQueryExecutionCommand).resolves({ QueryExecutionId: "test-id" });
+            athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: { Status: { State: QueryExecutionState.SUCCEEDED } }
+            });
+
+            const event = createEventBridgeEvent();
+            const context: Context = {} as any;
+
+            await handler(event, context);
+
+            expect(mockFs.existsSync).toHaveBeenCalled();
+            expect(mockFs.writeFileSync).toHaveBeenCalled();
+        });
+    });
+
+    describe("error handling scenarios", () => {
+        it("should handle errors during table ensure operations", async () => {
+            // Mock sentinel file exists (not first run)
+            mockFs.existsSync.mockReturnValue(true);
+            
+            // Mock table existence but make the process encounter an error during table operations
+            glueMock.on(GetTablesCommand).resolves({ 
+                TableList: [{ Name: "test-bucket_packages-view" }] 
+            });
+            
+            // Mock the query execution to fail, which should cause the lambda to eventually throw
+            athenaMock.on(StartQueryExecutionCommand).rejects(new Error("Ensure tables failed"));
+
+            const event = createEventBridgeEvent();
+            const context: Context = {} as any;
+
+            // The handler should still complete but the ensure tables operation should fail gracefully
+            const result = await handler(event, context);
+            expect(result).toBeDefined();
+            expect(result!.numTables).toBe(1); // It should process the table but encounter errors
+            expect(result!.message).toContain("failed"); // Should contain "failed" in the message
+        });
+
+        it("should detect and handle S3 access errors", async () => {
+            const event = createEventBridgeEvent();
+            const context: Context = {} as any;
+            
+            // Mock an S3 access error
+            glueMock.on(GetTablesCommand).rejects(new Error("Access denied to S3 bucket"));
+
+            await expect(handler(event, context)).rejects.toThrow("Access denied to S3 bucket");
+        });
+
+        it("should detect and handle S3 AccessDenied errors", async () => {
+            const event = createEventBridgeEvent();
+            const context: Context = {} as any;
+            
+            glueMock.on(GetTablesCommand).rejects(new Error("AccessDenied: User is not authorized"));
+
+            await expect(handler(event, context)).rejects.toThrow("AccessDenied: User is not authorized");
+        });
+
+        it("should detect and handle S3 no such bucket errors", async () => {
+            const event = createEventBridgeEvent();
+            const context: Context = {} as any;
+            
+            glueMock.on(GetTablesCommand).rejects(new Error("No such bucket: test-bucket"));
+
+            await expect(handler(event, context)).rejects.toThrow("No such bucket: test-bucket");
+        });
+
+        it("should detect and handle S3 forbidden errors", async () => {
+            const event = createEventBridgeEvent();
+            const context: Context = {} as any;
+            
+            glueMock.on(GetTablesCommand).rejects(new Error("Forbidden: Access to bucket denied"));
+
+            await expect(handler(event, context)).rejects.toThrow("Forbidden: Access to bucket denied");
+        });
+
+        it("should detect and handle HTTP 403 errors", async () => {
+            const event = createEventBridgeEvent();
+            const context: Context = {} as any;
+            
+            glueMock.on(GetTablesCommand).rejects(new Error("HTTP 403 error occurred"));
+
+            await expect(handler(event, context)).rejects.toThrow("HTTP 403 error occurred");
+        });
+    });
 });

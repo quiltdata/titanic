@@ -286,4 +286,111 @@ describe("AthenaUtils", () => {
             await expect(athenaUtils.dropAllTitanicTables()).resolves.toBeUndefined();
         });
     });
+
+    describe("S3Config-specific tests", () => {
+        it("should use S3Config getWriteDatabaseName for S3 operations", () => {
+            expect(config.getWriteDatabaseName()).toBe("test_glue_db");
+            expect(s3Config.getWriteDatabaseName()).toBe("test_s3_db");
+        });
+
+        it("should use S3Config getTablesBucket for S3 table storage", () => {
+            expect(config.getTablesBucket()).toBe("test-glue-bucket");
+            expect(s3Config.getTablesBucket()).toBe("test-s3-bucket");
+        });
+
+        it("should use S3Config getResultsBucket for Athena results", () => {
+            // Both should use Glue bucket for Athena results
+            expect(config.getResultsBucket()).toBe("test-glue-bucket");
+            expect(s3Config.getResultsBucket()).toBe("test-glue-bucket");
+        });
+
+        it("should use S3Config getS3TableCatalogName for catalog operations", () => {
+            expect(s3Config.getS3TableCatalogName()).toBe("test-s3-bucket");
+        });
+
+        it("should generate different createTableQuery for S3Config vs Config", () => {
+            const tableName = "test_table";
+            const columns = "id STRING, name STRING";
+            
+            const configQuery = config.createTableQuery(tableName, columns);
+            const s3ConfigQuery = s3Config.createTableQuery(tableName, columns);
+            
+            expect(configQuery).toContain("WITH (format = 'iceberg')");
+            expect(s3ConfigQuery).toContain("LOCATION 's3://test-s3-bucket/test_table/'");
+            expect(s3ConfigQuery).not.toContain("WITH (format = 'iceberg')");
+        });
+
+        it("should provide different execution contexts for S3Config vs Config", () => {
+            const configContext = config.getExecutionContext();
+            const s3ConfigContext = s3Config.getExecutionContext();
+            
+            expect(configContext).toEqual({ Database: "test_glue_db" });
+            expect(s3ConfigContext).toEqual({
+                Catalog: "test-s3-bucket",
+                Database: "test_s3_db"
+            });
+        });
+
+        it("should execute queries with S3Config execution context including catalog", async () => {
+            s3AthenaUtils.athenaMock.on(StartQueryExecutionCommand).resolves({
+                QueryExecutionId: "test-s3-execution-id"
+            });
+            s3AthenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.SUCCEEDED }
+                }
+            });
+
+            await expect(s3AthenaUtils.executeQuery("SELECT * FROM test_table")).resolves.toBeUndefined();
+            
+            expect(s3AthenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(1);
+            const call = s3AthenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)[0];
+            expect(call.args[0].input).toMatchObject({
+                QueryString: "SELECT * FROM test_table",
+                QueryExecutionContext: { 
+                    Catalog: "test-s3-bucket",
+                    Database: "test_s3_db" 
+                },
+                ResultConfiguration: { OutputLocation: "s3://test-glue-bucket/athena-results/" }
+            });
+        });
+
+        it("should use S3Config getReadDatabaseName consistently", () => {
+            expect(config.getReadDatabaseName()).toBe("test_glue_db");
+            expect(s3Config.getReadDatabaseName()).toBe("test_glue_db"); // S3Config inherits this from base
+        });
+
+        it("should handle tableExists with S3Config database overrides", async () => {
+            s3AthenaUtils.glueMock.on(GetTablesCommand).resolves({
+                TableList: [{ Name: "test_table" }]
+            });
+
+            const result = await s3AthenaUtils.tableExists("test_table");
+            expect(result).toBe(true);
+            
+            // Verify it uses the S3Config's read database
+            const call = s3AthenaUtils.glueMock.commandCalls(GetTablesCommand)[0];
+            expect(call.args[0].input.DatabaseName).toBe("test_glue_db");
+        });
+
+        it("should handle dropTableQuery identically for both configs", () => {
+            const tableName = "test_table";
+            
+            const configDropQuery = config.dropTableQuery(tableName);
+            const s3ConfigDropQuery = s3Config.dropTableQuery(tableName);
+            
+            expect(configDropQuery).toBe("DROP TABLE IF EXISTS test_table");
+            expect(s3ConfigDropQuery).toBe("DROP TABLE IF EXISTS test_table");
+        });
+
+        it("should extract source bucket names consistently for both config types", () => {
+            const packagesTableName = "test-bucket_packages-view";
+            const objectsTableName = "test-bucket_objects-view";
+            
+            expect(Config.sourceBucketFromTableName(packagesTableName)).toBe("test-bucket");
+            expect(Config.sourceBucketFromTableName(objectsTableName)).toBe("test-bucket");
+            expect(S3Config.sourceBucketFromTableName(packagesTableName)).toBe("test-bucket");
+            expect(S3Config.sourceBucketFromTableName(objectsTableName)).toBe("test-bucket");
+        });
+    });
 });

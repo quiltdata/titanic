@@ -23,28 +23,6 @@ export function createTestTableContext(
 export const glueMock = mockClient(GlueClient);
 export const athenaMock = mockClient(AthenaClient);
 
-// Common test setup
-export const setupTableTest = () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-        glueMock.reset();
-        athenaMock.reset();
-    });
-};
-
-// Helper to mock successful Athena operations
-export const mockSuccessfulAthenaOperation = () => {
-    athenaMock
-        .on(StartQueryExecutionCommand)
-        .resolves({ QueryExecutionId: "test-id" })
-        .on(GetQueryExecutionCommand)
-        .resolves({
-            QueryExecution: {
-                Status: { State: QueryExecutionState.SUCCEEDED }
-            }
-        });
-};
-
 // Consolidated test setup for table classes
 export interface TableTestSetup {
     mockConfig: Config;
@@ -78,7 +56,6 @@ export function createTableTestSuite(
     tableName: string,
     additionalQueryExpectations: {
         insertQueryContains?: string[];
-        createTableContains?: string[];
     } = {}
 ) {
     return () => {
@@ -120,15 +97,6 @@ export function createTableTestSuite(
                 expect(executeQuerySpy).toHaveBeenCalledWith(
                     expect.stringContaining(`CREATE TABLE ${tableName}`)
                 );
-                
-                // Additional expectations for specific tables
-                if (additionalQueryExpectations.createTableContains) {
-                    additionalQueryExpectations.createTableContains.forEach(expectation => {
-                        expect(executeQuerySpy).toHaveBeenCalledWith(
-                            expect.stringContaining(expectation)
-                        );
-                    });
-                }
             });
         });
 
@@ -160,32 +128,19 @@ export function createTableTestSuite(
         });
 
         describe("insert", () => {
-            it("should create table with CTAS on first run for Glue tables", async () => {
+            it("should execute insert without checking table existence", async () => {
                 const context = createTestTableContext();
-                jest.spyOn(setup.mockAthenaUtils, 'tableExists').mockResolvedValue(false);
                 const executeQuerySpy = jest.spyOn(setup.mockAthenaUtils, 'executeQuery').mockResolvedValue(undefined);
 
                 await TableClass.insert(context, "source_table", setup.mockConfig, setup.mockAthenaUtils);
 
-                expect(setup.mockAthenaUtils.tableExists).toHaveBeenCalledWith(tableName);
-                expect(executeQuerySpy).toHaveBeenCalledWith(
-                    expect.stringContaining(`CREATE TABLE ${tableName}`)
-                );
-            });
-
-            it("should execute regular insert when table exists", async () => {
-                const context = createTestTableContext();
-                jest.spyOn(setup.mockAthenaUtils, 'tableExists').mockResolvedValue(true);
-                const executeQuerySpy = jest.spyOn(setup.mockAthenaUtils, 'executeQuery').mockResolvedValue(undefined);
-
-                await TableClass.insert(context, "source_table", setup.mockConfig, setup.mockAthenaUtils);
-
+                // Should execute a regular INSERT query without checking table existence
                 expect(executeQuerySpy).toHaveBeenCalledWith(
                     expect.stringContaining(`INSERT INTO ${tableName}`)
                 );
             });
 
-            it("should execute regular insert for S3 tables", async () => {
+            it("should execute regular insert for S3 tables without checking table existence", async () => {
                 const context = createTestTableContext();
                 const executeQuerySpy = jest.spyOn(setup.mockAthenaUtils, 'executeQuery').mockResolvedValue(undefined);
 

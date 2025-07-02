@@ -121,6 +121,100 @@ describe("TableManager", () => {
             expect(MockedPackageEntryTable.ensureExists).not.toHaveBeenCalled();
         });
     });
+
+    describe("error handling", () => {
+        it("should handle errors when creating package_revision table", async () => {
+            const sourceTables: Table[] = [
+                { Name: "test_packages-view" }
+            ];
+
+            MockedPackageRevisionTable.ensureExists.mockRejectedValue(new Error("Create revision table failed"));
+            MockedPackageTagTable.ensureExists.mockResolvedValue();
+
+            const result = await tableManager.ensureTablesExist(sourceTables);
+
+            expect(result.failedTables).toBe(1);
+            expect(result.successfulTables).toBe(1); // tag table should still succeed
+            expect(result.totalTables).toBe(2);
+        });
+
+        it("should handle errors when creating package_tag table", async () => {
+            const sourceTables: Table[] = [
+                { Name: "test_packages-view" }
+            ];
+
+            MockedPackageRevisionTable.ensureExists.mockResolvedValue();
+            MockedPackageTagTable.ensureExists.mockRejectedValue(new Error("Create tag table failed"));
+
+            const result = await tableManager.ensureTablesExist(sourceTables);
+
+            expect(result.failedTables).toBe(1);
+            expect(result.successfulTables).toBe(1); // revision table should still succeed
+            expect(result.totalTables).toBe(2);
+        });
+
+        it("should handle errors when creating package_entry table", async () => {
+            const sourceTables: Table[] = [
+                { Name: "test_objects-view" }
+            ];
+
+            MockedPackageEntryTable.ensureExists.mockRejectedValue(new Error("Create entry table failed"));
+
+            const result = await tableManager.ensureTablesExist(sourceTables);
+
+            expect(result.failedTables).toBe(1);
+            expect(result.successfulTables).toBe(0);
+            expect(result.totalTables).toBe(1);
+        });
+    });
+
+    describe("executeInserts", () => {
+        it("should handle errors during table insertion operations", async () => {
+            const sourceTables: Table[] = [
+                { Name: "npm_packages-view" }
+            ];
+
+            // Mock successful revision insertion but failed tag insertion
+            MockedPackageRevisionTable.insert.mockResolvedValue();
+            MockedPackageTagTable.insert.mockRejectedValue(new Error("Tag insertion failed"));
+
+            const result = await tableManager.executeInserts(sourceTables);
+
+            expect(result.failedTables).toBe(1);
+            expect(result.totalQueries).toBe(2); // Both operations should be counted
+        });
+
+        it("should handle complete table processing failures", async () => {
+            const sourceTables: Table[] = [
+                { Name: "npm_packages-view" }
+            ];
+
+            // Mock both operations to fail
+            MockedPackageRevisionTable.insert.mockRejectedValue(new Error("Revision insertion failed"));
+            MockedPackageTagTable.insert.mockRejectedValue(new Error("Tag insertion failed"));
+
+            const result = await tableManager.executeInserts(sourceTables);
+
+            expect(result.failedTables).toBe(1);
+            expect(result.successfulTables).toBe(0);
+            expect(result.totalQueries).toBe(2);
+        });
+
+        it("should skip tables that don't match expected patterns", async () => {
+            const sourceTables: Table[] = [
+                { Name: "unrelated_table" }
+            ];
+
+            // For unrelated tables, no operations should be executed
+            const result = await tableManager.executeInserts(sourceTables);
+
+            expect(result.failedTables).toBe(0);
+            expect(result.successfulTables).toBe(0);
+            expect(result.totalQueries).toBe(0);
+            expect(MockedPackageRevisionTable.insert).not.toHaveBeenCalled();
+            expect(MockedPackageTagTable.insert).not.toHaveBeenCalled();
+        });
+    });
 });
 
 MockedPackageRevisionTable.ensureExists.mockImplementation((config, sourceView) => {

@@ -1,7 +1,0 @@
-import { PackageEntryTable } from "./package-entry";
-import { createTableTestSuite } from "../shared/test-utils";
-
-describe("PackageEntryTable", createTableTestSuite(
-    PackageEntryTable,
-    "package_entry"
-));
