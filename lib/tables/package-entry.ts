@@ -1,21 +1,21 @@
 import { BaseTable } from "./base-table";
-import { TableContext } from "../shared/types";
+import { TableContext, ColumnDefinitions } from "../shared/types";
 
 export class PackageEntryTable extends BaseTable {
     protected get tableName(): string {
         return "package_entry";
     }
 
-    protected getCreateTableSchema(): string {
-        return `
-              registry     STRING,    
-              top_hash     STRING,
-              logical_key  STRING,    
-              physical_key STRING,    
-              multihash   STRING,    
-              size         BIGINT,    
-              metadata    STRING        
-        `;
+    protected getColumnDefinitions(): ColumnDefinitions {
+        return {
+            'registry': 'STRING',
+            'top_hash': 'STRING',
+            'logical_key': 'STRING',
+            'physical_key': 'STRING',
+            'multihash': 'STRING',
+            'size': 'BIGINT',
+            'metadata': 'STRING'
+        };
     }
 
     protected getPartitioningClause(): string {

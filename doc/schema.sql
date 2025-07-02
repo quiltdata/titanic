@@ -50,7 +50,7 @@ PARTITIONED BY (
   bucket(64, physical_key)
 );
 
--- Glue_Tables: Uses explicit CTAS
+-- Glue_Tables: Uses CTAS with NULL values for empty table initialization
 
 CREATE TABLE package_revision
 WITH (
@@ -61,14 +61,13 @@ WITH (
   is_external = false
 ) AS
 SELECT
-  'quilt-bake' AS registry,
-  s.pkg_name,
-  s.top_hash,
-  from_unixtime(CAST(s.timestamp AS bigint)) AS timestamp,
-  s.message,
-  s.user_meta AS metadata
-FROM "AwsDataCatalog"."userathenadatabase-6fosfzznfasm"."quilt-bake_packages-view" s
-WHERE s.timestamp != 'latest';
+  CAST(NULL AS STRING) AS registry,
+  CAST(NULL AS STRING) AS pkg_name,
+  CAST(NULL AS STRING) AS top_hash,
+  CAST(NULL AS TIMESTAMP) AS timestamp,
+  CAST(NULL AS STRING) AS message,
+  CAST(NULL AS STRING) AS metadata
+WHERE 1=0;
 
 CREATE TABLE package_tag
 WITH (
@@ -79,12 +78,11 @@ WITH (
   is_external = false
 ) AS
 SELECT
-  'quilt-bake' AS registry,
-  s.pkg_name,
-  s.timestamp AS tag_name,
-  s.top_hash
-FROM "AwsDataCatalog"."userathenadatabase-6fosfzznfasm"."quilt-bake_packages-view" s
-WHERE s.timestamp = 'latest';
+  CAST(NULL AS STRING) AS registry,
+  CAST(NULL AS STRING) AS pkg_name,
+  CAST(NULL AS STRING) AS tag_name,
+  CAST(NULL AS STRING) AS top_hash
+WHERE 1=0;
 
 CREATE TABLE package_entry
 WITH (
@@ -95,21 +93,14 @@ WITH (
   is_external = false
 ) AS
 SELECT
-  'quilt-bake' AS registry,
-  s.top_hash,
-  s.logical_key,
-  s.physical_key,
-  concat(
-    CASE s.hash.type
-      WHEN 'SHA256' THEN '1220'
-      WHEN 'sha2-256-chunked' THEN 'b150'
-      ELSE '0000'
-    END,
-    s.hash.value
-  ) AS multihash,
-  s.size,
-  s.meta AS metadata
-FROM "AwsDataCatalog"."userathenadatabase-6fosfzznfasm"."quilt-bake_objects-view" s;
+  CAST(NULL AS STRING) AS registry,
+  CAST(NULL AS STRING) AS top_hash,
+  CAST(NULL AS STRING) AS logical_key,
+  CAST(NULL AS STRING) AS physical_key,
+  CAST(NULL AS STRING) AS multihash,
+  CAST(NULL AS BIGINT) AS size,
+  CAST(NULL AS STRING) AS metadata
+WHERE 1=0;
 
 ---
 --- INSERT examples

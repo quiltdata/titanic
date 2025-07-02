@@ -77,6 +77,15 @@ describe('Config', () => {
     expect(config.getResultsBucket()).toBe('glue-bucket');
     expect(config.getTablesBucket()).toBe('glue-bucket');
   });
+
+  it('should return correct execution context for Glue config', () => {
+    const config = Config.createTestInstance({
+      glueDatabaseName: 'test_glue_db',
+    });
+
+    const context = config.getExecutionContext();
+    expect(context).toEqual({ Database: 'test_glue_db' });
+  });
 });
 
 describe('S3Config', () => {
@@ -95,6 +104,27 @@ describe('S3Config', () => {
     expect(config.formatTableName('test_table', false)).toBe('glue_db.test_table');
   });
 
+  it('should return correct S3 table catalog name', () => {
+    const config = S3Config.createTestInstance({
+      s3TablesBucket: 'my-s3-bucket',
+    });
+
+    expect(config.getS3TableCatalogName()).toBe('my-s3-bucket');
+  });
+
+  it('should return correct execution context for S3 config', () => {
+    const config = S3Config.createTestInstance({
+      s3TableDatabaseName: 'test_s3_db',
+      s3TablesBucket: 'my-s3-bucket',
+    });
+
+    const context = config.getExecutionContext();
+    expect(context).toEqual({
+      Catalog: 'my-s3-bucket',
+      Database: 'test_s3_db'
+    });
+  });
+
   it('should create correct table queries', () => {
     const config = S3Config.createTestInstance({
       s3TableDatabaseName: 's3_db',
@@ -105,7 +135,132 @@ describe('S3Config', () => {
     expect(createQuery).toContain('CREATE TABLE s3_db.test_table');
     expect(createQuery).toContain("LOCATION 's3://s3-bucket/test_table/'");
 
+    // S3Config inherits dropTableQuery from Config (no override)
     const dropQuery = config.dropTableQuery('test_table');
-    expect(dropQuery).toBe('DROP TABLE s3_db.test_table');
+    expect(dropQuery).toBe('DROP TABLE IF EXISTS test_table');
+  });
+
+  it('should test all Config methods', () => {
+    const config = Config.createTestInstance({
+      glueDatabaseName: 'test_glue_db',
+      glueTablesBucket: 'test-glue-bucket',
+      s3TableDatabaseName: 'test_s3_db',
+      s3TablesBucket: 'test-s3-bucket',
+      aws_region: 'us-west-1'
+    });
+
+    // Test all getter methods
+    expect(config.getReadDatabaseName()).toBe('test_glue_db');
+    expect(config.getWriteDatabaseName()).toBe('test_glue_db');
+    expect(config.getResultsBucket()).toBe('test-glue-bucket');
+    expect(config.getTablesBucket()).toBe('test-glue-bucket');
+
+    // Test table formatting (Glue uses quotes)
+    expect(config.formatTableName('my_table')).toBe('"my_table"');
+    expect(config.formatTableName('my_table', true)).toBe('"my_table"');
+
+    // Test SQL generation
+    const createQuery = config.createTableQuery('my_table', 'col1 STRING, col2 INT');
+    expect(createQuery).toContain('CREATE TABLE "my_table"');
+    expect(createQuery).toContain('col1 STRING, col2 INT');
+    expect(createQuery).toContain("WITH (format = 'iceberg')");
+
+    const dropQuery = config.dropTableQuery('my_table');
+    expect(dropQuery).toBe('DROP TABLE IF EXISTS my_table');
+
+    // Test properties
+    expect(config.aws_region).toBe('us-west-1');
+    expect(config.glueDatabaseName).toBe('test_glue_db');
+    expect(config.glueTablesBucket).toBe('test-glue-bucket');
+    expect(config.s3TableDatabaseName).toBe('test_s3_db');
+    expect(config.s3TablesBucket).toBe('test-s3-bucket');
+    expect(config.useS3Table).toBe(false);
+
+    // Test execution context
+    const context = config.getExecutionContext();
+    expect(context).toEqual({ Database: 'test_glue_db' });
+  });
+
+  it('should test all S3Config methods', () => {
+    const config = S3Config.createTestInstance({
+      glueDatabaseName: 'test_glue_db',
+      glueTablesBucket: 'test-glue-bucket',
+      s3TableDatabaseName: 'test_s3_db',
+      s3TablesBucket: 'test-s3-bucket',
+      aws_region: 'us-west-1'
+    });
+
+    // Test overridden getter methods
+    expect(config.getReadDatabaseName()).toBe('test_glue_db'); // Inherited from Config
+    expect(config.getWriteDatabaseName()).toBe('test_s3_db'); // Overridden
+    expect(config.getResultsBucket()).toBe('test-glue-bucket'); // Always uses Glue bucket for Athena results
+    expect(config.getTablesBucket()).toBe('test-s3-bucket'); // Overridden
+
+    // Test table formatting (S3 uses database.table format)
+    expect(config.formatTableName('my_table', false)).toBe('test_glue_db.my_table'); // read
+    expect(config.formatTableName('my_table', true)).toBe('test_s3_db.my_table'); // write
+
+    // Test SQL generation (overridden)
+    const createQuery = config.createTableQuery('my_table', 'col1 STRING, col2 INT');
+    expect(createQuery).toContain('CREATE TABLE test_s3_db.my_table');
+    expect(createQuery).toContain('col1 STRING, col2 INT');
+    expect(createQuery).toContain("LOCATION 's3://test-s3-bucket/my_table/'");
+
+    // Test inherited dropTableQuery (not overridden)
+    const dropQuery = config.dropTableQuery('my_table');
+    expect(dropQuery).toBe('DROP TABLE IF EXISTS my_table');
+
+    // Test properties
+    expect(config.aws_region).toBe('us-west-1');
+    expect(config.glueDatabaseName).toBe('test_glue_db');
+    expect(config.glueTablesBucket).toBe('test-glue-bucket');
+    expect(config.s3TableDatabaseName).toBe('test_s3_db');
+    expect(config.s3TablesBucket).toBe('test-s3-bucket');
+    expect(config.useS3Table).toBe(true); // S3Config sets this to true
+
+    // Test S3-specific methods
+    expect(config.getS3TableCatalogName()).toBe('test-s3-bucket');
+    
+    // Test execution context
+    const context = config.getExecutionContext();
+    expect(context).toEqual({
+      Catalog: 'test-s3-bucket',
+      Database: 'test_s3_db'
+    });
+  });
+
+  it('should test factory method behavior', () => {
+    // Test without environment variable
+    delete process.env.USE_S3_TABLE;
+    const config1 = Config.create();
+    expect(config1).toBeInstanceOf(Config);
+    expect(config1.useS3Table).toBe(false);
+
+    // Test with environment variable set to true
+    process.env.USE_S3_TABLE = 'true';
+    const config2 = Config.create();
+    expect(config2).toBeInstanceOf(S3Config);
+    expect(config2.useS3Table).toBe(true);
+
+    // Test with environment variable set to false
+    process.env.USE_S3_TABLE = 'false';
+    const config3 = Config.create();
+    expect(config3).toBeInstanceOf(Config);
+    expect(config3.useS3Table).toBe(false);
+  });
+
+  describe("sourceBucketFromTableName", () => {
+    it("should extract bucket name from objects view table", () => {
+      expect(Config.sourceBucketFromTableName("test_bucket_objects-view")).toBe("test_bucket");
+    });
+
+    it("should extract bucket name from packages view table", () => {
+      expect(Config.sourceBucketFromTableName("prod_registry_packages-view")).toBe("prod_registry");
+    });
+
+    it("should handle edge cases", () => {
+      expect(Config.sourceBucketFromTableName("simple-view")).toBe("simple-view");
+      expect(Config.sourceBucketFromTableName("")).toBe("");
+    });
   });
 });

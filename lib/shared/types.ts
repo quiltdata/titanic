@@ -1,5 +1,8 @@
 // Shared type definitions
 
+// Column definitions for table schemas - simple name to type mapping
+export type ColumnDefinitions = Record<string, string>;
+
 // EventBridge event detail structure
 export interface PackageEventDetail {
     version: string;

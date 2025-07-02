@@ -4,16 +4,20 @@ import { PackageTagTable } from "./package-tag";
 import { PackageEntryTable } from "./package-entry";
 import { BaseTable } from "./base-table";
 import { TableContext, createTableContext } from "../shared/types";
-import { sourceBucketFromTableName } from "../shared/athena-utils";
+import { AthenaUtils } from "../shared/athena-utils";
 import { Config } from "../shared/config";
 
 export class TableManager {
+    private athenaUtils: AthenaUtils;
+
     constructor(
         private config: Config, // Pass config as parameter
         private glueDatabaseName: string,
         private targetDatabaseName: string,
         private targetBucket: string
-    ) {}
+    ) {
+        this.athenaUtils = new AthenaUtils(config);
+    }
 
     async ensureTablesExist(sourceTables: Table[]): Promise<{ successfulTables: number; failedTables: number; totalTables: number }> {
         // Find representative views for each table type
@@ -72,7 +76,7 @@ export class TableManager {
 
             let tableSuccessful = true;
             let tableQueryCount = 0;
-            const registryName = sourceBucketFromTableName(table.Name);
+            const registryName = Config.sourceBucketFromTableName(table.Name);
 
             try {
                 const context = createTableContext(registryName);

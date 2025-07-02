@@ -47,7 +47,8 @@ describe("Table Schema Configuration", () => {
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
             expect(schema).toContain('CREATE TABLE test-s3-db.package_revision');
-            expect(schema).toContain("LOCATION 's3://test-s3-bucket/package_revision/'");
+            expect(schema).toContain("PARTITIONED BY");
+            expect(schema).not.toContain("LOCATION");
         });
     });
 
@@ -62,11 +63,11 @@ describe("Table Schema Configuration", () => {
             const table = new PackageRevisionTable(config);
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
-            // S3 Tables should have LOCATION but no WITH clause or PARTITIONED BY
+            // S3 Tables should have PARTITIONED BY but no LOCATION or WITH clause
             expect(schema).toContain("CREATE TABLE test-s3-db.package_revision");
-            expect(schema).toContain("LOCATION 's3://test-s3-bucket/package_revision/'");
+            expect(schema).toContain("PARTITIONED BY");
             expect(schema).not.toContain("WITH (");
-            expect(schema).not.toContain("PARTITIONED BY");
+            expect(schema).not.toContain("LOCATION");
         });
 
         it("should return schema with WITH clause for Glue mode", () => {
@@ -123,11 +124,11 @@ describe("Table Schema Configuration", () => {
             const table2 = new PackageRevisionTable(glueConfig);
             const glueSchema = (table2 as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
-            // S3 Tables should have LOCATION but no WITH clause or partitions
-            expect(s3Schema).toContain("LOCATION");
+            // S3 Tables should have PARTITIONED BY but no LOCATION or WITH clause
+            expect(s3Schema).toContain("PARTITIONED BY");
             expect(s3Schema).not.toContain("WITH (");
             expect(s3Schema).not.toContain("format = 'iceberg'");
-            expect(s3Schema).not.toContain("PARTITIONED BY");
+            expect(s3Schema).not.toContain("LOCATION");
             
             // Glue mode should have WITH clause but no LOCATION or partitions
             expect(glueSchema).not.toContain("PARTITIONED BY");

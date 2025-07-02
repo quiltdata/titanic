@@ -1,6 +1,6 @@
 /**
  * Centralized configuration management for the Titanic project.
- * Defaults to Glue tables. Use S3Config subclass for S3 tables.
+ * Defaults to Glue configuration with S3Config subclass for S3 tables.
  */
 export class Config {
   public readonly aws_region: string;
@@ -60,11 +60,18 @@ export class Config {
   }
 
   public dropTableQuery(tableName: string): string {
-    return `DROP TABLE ${this.formatTableName(tableName, true)}`;
+    return `DROP TABLE IF EXISTS ${tableName}`;
   }
 
-  public async createEmptyTables(): Promise<void> {
-    console.log('Glue tables will be created lazily on first use');
+  public getExecutionContext(): { Database: string } {
+    return { Database: this.getReadDatabaseName() };
+  }
+
+  /**
+   * Extract bucket name from table name by removing view suffixes
+   */
+  public static sourceBucketFromTableName(name: string): string {
+    return name.replace(/_(objects|packages)-view$/, "");
   }
 }
 
@@ -89,6 +96,15 @@ export class S3Config extends Config {
     return this.s3TablesBucket;
   }
 
+  // Always use Glue bucket for Athena query results, even in S3Config
+  public getResultsBucket(): string {
+    return this.glueTablesBucket;
+  }
+
+  public getS3TableCatalogName(): string {
+    return this.s3TablesBucket;
+  }
+
   public formatTableName(tableName: string, isWrite: boolean = false): string {
     const dbName = isWrite ? this.getWriteDatabaseName() : this.getReadDatabaseName();
     return `${dbName}.${tableName}`;
@@ -102,8 +118,10 @@ export class S3Config extends Config {
     `;
   }
 
-  public async createEmptyTables(): Promise<void> {
-    console.log('Creating S3 tables immediately after drop...');
-    // Implementation would go here if needed
+  public getExecutionContext(): { Catalog: string; Database: string } {
+    return {
+      Catalog: this.getS3TableCatalogName(),
+      Database: this.getWriteDatabaseName()
+    };
   }
 }

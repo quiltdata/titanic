@@ -1,6 +1,5 @@
 import { Context, EventBridgeEvent } from "aws-lambda";
-import { GetTablesCommand, GetTablesCommandOutput } from "@aws-sdk/client-glue";
-import { glueClient, dropAllTitanicTables, } from "./shared/athena-utils";
+import { AthenaUtils } from "./shared/athena-utils";
 import { PackageEventDetail, HandlerResponse } from "./shared/types";
 import { TableManager } from "./tables/table-manager";
 import { Config } from "./shared/config";
@@ -13,6 +12,7 @@ export async function handler(
     context: Context,
 ): Promise<HandlerResponse> {
     const config = Config.create(); // Use factory method instead of getInstance
+    const athenaUtils = new AthenaUtils(config);
     const glueDatabaseName = process.env.GLUE_DATABASE_NAME;
     const s3TableDatabaseName = process.env.S3TABLE_DATABASE_NAME;
     const glueTablesBucket = process.env.GLUE_TABLES_BUCKET;
@@ -41,7 +41,7 @@ export async function handler(
         const isFirstRun = !fs.existsSync(SENTINEL_FILE);
         if (isFirstRun) {
             console.log('First run after deployment detected, dropping existing tables...');
-            await dropAllTitanicTables(config);
+            await athenaUtils.dropAllTitanicTables();
             // Create sentinel file to mark tables as initialized
             fs.writeFileSync(SENTINEL_FILE, new Date().toISOString());
             console.log('Created sentinel file, tables will not be dropped on subsequent runs');
@@ -54,24 +54,7 @@ export async function handler(
 
         // Get all tables in the database
         console.log("Fetching tables from Glue database:", glueDatabaseName);
-        let allTables = [];
-        let nextToken = undefined;
-
-        do {
-            const tablesResponse: GetTablesCommandOutput = await glueClient.send(
-                new GetTablesCommand({
-                    DatabaseName: glueDatabaseName,
-                    NextToken: nextToken,
-                })
-            );
-            if (!tablesResponse.TableList) {
-                throw new Error(
-                    `Unable to list tables in database ${glueDatabaseName}`,
-                );
-            }
-            allTables.push(...tablesResponse.TableList);
-            nextToken = tablesResponse.NextToken;
-        } while (nextToken);
+        const allTables = await athenaUtils.getAllTables(glueDatabaseName);
 
         // Derive table prefix from bucket name (source registry name)
 

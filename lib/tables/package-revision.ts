@@ -1,20 +1,20 @@
 import { BaseTable } from "./base-table";
-import { TableContext } from "../shared/types";
+import { TableContext, ColumnDefinitions } from "../shared/types";
 
 export class PackageRevisionTable extends BaseTable {
     protected get tableName(): string {
         return "package_revision";
     }
 
-    protected getCreateTableSchema(): string {
-        return `
-              registry     STRING,   
-              pkg_name     STRING,   
-              top_hash     STRING,   
-              timestamp    TIMESTAMP, 
-              message      STRING,   
-              metadata    STRING       
-        `;
+    protected getColumnDefinitions(): ColumnDefinitions {
+        return {
+            'registry': 'STRING',
+            'pkg_name': 'STRING',
+            'top_hash': 'STRING',
+            'timestamp': 'TIMESTAMP',
+            'message': 'STRING',
+            'metadata': 'STRING'
+        };
     }
 
     protected getPartitioningClause(): string {

@@ -1,5 +1,5 @@
-import { executeQuery, tableExists } from "../shared/athena-utils";
-import { TableContext } from "../shared/types";
+import { AthenaUtils } from "../shared/athena-utils";
+import { TableContext, ColumnDefinitions } from "../shared/types";
 import { Config, S3Config } from "../shared/config";
 
 /**
@@ -9,14 +9,16 @@ import { Config, S3Config } from "../shared/config";
  */
 export abstract class BaseTable {
     protected readonly config: Config;
+    protected readonly athenaUtils: AthenaUtils;
     
-    constructor(config: Config) {
+    constructor(config: Config, athenaUtils?: AthenaUtils) {
         this.config = config;
+        this.athenaUtils = athenaUtils || new AthenaUtils(config);
     }
     
     // Abstract properties that subclasses must implement
     protected abstract get tableName(): string;
-    protected abstract getCreateTableSchema(): string;
+    protected abstract getColumnDefinitions(): ColumnDefinitions;
     protected abstract getPartitioningClause(): string;
     protected abstract generateInsertQuery(context: TableContext, sourceTableName: string): string;
     
@@ -31,11 +33,12 @@ export abstract class BaseTable {
      */
     static async ensureExists(
         config: Config,
-        sourceView: string
+        sourceView: string,
+        athenaUtils?: AthenaUtils
     ): Promise<void> {
-        const instance = new (this as any)(config);
+        const instance = new (this as any)(config, athenaUtils);
         
-        if (await tableExists(config, instance.tableName)) {
+        if (await instance.athenaUtils.tableExists(instance.tableName)) {
             return;
         }
 
@@ -50,42 +53,66 @@ export abstract class BaseTable {
     }
 
     /**
-     * Create an empty table with the schema defined by the subclass (for S3 tables)
+     * Generate CTAS query for empty table creation (mainly for tests)
      */
-    private async createEmptyTable(): Promise<void> {
-        const createQuery = this.getCompleteCreateTableSchema();
-        console.log(`Creating empty ${this.tableName} table with SQL:`, createQuery);
-        await executeQuery(createQuery, this.config);
-    }
-
-    /**
-     * Create table using CTAS for insert operations (lazy creation)
-     */
-    private async createTableAsSelectForInsert(
-        context: TableContext,
-        sourceTableName: string
-    ): Promise<void> {
-        const ctasQuery = this.generateCtasQueryForInsert(context, sourceTableName);
-        console.log(`Creating ${this.tableName} table with CTAS for insert:`, ctasQuery);
-        await executeQuery(ctasQuery, this.config);
-    }
-
-    /**
-     * Generate CTAS query for insert operations (lazy creation)
-     */
-    protected generateCtasQueryForInsert(context: TableContext, sourceTableName: string): string {
-        const selectQuery = this.generateSelectForInsert(context, sourceTableName);
+    protected generateCtasQuery() {
+        const columns = this.getColumnDefinitions();
         
-        // Use config to generate proper CREATE TABLE query
-        const columns = this.getCreateTableSchema().replace(/CREATE TABLE[^(]+\(/, '').replace(/\)\s*$/, '');
-        const createQuery = this.config.createTableQuery(this.tableName, columns);
-        
-        return `${createQuery.replace(/\)\s*$/, '')} AS ${selectQuery}`;
+        if (this.config.useS3Table) {
+            // For S3 tables, use CREATE TABLE with partitioning (no LOCATION)
+            const columnDefs = Object.entries(columns)
+                .map(([name, type]) => `${name} ${type}`)
+                .join(', ');
+            const tableName = this.config.formatTableName(this.tableName, true);
+            const partitioning = this.getPartitioningClause();
+            return `
+      CREATE TABLE ${tableName} (
+        ${columnDefs}
+      ) ${partitioning}
+    `;
+        } else {
+            // For Glue tables, generate CTAS with CAST(NULL AS ...) for each column
+            const selectColumns = Object.entries(columns)
+                .map(([name, type]) => `CAST(NULL AS ${type}) AS ${name}`)
+                .join(', ');
+
+            return `CREATE TABLE ${this.tableName} WITH (
+                format = 'PARQUET',
+                write_compression = 'SNAPPY',
+                location = 's3://${this.config.getTablesBucket()}/iceberg_catalog/${this.tableName}',
+                table_type = 'ICEBERG',
+                is_external = false
+            ) AS SELECT ${selectColumns} WHERE 1=0`;
+        }
     }
 
     /**
-     * Generate the SELECT portion for CTAS during insert operations (lazy creation)
+     * Create table using CTAS for first-time insertion (Glue tables only)
      */
+    protected async createTableAsSelectForInsert(context: TableContext, sourceTableName: string): Promise<void> {
+        const selectClause = this.generateSelectForInsert(context, sourceTableName);
+        
+        const ctasQuery = `CREATE TABLE ${this.tableName} WITH (
+            format = 'PARQUET',
+            write_compression = 'SNAPPY',
+            location = 's3://${this.config.getTablesBucket()}/iceberg_catalog/${this.tableName}',
+            table_type = 'ICEBERG',
+            is_external = false
+        ) AS ${selectClause}`;
+        
+        console.log(`Creating ${this.tableName} with CTAS:`, ctasQuery);
+        await this.athenaUtils.executeQuery(ctasQuery);
+    }
+
+    /**
+     * Create empty table (S3 tables)
+     */
+    protected async createEmptyTable(): Promise<void> {
+        const createQuery = this.generateCtasQuery();
+        console.log(`Creating empty ${this.tableName}:`, createQuery);
+        await this.athenaUtils.executeQuery(createQuery);
+    }
+    
     protected generateSelectForInsert(context: TableContext, sourceTableName: string): string {
         const sourceAlias = 's';
         
@@ -108,8 +135,24 @@ export abstract class BaseTable {
      * Generate the complete CREATE TABLE schema using the new Config architecture
      */
     protected getCompleteCreateTableSchema(): string {
-        const columns = this.getCreateTableSchema().replace(/CREATE TABLE[^(]+\(/, '').replace(/\)\s*$/, '');
-        return this.config.createTableQuery(this.tableName, columns);
+        const columns = this.getColumnDefinitions();
+        const columnDefs = Object.entries(columns)
+            .map(([name, type]) => `${name} ${type}`)
+            .join(', ');
+        
+        if (this.config.useS3Table) {
+            // For S3 tables, include partitioning clause
+            const tableName = this.config.formatTableName(this.tableName, true);
+            const partitioning = this.getPartitioningClause();
+            return `
+      CREATE TABLE ${tableName} (
+        ${columnDefs}
+      ) ${partitioning}
+    `;
+        } else {
+            // For Glue tables, use config's createTableQuery (no partitioning)
+            return this.config.createTableQuery(this.tableName, columnDefs);
+        }
     }
 
     /**
@@ -117,13 +160,13 @@ export abstract class BaseTable {
      * For Glue tables: Create table using CTAS if it doesn't exist, then mark creation as done
      * For S3 tables: Use regular INSERT (table should already exist)
      */
-    static async insert(context: TableContext, sourceTableName: string, config: Config): Promise<void> {
-        const instance = new (this as any)(config);
+    static async insert(context: TableContext, sourceTableName: string, config: Config, athenaUtils?: AthenaUtils): Promise<void> {
+        const instance = new (this as any)(config, athenaUtils);
         
         // Check if we need to create the table lazily (Glue tables)
         if (!config.useS3Table) {
             // Check if table exists - if not, create it using CTAS
-            if (!(await tableExists(config, instance.tableName))) {
+            if (!(await instance.athenaUtils.tableExists(instance.tableName))) {
                 console.log(`Creating ${instance.tableName} Glue table using CTAS on first run`);
                 await instance.createTableAsSelectForInsert(context, sourceTableName);
                 return; // CTAS already inserted the data, no need for separate INSERT
@@ -133,7 +176,7 @@ export abstract class BaseTable {
         // Regular INSERT for subsequent runs or S3 tables
         const query = instance.generateInsertQuery(context, sourceTableName);
         console.log(`Inserting into ${instance.tableName} with SQL:`, query);
-        await executeQuery(query, config);
+        await instance.athenaUtils.executeQuery(query);
     }
 
     /**
