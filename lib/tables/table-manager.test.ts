@@ -4,6 +4,7 @@ import { PackageRevisionTable } from "./package-revision";
 import { PackageTagTable } from "./package-tag";
 import { PackageEntryTable } from "./package-entry";
 import { Config } from "../shared/config";
+import { AthenaUtils } from "../shared/athena-utils";
 
 // Mock all table classes
 jest.mock("./package-revision");
@@ -17,19 +18,27 @@ const MockedPackageEntryTable = jest.mocked(PackageEntryTable);
 describe("TableManager", () => {
     let tableManager: TableManager;
     let mockConfig: Config;
+    let mockAthenaUtils: AthenaUtils;
 
     beforeEach(() => {
         jest.clearAllMocks();
+        
         mockConfig = Config.createTestInstance({
             glueDatabaseName: "test-db",
             glueTablesBucket: "test-bucket"
         });
-        tableManager = new TableManager(mockConfig, "test-db", "target-db", "test-bucket");
+        
+        // Create mock AthenaUtils instance
+        mockAthenaUtils = AthenaUtils.createTestInstance(mockConfig);
+        
+        // Mock tableExists to return false by default (tables don't exist)
+        jest.spyOn(mockAthenaUtils, 'tableExists').mockResolvedValue(false);
+        
+        tableManager = TableManager.createTestInstance(mockConfig, "test-db", "target-db", "test-bucket", mockAthenaUtils);
     });
 
     describe("ensureTablesExist", () => {
         it("should create revision and tag tables when packages view exists", async () => {
-            const tableManager = new TableManager(mockConfig, "test-db", "target-db", "test-bucket");
             const sourceTables: Table[] = [
                 { Name: "test_packages-view" }
             ];
@@ -54,7 +63,6 @@ describe("TableManager", () => {
         });
 
         it("should configure S3 Tables mode when useS3Table=true", async () => {
-            const s3TableManager = new TableManager(mockConfig, "test-db", "target-db", "test-bucket");
             const sourceTables: Table[] = [
                 { Name: "test_packages-view" }
             ];
@@ -62,7 +70,7 @@ describe("TableManager", () => {
             MockedPackageRevisionTable.ensureExists.mockResolvedValue();
             MockedPackageTagTable.ensureExists.mockResolvedValue();
 
-            const result = await s3TableManager.ensureTablesExist(sourceTables);
+            const result = await tableManager.ensureTablesExist(sourceTables);
 
             expect(result.totalTables).toBe(2);
             expect(result.successfulTables).toBe(2);

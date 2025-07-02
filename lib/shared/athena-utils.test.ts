@@ -1,11 +1,7 @@
-import { mockClient } from "aws-sdk-client-mock";
-import { GetTablesCommand, GlueClient } from "@aws-sdk/client-glue";
-import { AthenaClient, GetQueryExecutionCommand, QueryExecutionState, StartQueryExecutionCommand } from "@aws-sdk/client-athena";
+import { GetTablesCommand } from "@aws-sdk/client-glue";
+import { GetQueryExecutionCommand, QueryExecutionState, StartQueryExecutionCommand } from "@aws-sdk/client-athena";
 import { AthenaUtils } from "./athena-utils";
 import { Config, S3Config } from "./config";
-
-const glueMock = mockClient(GlueClient);
-const athenaMock = mockClient(AthenaClient);
 
 describe("AthenaUtils", () => {
     let config: Config;
@@ -14,9 +10,6 @@ describe("AthenaUtils", () => {
     let s3AthenaUtils: AthenaUtils;
 
     beforeEach(() => {
-        glueMock.reset();
-        athenaMock.reset();
-        
         config = Config.createTestInstance({
             glueTablesBucket: 'test-glue-bucket',
             s3TablesBucket: 'test-s3-bucket',
@@ -33,14 +26,20 @@ describe("AthenaUtils", () => {
             s3TableDatabaseName: 'test_s3_db'
         });
 
-        // Use test instances with mocked clients
-        athenaUtils = AthenaUtils.createTestInstance(config, athenaMock as any, glueMock as any);
-        s3AthenaUtils = AthenaUtils.createTestInstance(s3Config, athenaMock as any, glueMock as any);
+        // Use test instances with internal mocked clients
+        athenaUtils = AthenaUtils.createTestInstance(config);
+        s3AthenaUtils = AthenaUtils.createTestInstance(s3Config);
+        
+        // Reset mocks before each test
+        athenaUtils.glueMock?.reset();
+        athenaUtils.athenaMock?.reset();
+        s3AthenaUtils.glueMock?.reset();
+        s3AthenaUtils.athenaMock?.reset();
     });
 
     describe("tableExists", () => {
         it("should return true when table exists", async () => {
-            glueMock.on(GetTablesCommand).resolves({
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({
                 TableList: [{ Name: "package_revision" }]
             });
 
@@ -48,12 +47,12 @@ describe("AthenaUtils", () => {
             expect(result).toBe(true);
             
             // Verify it uses the default read database
-            const call = glueMock.commandCalls(GetTablesCommand)[0];
+            const call = athenaUtils.glueMock.commandCalls(GetTablesCommand)[0];
             expect(call.args[0].input.DatabaseName).toBe("test_glue_db");
         });
 
         it("should return true when table exists with specified database", async () => {
-            glueMock.on(GetTablesCommand).resolves({
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({
                 TableList: [{ Name: "package_revision" }]
             });
 
@@ -61,12 +60,12 @@ describe("AthenaUtils", () => {
             expect(result).toBe(true);
             
             // Verify it uses the specified database
-            const call = glueMock.commandCalls(GetTablesCommand)[0];
+            const call = athenaUtils.glueMock.commandCalls(GetTablesCommand)[0];
             expect(call.args[0].input.DatabaseName).toBe("custom_db");
         });
 
         it("should return false when table does not exist", async () => {
-            glueMock.on(GetTablesCommand).resolves({
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({
                 TableList: []
             });
 
@@ -75,7 +74,7 @@ describe("AthenaUtils", () => {
         });
 
         it("should handle undefined TableList", async () => {
-            glueMock.on(GetTablesCommand).resolves({});
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({});
 
             const result = await athenaUtils.tableExists("package_revision");
             expect(result).toBe(false);
@@ -84,7 +83,7 @@ describe("AthenaUtils", () => {
 
     describe("waitForQueryCompletion", () => {
         it("should resolve when query succeeds", async () => {
-            athenaMock.on(GetQueryExecutionCommand).resolves({
+            athenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
                 QueryExecution: {
                     Status: { State: QueryExecutionState.SUCCEEDED }
                 }
@@ -94,7 +93,7 @@ describe("AthenaUtils", () => {
         });
 
         it("should reject when query fails", async () => {
-            athenaMock.on(GetQueryExecutionCommand).resolves({
+            athenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
                 QueryExecution: {
                     Status: { 
                         State: QueryExecutionState.FAILED,
@@ -107,7 +106,7 @@ describe("AthenaUtils", () => {
         });
 
         it("should reject when query is cancelled", async () => {
-            athenaMock.on(GetQueryExecutionCommand).resolves({
+            athenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
                 QueryExecution: {
                     Status: { 
                         State: QueryExecutionState.CANCELLED,
@@ -120,7 +119,7 @@ describe("AthenaUtils", () => {
         });
 
         it("should timeout after max attempts", async () => {
-            athenaMock.on(GetQueryExecutionCommand).resolves({
+            athenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
                 QueryExecution: {
                     Status: { State: QueryExecutionState.RUNNING }
                 }
@@ -132,10 +131,10 @@ describe("AthenaUtils", () => {
 
     describe("executeQuery", () => {
         it("should execute query successfully with Glue config", async () => {
-            athenaMock.on(StartQueryExecutionCommand).resolves({
+            athenaUtils.athenaMock.on(StartQueryExecutionCommand).resolves({
                 QueryExecutionId: "test-execution-id"
             });
-            athenaMock.on(GetQueryExecutionCommand).resolves({
+            athenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
                 QueryExecution: {
                     Status: { State: QueryExecutionState.SUCCEEDED }
                 }
@@ -143,8 +142,8 @@ describe("AthenaUtils", () => {
 
             await expect(athenaUtils.executeQuery("SELECT 1")).resolves.toBeUndefined();
             
-            expect(athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(1);
-            const call = athenaMock.commandCalls(StartQueryExecutionCommand)[0];
+            expect(athenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(1);
+            const call = athenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)[0];
             expect(call.args[0].input).toMatchObject({
                 QueryString: "SELECT 1",
                 QueryExecutionContext: { Database: "test_glue_db" },
@@ -153,10 +152,10 @@ describe("AthenaUtils", () => {
         });
 
         it("should execute query successfully with S3 config", async () => {
-            athenaMock.on(StartQueryExecutionCommand).resolves({
+            s3AthenaUtils.athenaMock.on(StartQueryExecutionCommand).resolves({
                 QueryExecutionId: "test-execution-id"
             });
-            athenaMock.on(GetQueryExecutionCommand).resolves({
+            s3AthenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
                 QueryExecution: {
                     Status: { State: QueryExecutionState.SUCCEEDED }
                 }
@@ -164,8 +163,8 @@ describe("AthenaUtils", () => {
 
             await expect(s3AthenaUtils.executeQuery("CREATE TABLE test AS SELECT 1")).resolves.toBeUndefined();
             
-            expect(athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(1);
-            const call = athenaMock.commandCalls(StartQueryExecutionCommand)[0];
+            expect(s3AthenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(1);
+            const call = s3AthenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)[0];
             expect(call.args[0].input).toMatchObject({
                 QueryString: "CREATE TABLE test AS SELECT 1",
                 QueryExecutionContext: { Database: "test_s3_db" },
@@ -174,7 +173,7 @@ describe("AthenaUtils", () => {
         });
 
         it("should handle missing QueryExecutionId", async () => {
-            athenaMock.on(StartQueryExecutionCommand).resolves({});
+            athenaUtils.athenaMock.on(StartQueryExecutionCommand).resolves({});
 
             await expect(athenaUtils.executeQuery("SELECT 1")).rejects.toThrow("Failed to start query");
         });
@@ -182,7 +181,7 @@ describe("AthenaUtils", () => {
 
     describe("getAllTables", () => {
         it("should return all tables with pagination", async () => {
-            glueMock.on(GetTablesCommand)
+            athenaUtils.glueMock.on(GetTablesCommand)
                 .resolvesOnce({
                     TableList: [{ Name: "table1" }, { Name: "table2" }],
                     NextToken: "token1"
@@ -197,7 +196,7 @@ describe("AthenaUtils", () => {
         });
 
         it("should handle empty table list", async () => {
-            glueMock.on(GetTablesCommand).resolves({});
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({});
 
             const result = await athenaUtils.getAllTables("test_db");
             expect(result).toHaveLength(0);
@@ -207,7 +206,7 @@ describe("AthenaUtils", () => {
     describe("dropAllTitanicTables", () => {
         it("should drop all tables when they exist with correct database context", async () => {
             // Mock tableExists to return true for all tables
-            glueMock.on(GetTablesCommand).resolves({
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({
                 TableList: [
                     { Name: "package_revision" },
                     { Name: "package_tag" },
@@ -215,10 +214,10 @@ describe("AthenaUtils", () => {
                 ]
             });
             
-            athenaMock.on(StartQueryExecutionCommand).resolves({
+            athenaUtils.athenaMock.on(StartQueryExecutionCommand).resolves({
                 QueryExecutionId: "test-execution-id"
             });
-            athenaMock.on(GetQueryExecutionCommand).resolves({
+            athenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
                 QueryExecution: {
                     Status: { State: QueryExecutionState.SUCCEEDED }
                 }
@@ -227,28 +226,28 @@ describe("AthenaUtils", () => {
             await expect(athenaUtils.dropAllTitanicTables("target_db")).resolves.toBeUndefined();
             
             // Should call executeQuery for each table that exists with qualified names
-            expect(athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(3);
+            expect(athenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(3);
             
             // Verify the queries use fully qualified table names with target database
-            const calls = athenaMock.commandCalls(StartQueryExecutionCommand);
+            const calls = athenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand);
             expect(calls[0].args[0].input.QueryString).toBe("DROP TABLE IF EXISTS target_db.package_revision");
             expect(calls[1].args[0].input.QueryString).toBe("DROP TABLE IF EXISTS target_db.package_tag");
             expect(calls[2].args[0].input.QueryString).toBe("DROP TABLE IF EXISTS target_db.package_entry");
             
             // Verify tableExists was called with the target database
-            const glueCalls = glueMock.commandCalls(GetTablesCommand);
+            const glueCalls = athenaUtils.glueMock.commandCalls(GetTablesCommand);
             expect(glueCalls[0].args[0].input.DatabaseName).toBe("target_db");
         });
 
         it("should use write database when no database specified", async () => {
-            glueMock.on(GetTablesCommand).resolves({
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({
                 TableList: [{ Name: "package_revision" }]
             });
             
-            athenaMock.on(StartQueryExecutionCommand).resolves({
+            athenaUtils.athenaMock.on(StartQueryExecutionCommand).resolves({
                 QueryExecutionId: "test-execution-id"
             });
-            athenaMock.on(GetQueryExecutionCommand).resolves({
+            athenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
                 QueryExecution: {
                     Status: { State: QueryExecutionState.SUCCEEDED }
                 }
@@ -257,32 +256,32 @@ describe("AthenaUtils", () => {
             await expect(athenaUtils.dropAllTitanicTables()).resolves.toBeUndefined();
             
             // Verify the default write database is used
-            const glueCall = glueMock.commandCalls(GetTablesCommand)[0];
+            const glueCall = athenaUtils.glueMock.commandCalls(GetTablesCommand)[0];
             expect(glueCall.args[0].input.DatabaseName).toBe("test_glue_db"); // write database for config
             
             // Verify the query uses fully qualified table name with default database
-            const athenaCall = athenaMock.commandCalls(StartQueryExecutionCommand)[0];
+            const athenaCall = athenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)[0];
             expect(athenaCall.args[0].input.QueryString).toBe("DROP TABLE IF EXISTS test_glue_db.package_revision");
         });
 
         it("should skip dropping tables when they don't exist", async () => {
             // Mock tableExists to return false for all tables
-            glueMock.on(GetTablesCommand).resolves({
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({
                 TableList: []
             });
 
             await expect(athenaUtils.dropAllTitanicTables()).resolves.toBeUndefined();
             
             // Should not call any DROP commands since tables don't exist
-            expect(athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(0);
+            expect(athenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(0);
         });
 
         it("should handle errors when dropping tables", async () => {
             // Mock tableExists to return true, but then fail on drop
-            glueMock.on(GetTablesCommand).resolves({
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({
                 TableList: [{ Name: "package_revision" }]
             });
-            athenaMock.on(StartQueryExecutionCommand).rejects(new Error("Drop failed"));
+            athenaUtils.athenaMock.on(StartQueryExecutionCommand).rejects(new Error("Drop failed"));
 
             // Should not throw error, just log it
             await expect(athenaUtils.dropAllTitanicTables()).resolves.toBeUndefined();

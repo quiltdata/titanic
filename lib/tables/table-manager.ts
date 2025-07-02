@@ -14,9 +14,23 @@ export class TableManager {
         private config: Config, // Pass config as parameter
         private glueDatabaseName: string,
         private targetDatabaseName: string,
-        private targetBucket: string
+        private targetBucket: string,
+        athenaUtils?: AthenaUtils // Optional for testing
     ) {
-        this.athenaUtils = new AthenaUtils(config);
+        this.athenaUtils = athenaUtils || new AthenaUtils(config);
+    }
+
+    /**
+     * Create a test instance with injectable AthenaUtils for mocking
+     */
+    static createTestInstance(
+        config: Config,
+        glueDatabaseName: string,
+        targetDatabaseName: string,
+        targetBucket: string,
+        athenaUtils: AthenaUtils
+    ): TableManager {
+        return new TableManager(config, glueDatabaseName, targetDatabaseName, targetBucket, athenaUtils);
     }
 
     /**

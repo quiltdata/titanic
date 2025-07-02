@@ -1,6 +1,7 @@
 import { AthenaClient, GetQueryExecutionCommand, QueryExecutionState, StartQueryExecutionCommand } from "@aws-sdk/client-athena";
 import { GlueClient, GetTablesCommand, GetTablesCommandOutput } from "@aws-sdk/client-glue";
 import { Config } from './config';
+import { mockClient } from "aws-sdk-client-mock";
 
 /**
  * Simplified AthenaUtils - just the essentials for running queries and checking tables
@@ -9,18 +10,25 @@ export class AthenaUtils {
     private readonly athena: AthenaClient;
     private readonly _glue: GlueClient;
     private readonly config: Config;
+    public readonly athenaMock?: any;
+    public readonly glueMock?: any;
 
-    constructor(config: Config, athenaClient?: AthenaClient, glueClient?: GlueClient) {
+    constructor(config: Config, athenaClient?: AthenaClient, glueClient?: GlueClient, athenaMock?: any, glueMock?: any) {
         this.config = config;
         this.athena = athenaClient || new AthenaClient();
         this._glue = glueClient || new GlueClient();
+        this.athenaMock = athenaMock;
+        this.glueMock = glueMock;
     }
 
     /**
-     * Create a test instance with injectable clients for mocking
+     * Create a test instance with mocked clients for testing
      */
-    static createTestInstance(config: Config, athenaClient?: AthenaClient, glueClient?: GlueClient): AthenaUtils {
-        return new AthenaUtils(config, athenaClient, glueClient);
+    static createTestInstance(config: Config): AthenaUtils {
+        const glueMock = mockClient(GlueClient);
+        const athenaMock = mockClient(AthenaClient);
+        
+        return new AthenaUtils(config, athenaMock as any, glueMock as any, athenaMock, glueMock);
     }
 
     /**
