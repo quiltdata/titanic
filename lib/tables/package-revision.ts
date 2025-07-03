@@ -41,9 +41,9 @@ export class PackageRevisionTable extends BaseTable {
     public generateInsertQuery(context: TableContext, sourceTableName: string): string {
         const selectClause = this.generateSelectClause(context.registryName, 's');
         
-        // Use table names directly
+        // Target table is SQL safe and unquoted, source table needs quoting
         const targetTable = this.tableName;
-        const sourceTable = sourceTableName;
+        const sourceTable = `"${sourceTableName}"`;
         
         return `
             INSERT INTO ${targetTable} (registry, pkg_name, top_hash, timestamp, message, metadata)

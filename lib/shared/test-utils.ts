@@ -115,7 +115,7 @@ export function createTableTestSuite(
 
                 expect(query).toContain(`INSERT INTO ${tableName}`);
                 expect(query).toContain("'test_registry' AS registry");
-                expect(query).toContain('FROM source_table s');
+                expect(query).toContain('FROM "source_table" s');
                 expect(query).toContain(`LEFT JOIN ${tableName} t`);
                 
                 // Additional expectations for specific tables
