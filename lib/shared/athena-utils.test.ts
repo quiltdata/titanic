@@ -227,11 +227,11 @@ describe("AthenaUtils", () => {
             // Should call executeQuery for each table that exists with qualified names
             expect(athenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(3);
             
-            // Verify the queries use fully qualified table names with target database
+            // Verify the queries use table names without database prefix for target tables
             const calls = athenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand);
-            expect(calls[0].args[0].input.QueryString).toBe("DROP TABLE IF EXISTS target_db.package_revision");
-            expect(calls[1].args[0].input.QueryString).toBe("DROP TABLE IF EXISTS target_db.package_tag");
-            expect(calls[2].args[0].input.QueryString).toBe("DROP TABLE IF EXISTS target_db.package_entry");
+            expect(calls[0].args[0].input.QueryString).toBe("DROP TABLE IF EXISTS package_revision");
+            expect(calls[1].args[0].input.QueryString).toBe("DROP TABLE IF EXISTS package_tag");
+            expect(calls[2].args[0].input.QueryString).toBe("DROP TABLE IF EXISTS package_entry");
             
             // Verify tableExists was called with the target database
             const glueCalls = athenaUtils.glueMock.commandCalls(GetTablesCommand);
@@ -258,9 +258,9 @@ describe("AthenaUtils", () => {
             const glueCall = athenaUtils.glueMock.commandCalls(GetTablesCommand)[0];
             expect(glueCall.args[0].input.DatabaseName).toBe("test_glue_db"); // write database for config
             
-            // Verify the query uses fully qualified table name with default database
+            // Verify the query uses table name without database prefix for target tables
             const athenaCall = athenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)[0];
-            expect(athenaCall.args[0].input.QueryString).toBe("DROP TABLE IF EXISTS test_glue_db.package_revision");
+            expect(athenaCall.args[0].input.QueryString).toBe("DROP TABLE IF EXISTS package_revision");
         });
 
         it("should skip dropping tables when they don't exist", async () => {

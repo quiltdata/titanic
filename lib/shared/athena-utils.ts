@@ -138,10 +138,9 @@ export class AthenaUtils {
             try {
                 const exists = await this.tableExists(tableName, targetDatabase);
                 if (exists) {
-                    const qualifiedTableName = `${targetDatabase}.${tableName}`;
-                    console.log(`🗑️ Dropping existing table: ${qualifiedTableName}`);
-                    await this.executeQuery(`DROP TABLE IF EXISTS ${qualifiedTableName}`);
-                    console.log(`✅ Successfully dropped table: ${qualifiedTableName}`);
+                    console.log(`🗑️ Dropping existing table: ${tableName} from database ${targetDatabase}`);
+                    await this.executeQuery(`DROP TABLE IF EXISTS ${tableName}`);
+                    console.log(`✅ Successfully dropped table: ${tableName}`);
                 } else {
                     console.log(`⏭️ Table ${tableName} does not exist in ${targetDatabase}, skipping drop`);
                 }
