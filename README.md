@@ -152,12 +152,19 @@ The system includes robust error handling:
 
 ## Troubleshooting
 
+For detailed troubleshooting information, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 ### Common Issues
 
 **Tables not found**: Check that source views exist and are accessible
 ```bash
 aws glue get-tables --database-name $QUILT_DATABASE_NAME
 ```
+
+**Cannot find or access the specified bucket**: The most common issue is missing or inaccessible S3 buckets for Athena results. This typically means:
+- The CDK stack wasn't deployed successfully
+- Environment variables are missing or incorrect  
+- Lambda lacks S3 permissions
 
 **Permission errors**: Verify IAM roles have required permissions:
 - Glue: `GetTables`, `GetTable`

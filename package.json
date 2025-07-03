@@ -12,8 +12,13 @@
     "event:all": "aws events put-events --entries file://doc/event-all.json",
     "event:bake": "aws events put-events --entries file://doc/event-quilt-bake.json",
     "event:staff": "aws events put-events --entries file://doc/event-staff.json",
-    "test": "jest",
-    "test:coverage": "jest --coverage",
+    "logs": "./bin/monitor-logs.sh",
+    "outputs": "aws cloudformation describe-stacks --stack-name TitanicStack --query 'Stacks[0].Outputs'",
+    "test": "jest --verbose --no-coverage",
+    "test:coverage": "jest --coverage --verbose",
+    "test:failed-only": "jest --verbose --onlyFailures",
+    "test:watch": "jest --watch --verbose",
+    "test:debug": "jest --verbose --no-coverage --runInBand --detectOpenHandles",
     "watch": "tsc -w"
   },
   "devDependencies": {
@@ -23,6 +28,7 @@
     "aws-cdk": "2.1019.2",
     "aws-sdk-client-mock": "^4.1.0",
     "jest": "^30.0.0",
+    "jest-junit": "^16.0.0",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "typescript": "~5.8.0"
