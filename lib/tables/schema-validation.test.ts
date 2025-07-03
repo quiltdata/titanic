@@ -20,12 +20,12 @@ describe('Schema Validation Tests', () => {
     beforeEach(() => {
         glueConfig = Config.createTestInstance({
             glueDatabaseName: 'test-glue-db',
-            glueTablesBucket: 'test-glue-bucket'
+            glueTablesBucketArn: 'arn:aws:s3:::test-glue-bucket'
         });
         
         s3Config = S3Config.createTestInstance({
             s3TableDatabaseName: 'test-s3-db',
-            s3TablesBucket: 'test-s3-bucket'
+            s3TablesBucketArn: 'arn:aws:s3tables:us-east-1:123456789012:bucket/test-s3-bucket'
         });
     });
 

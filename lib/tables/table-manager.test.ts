@@ -25,7 +25,7 @@ describe("TableManager", () => {
         
         mockConfig = Config.createTestInstance({
             glueDatabaseName: "test-db",
-            glueTablesBucket: "test-bucket"
+            glueTablesBucketArn: "arn:aws:s3:::test-bucket"
         });
         
         // Create mock AthenaUtils instance using the new AthenaTest class

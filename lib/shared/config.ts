@@ -5,17 +5,17 @@
 export class Config {
   public readonly aws_region: string;
   public readonly glueDatabaseName: string;
-  public readonly glueTablesBucket: string;
+  public readonly glueTablesBucketArn: string;
   public readonly s3TableDatabaseName: string;
-  public readonly s3TablesBucket: string;
+  public readonly s3TablesBucketArn: string;
   public readonly useS3Table: boolean;
 
   constructor(config?: Partial<Config>) {
     this.aws_region = config?.aws_region ?? (process.env.AWS_REGION || 'us-east-1');
     this.glueDatabaseName = config?.glueDatabaseName ?? (process.env.GLUE_DATABASE_NAME || 'glue_database');
-    this.glueTablesBucket = config?.glueTablesBucket ?? (process.env.GLUE_TABLES_BUCKET || '');
+    this.glueTablesBucketArn = config?.glueTablesBucketArn ?? (process.env.GLUE_TABLES_BUCKET_ARN || '');
     this.s3TableDatabaseName = config?.s3TableDatabaseName ?? (process.env.S3TABLE_DATABASE_NAME || 's3_table_database');
-    this.s3TablesBucket = config?.s3TablesBucket ?? (process.env.S3_TABLES_BUCKET || '');
+    this.s3TablesBucketArn = config?.s3TablesBucketArn ?? (process.env.S3_TABLES_BUCKET_ARN || '');
     this.useS3Table = config?.useS3Table ?? false;
   }
   
@@ -40,11 +40,11 @@ export class Config {
   }
   
   public getResultsBucket(): string {
-    return this.glueTablesBucket;
+    return this.getGlueTablesBucketName();
   }
 
   public getTablesBucket(): string {
-    return this.glueTablesBucket;
+    return this.getGlueTablesBucketName();
   }
 
   public createTableQuery(tableName: string, columns: string): string {
@@ -69,6 +69,55 @@ export class Config {
   public static sourceBucketFromTableName(name: string): string {
     return name.replace(/_(objects|packages)-view$/, "");
   }
+
+  /**
+   * Extract bucket name from S3 bucket ARN
+   * Handles both regular S3 buckets and S3 Tables buckets
+   */
+  public static extractBucketNameFromArn(arn: string): string {
+    // Handle S3 Tables ARN: arn:aws:s3tables:region:account:bucket/bucket-name
+    const s3TablesMatch = arn.match(/^arn:aws:s3tables:[^:]+:[^:]+:bucket\/(.+)$/);
+    if (s3TablesMatch) {
+      return s3TablesMatch[1];
+    }
+    
+    // Handle regular S3 bucket ARN: arn:aws:s3:::bucket-name
+    const s3Match = arn.match(/^arn:aws:s3:::(.+)$/);
+    if (s3Match) {
+      return s3Match[1];
+    }
+    
+    // If not an ARN, assume it's already a bucket name
+    return arn;
+  }
+
+  /**
+   * Get Glue tables bucket name (extracted from ARN)
+   */
+  public getGlueTablesBucketName(): string {
+    return Config.extractBucketNameFromArn(this.glueTablesBucketArn);
+  }
+
+  /**
+   * Get Glue tables bucket ARN
+   */
+  public getGlueTablesBucketArn(): string {
+    return this.glueTablesBucketArn;
+  }
+
+  /**
+   * Get S3 Tables bucket name (extracted from ARN)
+   */
+  public getS3TablesBucketName(): string {
+    return Config.extractBucketNameFromArn(this.s3TablesBucketArn);
+  }
+
+  /**
+   * Get S3 Tables bucket ARN
+   */
+  public getS3TablesBucketArn(): string {
+    return this.s3TablesBucketArn;
+  }
 }
 
 export class S3Config extends Config {
@@ -89,16 +138,18 @@ export class S3Config extends Config {
   }
 
   public getTablesBucket(): string {
-    return this.s3TablesBucket;
+    return this.getS3TablesBucketName();
   }
 
   // Always use Glue bucket for Athena query results, even in S3Config
   public getResultsBucket(): string {
-    return this.glueTablesBucket;
+    return this.getGlueTablesBucketName();
   }
 
   public getS3TableCatalogName(): string {
-    return this.s3TablesBucket;
+    // For S3 Tables, Athena expects: s3tablescatalog/bucket-name
+    const bucketName = this.getS3TablesBucketName();
+    return `s3tablescatalog/${bucketName}`;
   }
 
   public createTableQuery(tableName: string, columns: string): string {

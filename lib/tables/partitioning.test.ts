@@ -1,15 +1,18 @@
 import { PackageRevisionTable } from "./package-revision";
 import { Config, S3Config } from "../shared/config";
 
+// Global test configuration constants
+const TEST_CONFIG_PARAMS = {
+    glueTablesBucketArn: "arn:aws:s3:::test-glue-bucket",
+    glueDatabaseName: "test-db",
+    s3TablesBucketArn: "arn:aws:s3tables:us-east-1:123456789012:bucket/test-s3-bucket",
+    s3TableDatabaseName: "test-s3-db"
+};
+
 describe("Table Schema Configuration", () => {
     describe("Glue mode (default)", () => {
         it("should generate CREATE TABLE with WITH clause by default", () => {
-            const config = Config.createTestInstance({
-                glueTablesBucket: "test-bucket",
-                glueDatabaseName: "test-db",
-                s3TablesBucket: "test-s3-bucket",
-                s3TableDatabaseName: "test-s3-db"
-            });
+            const config = Config.createTestInstance(TEST_CONFIG_PARAMS);
             const table = new PackageRevisionTable(config);
             const schema = (table as any).getCompleteCreateTableSchema();
             
@@ -19,12 +22,7 @@ describe("Table Schema Configuration", () => {
         });
 
         it("should generate CREATE TABLE with WITH clause when explicitly disabled", () => {
-            const config = Config.createTestInstance({
-                glueTablesBucket: "test-bucket",
-                glueDatabaseName: "test-db",
-                s3TablesBucket: "test-s3-bucket",
-                s3TableDatabaseName: "test-s3-db"
-            });
+            const config = Config.createTestInstance(TEST_CONFIG_PARAMS);
             const table = new PackageRevisionTable(config);
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket", false);
             
@@ -37,12 +35,7 @@ describe("Table Schema Configuration", () => {
 
     describe("S3 Tables mode", () => {
         it("should generate CREATE TABLE with partitioning when S3 Tables mode enabled", () => {
-            const config = S3Config.createTestInstance({
-                glueTablesBucket: "test-bucket",
-                glueDatabaseName: "test-db",
-                s3TablesBucket: "test-s3-bucket",
-                s3TableDatabaseName: "test-s3-db"
-            });
+            const config = S3Config.createTestInstance(TEST_CONFIG_PARAMS);
             const table = new PackageRevisionTable(config);
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
@@ -54,12 +47,7 @@ describe("Table Schema Configuration", () => {
 
     describe("Schema generation", () => {
         it("should correctly combine base schema with partitioning clause for S3 Tables", () => {
-            const config = S3Config.createTestInstance({
-                glueTablesBucket: "test-bucket",
-                glueDatabaseName: "test-db",
-                s3TablesBucket: "test-s3-bucket",
-                s3TableDatabaseName: "test-s3-db"
-            });
+            const config = S3Config.createTestInstance(TEST_CONFIG_PARAMS);
             const table = new PackageRevisionTable(config);
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
@@ -71,12 +59,7 @@ describe("Table Schema Configuration", () => {
         });
 
         it("should return schema with WITH clause for Glue mode", () => {
-            const config = Config.createTestInstance({
-                glueTablesBucket: "test-bucket",
-                glueDatabaseName: "test-db",
-                s3TablesBucket: "test-s3-bucket",
-                s3TableDatabaseName: "test-s3-db"
-            });
+            const config = Config.createTestInstance(TEST_CONFIG_PARAMS);
             const table = new PackageRevisionTable(config);
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
@@ -88,12 +71,7 @@ describe("Table Schema Configuration", () => {
         });
 
         it("should handle default static property as Glue mode", () => {
-            const config = Config.createTestInstance({
-                glueTablesBucket: "test-bucket",
-                glueDatabaseName: "test-db",
-                s3TablesBucket: "test-s3-bucket",
-                s3TableDatabaseName: "test-s3-db"
-            });
+            const config = Config.createTestInstance(TEST_CONFIG_PARAMS);
             const table = new PackageRevisionTable(config);
             const schema = (table as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
@@ -105,22 +83,12 @@ describe("Table Schema Configuration", () => {
 
         it("should correctly generate S3 Tables with partitions but no WITH clause", () => {
             // Test S3 Tables mode
-            const s3Config = S3Config.createTestInstance({
-                glueTablesBucket: "test-bucket",
-                glueDatabaseName: "test-db",
-                s3TablesBucket: "test-s3-bucket",
-                s3TableDatabaseName: "test-s3-db"
-            });
+            const s3Config = S3Config.createTestInstance(TEST_CONFIG_PARAMS);
             const table1 = new PackageRevisionTable(s3Config);
             const s3Schema = (table1 as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             
             // Test Glue mode
-            const glueConfig = Config.createTestInstance({
-                glueTablesBucket: "test-bucket",
-                glueDatabaseName: "test-db",
-                s3TablesBucket: "test-s3-bucket",
-                s3TableDatabaseName: "test-s3-db"
-            });
+            const glueConfig = Config.createTestInstance(TEST_CONFIG_PARAMS);
             const table2 = new PackageRevisionTable(glueConfig);
             const glueSchema = (table2 as any).getCompleteCreateTableSchema("test-db", "test-bucket");
             

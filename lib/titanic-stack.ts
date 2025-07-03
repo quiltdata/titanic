@@ -64,12 +64,12 @@ export class TitanicStack extends cdk.Stack {
                 // Target database to write to (changes based on USE_S3_TABLE)
                 S3TABLE_DATABASE_NAME: s3DatabaseName,
                 
-                // Target buckets - Lambda chooses based on USE_S3_TABLE
-                GLUE_TABLES_BUCKET: glueTablesBucket.bucketName,
-                S3_TABLES_BUCKET: s3TablesBucket.tableBucketName,
+                // Target buckets - Always pass ARNs for consistency
+                GLUE_TABLES_BUCKET_ARN: glueTablesBucket.bucketArn,
+                S3_TABLES_BUCKET_ARN: s3TablesBucket.tableBucketArn,
                 
-                // Always use regular bucket for Athena results
-                ATHENA_RESULTS_BUCKET: glueTablesBucket.bucketName,
+                // Always use regular bucket for Athena results (ARN format)
+                ATHENA_RESULTS_BUCKET_ARN: glueTablesBucket.bucketArn,
                 
                 // Configuration
                 LAMBDA_TIMEOUT: (props.lambdaTimeout || 15000).toString(),
@@ -161,6 +161,36 @@ export class TitanicStack extends cdk.Stack {
             )
         );
 
+        // Add stack outputs for easy access
+        new cdk.CfnOutput(this, "LambdaFunctionName", {
+            value: mergeLambda.functionName,
+            description: "Name of the Titanic merge tables Lambda function"
+        });
+
+        new cdk.CfnOutput(this, "LambdaLogGroupName", {
+            value: `/aws/lambda/${mergeLambda.functionName}`,
+            description: "CloudWatch log group name for the Titanic merge tables Lambda"
+        });
+
+        new cdk.CfnOutput(this, "GlueTablesBucket", {
+            value: glueTablesBucket.bucketName,
+            description: "S3 bucket for Glue tables and Athena results"
+        });
+
+        new cdk.CfnOutput(this, "S3TablesBucket", {
+            value: s3TablesBucket.tableBucketName,
+            description: "S3 Tables bucket name"
+        });
+
+        new cdk.CfnOutput(this, "SourceDatabaseName", {
+            value: glueDatabaseName,
+            description: "Source Glue database name (where views are read from)"
+        });
+
+        new cdk.CfnOutput(this, "TargetDatabaseName", {
+            value: useS3Table ? s3DatabaseName : glueDatabaseName,
+            description: "Target database name (where tables are written to)"
+        });
 
     }
 }

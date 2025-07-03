@@ -11,24 +11,46 @@ export async function handler(
     event: EventBridgeEvent<string, PackageEventDetail>,
     context: Context,
 ): Promise<HandlerResponse> {
+    console.log("🚀 Starting Titanic merge handler");
+    
     const config = Config.create(); // Use factory method instead of getInstance
     const athenaUtils = new AthenaUtils(config);
     const glueDatabaseName = process.env.GLUE_DATABASE_NAME;
     const s3TableDatabaseName = process.env.S3TABLE_DATABASE_NAME;
-    const glueTablesBucket = process.env.GLUE_TABLES_BUCKET;
-    const s3TablesBucket = process.env.S3_TABLES_BUCKET;
+    const glueTablesBucketArn = process.env.GLUE_TABLES_BUCKET_ARN;
+    const s3TablesBucketArn = process.env.S3_TABLES_BUCKET_ARN;
     
     console.log("Environment variables:", {
         glueDatabaseName,
         s3TableDatabaseName,
-        glueTablesBucket,
-        s3TablesBucket,
+        glueTablesBucketArn,
+        s3TablesBucketArn,
         configType: config.constructor.name,
+        useS3Table: process.env.USE_S3_TABLE
     });
 
-    if (!glueDatabaseName || !s3TableDatabaseName || !glueTablesBucket || !s3TablesBucket) {
+    // Early validation to catch configuration issues
+    console.log("📋 Configuration Summary:", {
+        mode: config.useS3Table ? 'S3 Tables' : 'Glue Tables',
+        readDatabase: config.getReadDatabaseName(),
+        writeDatabase: config.getWriteDatabaseName(),
+        resultsBucket: config.getResultsBucket(),
+        tablesBucket: config.getTablesBucket(),
+        athenaOutputLocation: `s3://${config.getResultsBucket()}/athena-results/`
+    });
+
+    // Test Athena + S3 connectivity early to catch bucket issues
+    console.log("🔬 Testing Athena + S3 connectivity before proceeding...");
+    const athenaConnectivityValid = await athenaUtils.validateAthenaAccess();
+    if (!athenaConnectivityValid) {
+        console.error(`🚨 Athena + S3 connectivity test failed - this will cause DROP TABLE operations to fail`);
+        console.error(`💡 The system can still check table existence (uses Glue API) but cannot execute queries (uses Athena API)`);
+        // Continue execution but warn that table operations may fail
+    }
+
+    if (!glueDatabaseName || !s3TableDatabaseName || !glueTablesBucketArn || !s3TablesBucketArn) {
         throw new Error(
-            "Missing required environment variables: GLUE_DATABASE_NAME, S3TABLE_DATABASE_NAME, GLUE_TABLES_BUCKET, or S3_TABLES_BUCKET",
+            "Missing required environment variables: GLUE_DATABASE_NAME, S3TABLE_DATABASE_NAME, GLUE_TABLES_BUCKET_ARN, or S3_TABLES_BUCKET_ARN",
         );
     }
 

@@ -178,9 +178,9 @@ describe("TitanicStack", () => {
                         GLUE_DATABASE_NAME: "test-database-env",
                         LAMBDA_TIMEOUT: "10000",
                         USE_S3_TABLE: "false",
-                        GLUE_TABLES_BUCKET: Match.anyValue(),
-                        S3_TABLES_BUCKET: Match.anyValue(),
-                        ATHENA_RESULTS_BUCKET: Match.anyValue(),
+                        GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
+                        S3_TABLES_BUCKET_ARN: Match.anyValue(),
+                        ATHENA_RESULTS_BUCKET_ARN: Match.anyValue(),
                     },
                 },
             });
@@ -210,9 +210,9 @@ describe("TitanicStack", () => {
                         GLUE_DATABASE_NAME: "test-database",
                         USE_S3_TABLE: "false",
                         QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
-                        GLUE_TABLES_BUCKET: Match.anyValue(),
-                        S3_TABLES_BUCKET: Match.anyValue(),
-                        ATHENA_RESULTS_BUCKET: Match.anyValue(),
+                        GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
+                        S3_TABLES_BUCKET_ARN: Match.anyValue(),
+                        ATHENA_RESULTS_BUCKET_ARN: Match.anyValue(),
                     },
                 },
             });
@@ -231,9 +231,9 @@ describe("TitanicStack", () => {
                         Variables: {
                             GLUE_DATABASE_NAME: "env_var_db_name",
                             USE_S3_TABLE: "false",
-                            GLUE_TABLES_BUCKET: Match.anyValue(),
-                            S3_TABLES_BUCKET: Match.anyValue(),
-                            ATHENA_RESULTS_BUCKET: Match.anyValue(),
+                            GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
+                            S3_TABLES_BUCKET_ARN: Match.anyValue(),
+                            ATHENA_RESULTS_BUCKET_ARN: Match.anyValue(),
                         },
                     },
                 });
@@ -270,9 +270,9 @@ describe("TitanicStack", () => {
                         S3TABLE_DATABASE_NAME: "quilt_titanic", // This is the hardcoded constant
                         USE_S3_TABLE: "true",
                         QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
-                        GLUE_TABLES_BUCKET: Match.anyValue(),
-                        S3_TABLES_BUCKET: Match.anyValue(),
-                        ATHENA_RESULTS_BUCKET: Match.anyValue(),
+                        GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
+                        S3_TABLES_BUCKET_ARN: Match.anyValue(),
+                        ATHENA_RESULTS_BUCKET_ARN: Match.anyValue(),
                     },
                 },
             });

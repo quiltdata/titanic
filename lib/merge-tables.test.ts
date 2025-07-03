@@ -59,9 +59,9 @@ describe("merge-tables lambda", () => {
         process.env.NODE_ENV = "test";
         process.env.GLUE_DATABASE_NAME = "test-db";
         process.env.S3TABLE_DATABASE_NAME = "test-db";
-        process.env.GLUE_TABLES_BUCKET = "test-bucket";
-        process.env.S3_TABLES_BUCKET = "test-tables-bucket";
-        process.env.ATHENA_RESULTS_BUCKET = "test-bucket";
+        process.env.GLUE_TABLES_BUCKET_ARN = "arn:aws:s3:::test-bucket";
+        process.env.S3_TABLES_BUCKET_ARN = "arn:aws:s3tables:us-east-1:123456789012:bucket/test-tables-bucket";
+        process.env.ATHENA_RESULTS_BUCKET_ARN = "arn:aws:s3:::test-bucket";
         process.env.LAMBDA_TIMEOUT = "5000";
         delete process.env.USE_S3_TABLE; // Default to Glue mode
         glueMock.reset();
@@ -78,7 +78,7 @@ describe("merge-tables lambda", () => {
             delete process.env.S3TABLE_DATABASE_NAME;
             const mockEvent = createEventBridgeEvent();
             await expect(handler(mockEvent, {} as Context)).rejects.toThrow(
-                "Missing required environment variables: GLUE_DATABASE_NAME, S3TABLE_DATABASE_NAME, GLUE_TABLES_BUCKET, or S3_TABLES_BUCKET",
+                "Missing required environment variables: GLUE_DATABASE_NAME, S3TABLE_DATABASE_NAME, GLUE_TABLES_BUCKET_ARN, or S3_TABLES_BUCKET_ARN",
             );
         });
 
@@ -471,7 +471,7 @@ describe("merge-tables lambda", () => {
             const queryCall = startQueryCalls[0];
             expect(queryCall.args[0].input.QueryExecutionContext).toEqual({
                 Database: "test-db", // S3Config uses s3TableDatabaseName
-                Catalog: "test-tables-bucket" // S3Config includes catalog in execution context
+                Catalog: "s3tablescatalog/test-tables-bucket" // S3Config includes catalog in execution context
             });
         });
 

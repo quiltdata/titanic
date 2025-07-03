@@ -32,16 +32,16 @@ export interface TableTestSetup {
 
 export function createTableTestSetup(): TableTestSetup {
     const mockConfig = Config.createTestInstance({
-        glueTablesBucket: "test-bucket",
+        glueTablesBucketArn: "arn:aws:s3:::test-bucket",
         glueDatabaseName: "test-db",
-        s3TablesBucket: "test-s3-bucket",
+        s3TablesBucketArn: "arn:aws:s3tables:us-east-1:123456789012:bucket/test-s3-bucket",
         s3TableDatabaseName: "test-s3-db"
     });
 
     const s3Config = S3Config.createTestInstance({
-        glueTablesBucket: "test-bucket",
+        glueTablesBucketArn: "arn:aws:s3:::test-bucket",
         glueDatabaseName: "test-db",
-        s3TablesBucket: "test-s3-bucket",
+        s3TablesBucketArn: "arn:aws:s3tables:us-east-1:123456789012:bucket/test-s3-bucket",
         s3TableDatabaseName: "test-s3-db"
     });
 
@@ -63,6 +63,27 @@ export function createTableTestSuite(
         
         beforeEach(() => {
             setup = createTableTestSetup();
+        });
+
+        describe("configuration validation", () => {
+            it("should distinguish between Glue API success and Athena API failure", async () => {
+                const athenaUtils = setup.mockAthenaUtils;
+                
+                // Mock Glue API to succeed (table exists)
+                jest.spyOn(athenaUtils, 'tableExists').mockResolvedValue(true);
+                
+                // Mock Athena API to fail (S3 bucket issue)
+                jest.spyOn(athenaUtils, 'executeQuery').mockRejectedValue(
+                    new Error('Cannot find or access the specified bucket')
+                );
+                
+                // This should show that tableExists works but executeQuery fails
+                const tableExists = await athenaUtils.tableExists('test_table');
+                expect(tableExists).toBe(true);
+                
+                await expect(athenaUtils.executeQuery('DROP TABLE test_table'))
+                    .rejects.toThrow('Cannot find or access the specified bucket');
+            });
         });
 
         describe("ensureExists", () => {
@@ -104,9 +125,9 @@ export function createTableTestSuite(
             it("should generate correct INSERT query", () => {
                 const context = createTestTableContext();
                 const config = Config.createTestInstance({
-                    glueTablesBucket: "test-bucket",
+                    glueTablesBucketArn: "arn:aws:s3:::test-bucket",
                     glueDatabaseName: "test-db",
-                    s3TablesBucket: "test-s3-bucket",
+                    s3TablesBucketArn: "arn:aws:s3tables:us-east-1:123456789012:bucket/test-s3-bucket",
                     s3TableDatabaseName: "test-s3-db"
                 });
                 const instance = new TableClass(context, config);
