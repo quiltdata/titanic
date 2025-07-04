@@ -5,7 +5,7 @@ import { TableManager } from "./tables/table-manager";
 import { Config } from "./shared/config";
 import * as fs from "fs";
 
-const SENTINEL_FILE = '/tmp/tables-initialized';
+const SENTINEL_FILE = '/opt/titanic-tables-initialized';
 
 export async function handler(
     event: EventBridgeEvent<string, PackageEventDetail>,
@@ -114,22 +114,28 @@ async function testAthenaConnectivity(athenaUtils: AthenaUtils): Promise<void> {
 async function handleFirstRun(tableManager: TableManager): Promise<void> {
     const isFirstRun = !fs.existsSync(SENTINEL_FILE);
     if (isFirstRun) {
-        console.log('First run after deployment detected, dropping existing tables if they exist...');
-        await tableManager.executeDrops();
-        console.log('Existing tables dropped successfully');
-        console.log('Creating tables on first run...');
-        const createResult = await tableManager.createTables();
-        
-        if (createResult.failedTables > 0) {
-            const errorMessage = `Table creation failed: ${createResult.failedTables} out of ${createResult.totalQueries} tables failed to create. Cannot proceed with merge operations.`;
-            console.error(errorMessage);
-            throw new Error(errorMessage);
-        }
-        
-        console.log('Tables created successfully');
+        console.log('First run after deployment detected, initializing tables...');
+        await initializeTables(tableManager);
         fs.writeFileSync(SENTINEL_FILE, new Date().toISOString());
         console.log('Created sentinel file, tables will not be dropped on subsequent runs');
     }
+}
+
+async function initializeTables(tableManager: TableManager): Promise<void> {
+    console.log('Dropping existing tables if they exist...');
+    await tableManager.executeDrops();
+    console.log('Existing tables dropped successfully');
+    
+    console.log('Creating tables...');
+    const createResult = await tableManager.createTables();
+    
+    if (createResult.failedTables > 0) {
+        const errorMessage = `Table creation failed: ${createResult.failedTables} out of ${createResult.totalQueries} tables failed to create. Cannot proceed with merge operations.`;
+        console.error(errorMessage);
+        throw new Error(errorMessage);
+    }
+    
+    console.log('Tables created successfully');
 }
 
 function filterSourceTables(allTables: string[], bucket: string): string[] {
