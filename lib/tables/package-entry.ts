@@ -1,8 +1,8 @@
 import { BaseTable } from "./base-table";
-import { TableContext, ColumnDefinitions } from "../shared/types";
+import { ColumnDefinitions } from "../shared/types";
 
 export class PackageEntryTable extends BaseTable {
-    protected get tableName(): string {
+    public get tableName(): string {
         return "package_entry";
     }
 
@@ -47,12 +47,14 @@ export class PackageEntryTable extends BaseTable {
         return '';
     }
 
-    public generateInsertQuery(context: TableContext, sourceTableName: string): string {
-        const selectClause = this.generateSelectClause(context.registryName, 's');
+    public generateInsertQuery(packagesView: string, objectsView: string): string {
+        // Extract registry name from the objects view table name
+        const registryName = this.extractRegistryName(objectsView);
+        const selectClause = this.generateSelectClause(registryName, 's');
         
         // Target table is SQL safe and unquoted, source table needs quoting
         const targetTable = this.tableName;
-        const sourceTable = `"${sourceTableName}"`;
+        const sourceTable = `"${objectsView}"`;
         
         return `
             INSERT INTO ${targetTable} (registry, top_hash, logical_key, physical_key, multihash, size, metadata)
@@ -63,7 +65,19 @@ export class PackageEntryTable extends BaseTable {
               ON s.logical_key = t.logical_key
               AND s.meta = t.metadata
               AND s.top_hash = t.top_hash
-              AND t.registry = '${context.registryName}'
+              AND t.registry = '${registryName}'
             WHERE t.logical_key IS NULL`;
+    }
+
+    private extractRegistryName(tableName: string): string {
+        // Extract registry name from table name like "npm_objects-view"
+        // or "AwsDataCatalog"."userathenadatabase-6fosfzznfasm"."quilt-bake_objects-view"
+        
+        // First remove quotes and database/catalog prefixes if present
+        const cleanTableName = tableName.replace(/^".*"\.".*"\."|^".*"\.|"$/g, '');
+        
+        // Then extract the registry name from the clean table name
+        const match = cleanTableName.match(/^(.+?)_objects-view$/);
+        return match ? match[1] : 'unknown';
     }
 }

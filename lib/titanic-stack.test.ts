@@ -44,13 +44,23 @@ const expectS3BucketLocationPermissions = (template: Template) => {
     expect(policy).toBeDefined();
     const statements = policy.Properties.PolicyDocument.Statement;
     
-    // Check for either a single action or an array containing the action
-    const hasS3BucketLocationPermission = statements.some((statement: any) => 
+    // Find all statements that grant s3:GetBucketLocation
+    const s3BucketLocationStatements = statements.filter((statement: any) => 
         statement.Action === "s3:GetBucketLocation" || 
         (Array.isArray(statement.Action) && statement.Action.includes("s3:GetBucketLocation"))
     );
     
-    expect(hasS3BucketLocationPermission).toBe(true);
+    expect(s3BucketLocationStatements.length).toBeGreaterThanOrEqual(2); // Should have at least 2 statements for both buckets
+    
+    // Check that we have permissions for both bucket types
+    const allResources = s3BucketLocationStatements.flatMap((stmt: any) => 
+        Array.isArray(stmt.Resource) ? stmt.Resource : [stmt.Resource]
+    );
+    
+    // Should have bucket location permissions for both the Glue tables bucket and S3 tables bucket
+    // The exact ARNs will be generated dynamically, but we should have at least 2 different bucket ARNs
+    const uniqueBuckets = [...new Set(allResources)];
+    expect(uniqueBuckets.length).toBeGreaterThanOrEqual(2);
 };
 
 const expectGluePermissions = (template: Template, expectedSourceDatabaseName: string) => {

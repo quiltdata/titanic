@@ -136,7 +136,6 @@ export class TitanicStack extends cdk.Stack {
         mergeLambda.addToRolePolicy(
             new iam.PolicyStatement({
                 actions: [
-                    "s3:GetBucketLocation",
                     "s3tables:GetTable",
                     "s3tables:CreateTable",
                     "s3tables:PutTableData",
@@ -149,6 +148,14 @@ export class TitanicStack extends cdk.Stack {
                     s3TablesBucket.tableBucketArn,
                     `${s3TablesBucket.tableBucketArn}/*`,
                 ],
+            }),
+        );
+
+        // Grant S3 bucket location permission for S3 Tables bucket separately
+        mergeLambda.addToRolePolicy(
+            new iam.PolicyStatement({
+                actions: ["s3:GetBucketLocation"],
+                resources: [s3TablesBucket.tableBucketArn],
             }),
         );
 

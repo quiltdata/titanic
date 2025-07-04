@@ -9,13 +9,12 @@ import { Config, S3Config } from '../shared/config';
 import { PackageRevisionTable } from './package-revision';
 import { PackageTagTable } from './package-tag';
 import { PackageEntryTable } from './package-entry';
-import { createTableContext } from '../shared/types';
 
 describe('Schema Validation Tests', () => {
     let glueConfig: Config;
     let s3Config: S3Config;
-    const testContext = createTableContext('test-registry');
-    const sourceTable = 'test-source-table';
+    const packagesView = 'test-registry_packages-view';
+    const objectsView = 'test-registry_objects-view';
     
     beforeEach(() => {
         glueConfig = Config.createTestInstance({
@@ -33,7 +32,7 @@ describe('Schema Validation Tests', () => {
         describe('package_revision S3 CREATE TABLE', () => {
             it('should generate correct S3 CREATE TABLE schema matching schema.sql', () => {
                 const table = new PackageRevisionTable(s3Config);
-                const schema = table['getCompleteCreateTableSchema']();
+                const schema = table['generateCreateQuery']();
                 
                 // Basic CREATE TABLE structure from schema.sql
                 expect(schema).toContain('CREATE TABLE');
@@ -63,7 +62,7 @@ describe('Schema Validation Tests', () => {
         describe('package_tag S3 CREATE TABLE', () => {
             it('should generate correct S3 CREATE TABLE schema matching schema.sql', () => {
                 const table = new PackageTagTable(s3Config);
-                const schema = table['getCompleteCreateTableSchema']();
+                const schema = table['generateCreateQuery']();
                 
                 // Basic CREATE TABLE structure from schema.sql
                 expect(schema).toContain('CREATE TABLE');
@@ -91,7 +90,7 @@ describe('Schema Validation Tests', () => {
         describe('package_entry S3 CREATE TABLE', () => {
             it('should generate correct S3 CREATE TABLE schema matching schema.sql', () => {
                 const table = new PackageEntryTable(s3Config);
-                const schema = table['getCompleteCreateTableSchema']();
+                const schema = table['generateCreateQuery']();
                 
                 // Basic CREATE TABLE structure from schema.sql
                 expect(schema).toContain('CREATE TABLE');
@@ -122,7 +121,7 @@ describe('Schema Validation Tests', () => {
         describe('package_revision Glue CTAS', () => {
             it('should generate correct Glue CTAS query matching schema.sql patterns', () => {
                 const table = new PackageRevisionTable(glueConfig);
-                const ctas = table['generateCtasQuery']();
+                const ctas = table['generateCreateQuery']();
                 
                 expect(ctas).toContain('CREATE TABLE package_revision');
                 expect(ctas).toContain('WITH (');
@@ -145,7 +144,7 @@ describe('Schema Validation Tests', () => {
         describe('package_tag Glue CTAS', () => {
             it('should generate correct Glue CTAS query matching schema.sql patterns', () => {
                 const table = new PackageTagTable(glueConfig);
-                const ctas = table['generateCtasQuery']();
+                const ctas = table['generateCreateQuery']();
                 
                 expect(ctas).toContain('CREATE TABLE package_tag');
                 expect(ctas).toContain('WITH (');
@@ -166,7 +165,7 @@ describe('Schema Validation Tests', () => {
         describe('package_entry Glue CTAS', () => {
             it('should generate correct Glue CTAS query matching schema.sql patterns', () => {
                 const table = new PackageEntryTable(glueConfig);
-                const ctas = table['generateCtasQuery']();
+                const ctas = table['generateCreateQuery']();
                 
                 expect(ctas).toContain('CREATE TABLE package_entry');
                 expect(ctas).toContain('WITH (');
@@ -188,155 +187,73 @@ describe('Schema Validation Tests', () => {
         });
     });
 
-    describe('S3 Tables - INSERT Operations', () => {
-        describe('package_revision S3 INSERT', () => {
-            it('should generate INSERT SQL matching schema.sql patterns', () => {
-                const table = new PackageRevisionTable(s3Config);
-                const sql = table.generateInsertQuery(testContext, sourceTable);
-                
-                expect(sql).toContain('INSERT INTO');
-                expect(sql).toContain('package_revision');
-                expect(sql).toContain('registry, pkg_name, top_hash, timestamp, message, metadata');
-                expect(sql).toContain("'test-registry' AS registry");
-                expect(sql).toContain('s.pkg_name');
-                expect(sql).toContain('s.top_hash');
-                expect(sql).toContain('from_unixtime(CAST(s.timestamp AS bigint)) AS timestamp');
-                expect(sql).toContain('s.message');
-                expect(sql).toContain('s.user_meta AS metadata');
-                expect(sql).toContain('LEFT JOIN');
-                expect(sql).toContain('ON s.pkg_name = t.pkg_name');
-                expect(sql).toContain('AND s.top_hash = t.top_hash');
-                expect(sql).toContain("AND t.registry = 'test-registry'");
-                expect(sql).toContain("WHERE t.pkg_name IS NULL");
-                expect(sql).toContain("AND s.timestamp != 'latest'");
-            });
-        });
-
-        describe('package_tag S3 INSERT', () => {
-            it('should generate INSERT SQL matching schema.sql patterns', () => {
-                const table = new PackageTagTable(s3Config);
-                const sql = table.generateInsertQuery(testContext, sourceTable);
-                
-                expect(sql).toContain('INSERT INTO');
-                expect(sql).toContain('package_tag');
-                expect(sql).toContain('registry, pkg_name, tag_name, top_hash');
-                expect(sql).toContain("'test-registry' AS registry");
-                expect(sql).toContain('s.pkg_name');
-                expect(sql).toContain('s.timestamp AS tag_name');
-                expect(sql).toContain('s.top_hash');
-                expect(sql).toContain('LEFT JOIN');
-                expect(sql).toContain('ON s.pkg_name = t.pkg_name');
-                expect(sql).toContain('AND s.timestamp = t.tag_name');
-                expect(sql).toContain("AND t.registry = 'test-registry'");
-                expect(sql).toContain("WHERE s.timestamp = 'latest'");
-                expect(sql).toContain("AND (t.top_hash IS NULL OR s.top_hash != t.top_hash)");
-            });
-        });
-
-        describe('package_entry S3 INSERT', () => {
-            it('should generate INSERT SQL matching schema.sql patterns', () => {
-                const table = new PackageEntryTable(s3Config);
-                const sql = table.generateInsertQuery(testContext, sourceTable);
-                
-                expect(sql).toContain('INSERT INTO');
-                expect(sql).toContain('package_entry');
-                expect(sql).toContain('registry, top_hash, logical_key, physical_key, multihash, size, metadata');
-                expect(sql).toContain("'test-registry' AS registry");
-                expect(sql).toContain('s.top_hash');
-                expect(sql).toContain('s.logical_key');
-                expect(sql).toContain('s.physical_key');
-                expect(sql).toContain('concat(');
-                expect(sql).toContain('CASE s.hash.type');
-                expect(sql).toContain("WHEN 'SHA256' THEN '1220'");
-                expect(sql).toContain("WHEN 'sha2-256-chunked' THEN 'b150'");
-                expect(sql).toContain("ELSE '0000'");
-                expect(sql).toContain('s.hash.value');
-                expect(sql).toContain('AS multihash');
-                expect(sql).toContain('s.size');
-                expect(sql).toContain('s.meta AS metadata');
-                expect(sql).toContain('LEFT JOIN');
-                expect(sql).toContain('ON s.logical_key = t.logical_key');
-                expect(sql).toContain('AND s.meta = t.metadata');
-                expect(sql).toContain('AND s.top_hash = t.top_hash');
-                expect(sql).toContain("AND t.registry = 'test-registry'");
-                expect(sql).toContain('WHERE t.logical_key IS NULL');
-            });
-        });
-    });
-
     describe('Glue Tables - INSERT Operations', () => {
-        describe('package_revision Glue INSERT', () => {
-            it('should generate INSERT SQL matching schema.sql patterns', () => {
-                const table = new PackageRevisionTable(glueConfig);
-                const sql = table.generateInsertQuery(testContext, sourceTable);
-                
-                expect(sql).toContain('INSERT INTO');
-                expect(sql).toContain('package_revision');
-                expect(sql).toContain('registry, pkg_name, top_hash, timestamp, message, metadata');
-                expect(sql).toContain("'test-registry' AS registry");
-                expect(sql).toContain('s.pkg_name');
-                expect(sql).toContain('s.top_hash');
-                expect(sql).toContain('from_unixtime(CAST(s.timestamp AS bigint)) AS timestamp');
-                expect(sql).toContain('s.message');
-                expect(sql).toContain('s.user_meta AS metadata');
-                expect(sql).toContain('LEFT JOIN');
-                expect(sql).toContain('ON s.pkg_name = t.pkg_name');
-                expect(sql).toContain('AND s.top_hash = t.top_hash');
-                expect(sql).toContain("AND t.registry = 'test-registry'");
-                expect(sql).toContain("WHERE t.pkg_name IS NULL");
-                expect(sql).toContain("AND s.timestamp != 'latest'");
-            });
+        it('should generate INSERT SQL for package_revision matching schema.sql patterns', () => {
+            const table = new PackageRevisionTable(glueConfig);
+            const sql = table.generateInsertQuery(packagesView, objectsView);
+
+            expect(sql).toContain('INSERT INTO');
+            expect(sql).toContain('package_revision');
+            expect(sql).toContain('registry, pkg_name, top_hash, timestamp, message, metadata');
+            expect(sql).toContain("'test-registry' AS registry");
+            expect(sql).toContain('s.pkg_name');
+            expect(sql).toContain('s.top_hash');
+            expect(sql).toContain('from_unixtime(CAST(s.timestamp AS bigint)) AS timestamp');
+            expect(sql).toContain('s.message');
+            expect(sql).toContain('s.user_meta AS metadata');
+            expect(sql).toContain('LEFT JOIN');
+            expect(sql).toContain('ON s.pkg_name = t.pkg_name');
+            expect(sql).toContain('AND s.top_hash = t.top_hash');
+            expect(sql).toContain("AND t.registry = 'test-registry'");
+            expect(sql).toContain("WHERE t.pkg_name IS NULL");
+            expect(sql).toContain("AND s.timestamp != 'latest'");
         });
 
-        describe('package_tag Glue INSERT', () => {
-            it('should generate INSERT SQL matching schema.sql patterns', () => {
-                const table = new PackageTagTable(glueConfig);
-                const sql = table.generateInsertQuery(testContext, sourceTable);
-                
-                expect(sql).toContain('INSERT INTO');
-                expect(sql).toContain('package_tag');
-                expect(sql).toContain('registry, pkg_name, tag_name, top_hash');
-                expect(sql).toContain("'test-registry' AS registry");
-                expect(sql).toContain('s.pkg_name');
-                expect(sql).toContain('s.timestamp AS tag_name');
-                expect(sql).toContain('s.top_hash');
-                expect(sql).toContain('LEFT JOIN');
-                expect(sql).toContain('ON s.pkg_name = t.pkg_name');
-                expect(sql).toContain('AND s.timestamp = t.tag_name');
-                expect(sql).toContain("AND t.registry = 'test-registry'");
-                expect(sql).toContain("WHERE s.timestamp = 'latest'");
-                expect(sql).toContain("AND (t.top_hash IS NULL OR s.top_hash != t.top_hash)");
-            });
+        it('should generate INSERT SQL for package_tag matching schema.sql patterns', () => {
+            const table = new PackageTagTable(glueConfig);
+            const sql = table.generateInsertQuery(packagesView, objectsView);
+
+            expect(sql).toContain('INSERT INTO');
+            expect(sql).toContain('package_tag');
+            expect(sql).toContain('registry, pkg_name, tag_name, top_hash');
+            expect(sql).toContain("'test-registry' AS registry");
+            expect(sql).toContain('s.pkg_name');
+            expect(sql).toContain('s.timestamp AS tag_name');
+            expect(sql).toContain('s.top_hash');
+            expect(sql).toContain('LEFT JOIN');
+            expect(sql).toContain('ON s.pkg_name = t.pkg_name');
+            expect(sql).toContain('AND s.timestamp = t.tag_name');
+            expect(sql).toContain("AND t.registry = 'test-registry'");
+            expect(sql).toContain("WHERE s.timestamp = 'latest'");
+            expect(sql).toContain("AND (t.top_hash IS NULL OR s.top_hash != t.top_hash)");
         });
 
-        describe('package_entry Glue INSERT', () => {
-            it('should generate INSERT SQL matching schema.sql patterns', () => {
-                const table = new PackageEntryTable(glueConfig);
-                const sql = table.generateInsertQuery(testContext, sourceTable);
-                
-                expect(sql).toContain('INSERT INTO');
-                expect(sql).toContain('package_entry');
-                expect(sql).toContain('registry, top_hash, logical_key, physical_key, multihash, size, metadata');
-                expect(sql).toContain("'test-registry' AS registry");
-                expect(sql).toContain('s.top_hash');
-                expect(sql).toContain('s.logical_key');
-                expect(sql).toContain('s.physical_key');
-                expect(sql).toContain('concat(');
-                expect(sql).toContain('CASE s.hash.type');
-                expect(sql).toContain("WHEN 'SHA256' THEN '1220'");
-                expect(sql).toContain("WHEN 'sha2-256-chunked' THEN 'b150'");
-                expect(sql).toContain("ELSE '0000'");
-                expect(sql).toContain('s.hash.value');
-                expect(sql).toContain('AS multihash');
-                expect(sql).toContain('s.size');
-                expect(sql).toContain('s.meta AS metadata');
-                expect(sql).toContain('LEFT JOIN');
-                expect(sql).toContain('ON s.logical_key = t.logical_key');
-                expect(sql).toContain('AND s.meta = t.metadata');
-                expect(sql).toContain('AND s.top_hash = t.top_hash');
-                expect(sql).toContain("AND t.registry = 'test-registry'");
-                expect(sql).toContain('WHERE t.logical_key IS NULL');
-            });
+        it('should generate INSERT SQL for package_entry matching schema.sql patterns', () => {
+            const table = new PackageEntryTable(glueConfig);
+            const sql = table.generateInsertQuery(packagesView, objectsView);
+
+            expect(sql).toContain('INSERT INTO');
+            expect(sql).toContain('package_entry');
+            expect(sql).toContain('registry, top_hash, logical_key, physical_key, multihash, size, metadata');
+            expect(sql).toContain("'test-registry' AS registry");
+            expect(sql).toContain('s.top_hash');
+            expect(sql).toContain('s.logical_key');
+            expect(sql).toContain('s.physical_key');
+            expect(sql).toContain('concat(');
+            expect(sql).toContain('CASE s.hash.type');
+            expect(sql).toContain("WHEN 'SHA256' THEN '1220'");
+            expect(sql).toContain("WHEN 'sha2-256-chunked' THEN 'b150'");
+            expect(sql).toContain("ELSE '0000'");
+            expect(sql).toContain('s.hash.value');
+            expect(sql).toContain('AS multihash');
+            expect(sql).toContain('s.size');
+            expect(sql).toContain('s.meta AS metadata');
+            expect(sql).toContain('LEFT JOIN');
+            expect(sql).toContain('ON s.logical_key = t.logical_key');
+            expect(sql).toContain('AND s.meta = t.metadata');
+            expect(sql).toContain('AND s.top_hash = t.top_hash');
+            expect(sql).toContain("AND t.registry = 'test-registry'");
+            expect(sql).toContain('WHERE t.logical_key IS NULL');
         });
     });
 
@@ -393,11 +310,11 @@ describe('Schema Validation Tests', () => {
         it('should validate source table formatting flexibility', () => {
             // Test that our table classes can handle both generic source tables
             // and specific Quilt source view references like in schema.sql
-            const quiltContext = createTableContext('quilt-bake');
-            const quiltSourceTable = '"AwsDataCatalog"."userathenadatabase-6fosfzznfasm"."quilt-bake_packages-view"';
+            const quiltPackagesView = '"AwsDataCatalog"."userathenadatabase-6fosfzznfasm"."quilt-bake_packages-view"';
+            const quiltObjectsView = '"AwsDataCatalog"."userathenadatabase-6fosfzznfasm"."quilt-bake_objects-view"';
             
             const table = new PackageRevisionTable(glueConfig);
-            const sql = table.generateInsertQuery(quiltContext, quiltSourceTable);
+            const sql = table.generateInsertQuery(quiltPackagesView, quiltObjectsView);
             
             expect(sql).toContain('INSERT INTO');
             expect(sql).toContain('package_revision');
@@ -408,7 +325,7 @@ describe('Schema Validation Tests', () => {
         it('should validate all tables support proper JOIN conditions for data integrity', () => {
             // package_revision: immutable - only insert new rows based on pkg_name + top_hash combination
             const revisionTable = new PackageRevisionTable(glueConfig);
-            const revisionSql = revisionTable.generateInsertQuery(testContext, sourceTable);
+            const revisionSql = revisionTable.generateInsertQuery(packagesView, objectsView);
             expect(revisionSql).toContain('ON s.pkg_name = t.pkg_name');
             expect(revisionSql).toContain('AND s.top_hash = t.top_hash');
             expect(revisionSql).toContain('WHERE t.pkg_name IS NULL');
@@ -416,7 +333,7 @@ describe('Schema Validation Tests', () => {
             
             // package_tag: mutable - insert or update based on tag/top_hash changes  
             const tagTable = new PackageTagTable(glueConfig);
-            const tagSql = tagTable.generateInsertQuery(testContext, sourceTable);
+            const tagSql = tagTable.generateInsertQuery(packagesView, objectsView);
             expect(tagSql).toContain('ON s.pkg_name = t.pkg_name');
             expect(tagSql).toContain('AND s.timestamp = t.tag_name');
             expect(tagSql).toContain("WHERE s.timestamp = 'latest'");
@@ -424,11 +341,30 @@ describe('Schema Validation Tests', () => {
             
             // package_entry: immutable - only insert new rows based on logical_key + metadata + top_hash combination
             const entryTable = new PackageEntryTable(glueConfig);
-            const entrySql = entryTable.generateInsertQuery(testContext, sourceTable);
+            const entrySql = entryTable.generateInsertQuery(packagesView, objectsView);
             expect(entrySql).toContain('ON s.logical_key = t.logical_key');
             expect(entrySql).toContain('AND s.meta = t.metadata');
             expect(entrySql).toContain('AND s.top_hash = t.top_hash');
             expect(entrySql).toContain('WHERE t.logical_key IS NULL');
+        });
+    });
+
+    describe('CREATE and DROP TABLE Operations', () => {
+        it('should generate CREATE TABLE SQL', () => {
+            const table = new PackageRevisionTable(s3Config);
+            const sql = table.query('create');
+            
+            expect(sql).toContain('CREATE TABLE');
+            expect(sql).toContain('package_revision');
+            expect(sql).toContain('registry STRING');
+            expect(sql).toContain('pkg_name STRING');
+        });
+
+        it('should generate DROP TABLE SQL', () => {
+            const table = new PackageRevisionTable(s3Config);
+            const sql = table.query('drop');
+            
+            expect(sql).toBe('DROP TABLE IF EXISTS package_revision');
         });
     });
 });

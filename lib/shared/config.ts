@@ -43,7 +43,7 @@ export class Config {
     return this.getGlueTablesBucketName();
   }
 
-  public getTablesBucket(): string {
+  public getTargetBucket(): string {
     return this.getGlueTablesBucketName();
   }
 
@@ -137,7 +137,7 @@ export class S3Config extends Config {
     return this.s3TableDatabaseName;
   }
 
-  public getTablesBucket(): string {
+  public getTargetBucket(): string {
     return this.getS3TablesBucketName();
   }
 
@@ -156,7 +156,7 @@ export class S3Config extends Config {
     return `
       CREATE TABLE ${tableName} (
         ${columns}
-      ) LOCATION 's3://${this.getTablesBucket()}/${tableName}/'
+      ) LOCATION 's3://${this.getTargetBucket()}/${tableName}/'
     `;
   }
 

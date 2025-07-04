@@ -14,9 +14,9 @@
     "event:staff": "aws events put-events --entries file://doc/event-staff.json",
     "logs": "./bin/monitor-logs.sh",
     "outputs": "aws cloudformation describe-stacks --stack-name TitanicStack --query 'Stacks[0].Outputs'",
-    "test": "jest --verbose --no-coverage",
+    "test": "jest --no-coverage",
     "test:coverage": "jest --coverage --verbose",
-    "test:failed-only": "jest --verbose --onlyFailures",
+    "test:fails": "jest --onlyFailures --verbose",
     "test:watch": "jest --watch --verbose",
     "test:debug": "jest --verbose --no-coverage --runInBand --detectOpenHandles",
     "watch": "tsc -w"

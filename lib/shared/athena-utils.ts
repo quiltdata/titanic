@@ -14,7 +14,7 @@ export class AthenaUtils {
         this.config = config;
         this.athena = athenaClient || new AthenaClient();
         this._glue = glueClient || new GlueClient();
-        
+
         // Validate configuration on startup
         this.validateConfiguration();
     }
@@ -24,21 +24,21 @@ export class AthenaUtils {
      */
     private validateConfiguration(): void {
         const issues: string[] = [];
-        
+
         if (!this.config.getResultsBucket()) {
-            issues.push('Results bucket is empty - check GLUE_TABLES_BUCKET environment variable');
+            issues.push('Results bucket is empty - check GLUE_TABLES_BUCKET_ARN environment variable');
         }
-        
+
         if (!this.config.getWriteDatabaseName()) {
             issues.push('Write database name is empty - check GLUE_DATABASE_NAME or S3TABLE_DATABASE_NAME environment variables');
         }
-        
+
         if (!this.config.getReadDatabaseName()) {
             issues.push('Read database name is empty - check GLUE_DATABASE_NAME environment variable');
         }
-        
+
         if (issues.length > 0) {
-            console.warn(`⚠️ Configuration issues detected:`, {
+            console.warn(`Configuration issues detected:`, {
                 issues,
                 currentConfig: {
                     configType: this.config.constructor.name,
@@ -48,10 +48,10 @@ export class AthenaUtils {
                     useS3Table: this.config.useS3Table
                 },
                 environmentVariables: {
-                    GLUE_TABLES_BUCKET: process.env.GLUE_TABLES_BUCKET,
+                    GLUE_TABLES_BUCKET_ARN: process.env.GLUE_TABLES_BUCKET_ARN,
                     GLUE_DATABASE_NAME: process.env.GLUE_DATABASE_NAME,
                     S3TABLE_DATABASE_NAME: process.env.S3TABLE_DATABASE_NAME,
-                    S3_TABLES_BUCKET: process.env.S3_TABLES_BUCKET,
+                    S3_TABLES_BUCKET_ARN: process.env.S3_TABLES_BUCKET_ARN,
                     USE_S3_TABLE: process.env.USE_S3_TABLE
                 }
             });
@@ -62,20 +62,46 @@ export class AthenaUtils {
      * Test Athena + S3 connectivity with a simple query
      * This validates that both Athena and the results bucket are accessible
      */
-    async validateAthenaAccess(): Promise<boolean> {
+    async validateAthenaAccess(): Promise<{
+        success: boolean;
+        executionContext: any;
+        outputLocation: string;
+        testQuery: string;
+        configType: string;
+        error?: string;
+    }> {
+        const executionContext = this.config.getExecutionContext();
+        const outputLocation = `s3://${this.config.getResultsBucket()}/athena-results/`;
+        const testQuery = 'SELECT 1 AS test_connection';
+        const configType = this.config.constructor.name;
+
         try {
-            console.log(`🔬 Testing Athena + S3 connectivity...`);
+            console.log(`Testing Athena + S3 connectivity...`);
             // Use a simple SELECT 1 query to test Athena + S3 integration
-            await this.executeQuery('SELECT 1 AS test_connection');
-            console.log(`✅ Athena + S3 connectivity test passed`);
-            return true;
+            await this.executeQuery(testQuery);
+            console.log(`Athena + S3 connectivity test passed`);
+            return {
+                success: true,
+                executionContext,
+                outputLocation,
+                testQuery,
+                configType
+            };
         } catch (error) {
-            console.error(`❌ Athena + S3 connectivity test failed:`, {
-                error: error instanceof Error ? error.message : String(error),
-                outputLocation: `s3://${this.config.getResultsBucket()}/athena-results/`,
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error(`Athena + S3 connectivity test failed:`, {
+                error: errorMessage,
+                outputLocation,
                 bucketName: this.config.getResultsBucket()
             });
-            return false;
+            return {
+                success: false,
+                executionContext,
+                outputLocation,
+                testQuery,
+                configType,
+                error: errorMessage
+            };
         }
     }
 
@@ -85,8 +111,8 @@ export class AthenaUtils {
     async executeQuery(query: string): Promise<void> {
         const database = this.config.getWriteDatabaseName();
         const outputLocation = `s3://${this.config.getResultsBucket()}/athena-results/`;
-        
-        console.log(`🔍 Executing query with context:`, {
+
+        console.log(`Executing query with context:`, {
             database,
             outputLocation,
             configType: this.config.constructor.name,
@@ -94,11 +120,11 @@ export class AthenaUtils {
         });
 
         // Log bucket information for diagnostics
-        console.log(`📦 S3 Configuration:`, {
+        console.log(`S3 Configuration:`, {
             resultsBucket: this.config.getResultsBucket(),
-            tablesBucket: this.config.getTablesBucket(),
-            bucketFromEnv: process.env.GLUE_TABLES_BUCKET,
-            s3BucketFromEnv: process.env.S3_TABLES_BUCKET
+            tablesBucket: this.config.getTargetBucket(),
+            bucketFromEnv: process.env.GLUE_TABLES_BUCKET_ARN,
+            s3BucketFromEnv: process.env.S3_TABLES_BUCKET_ARN
         });
 
         try {
@@ -112,36 +138,36 @@ export class AthenaUtils {
                 throw new Error("Failed to start query");
             }
 
-            console.log(`📝 Query started with ID: ${response.QueryExecutionId}`);
-            await this.waitForCompletion(response.QueryExecutionId);
-            console.log(`✅ Query completed successfully: ${response.QueryExecutionId}`);
+            console.log(`Query started with ID: ${response.QueryExecutionId}`);
+            await this.waitForQueryCompletion(response.QueryExecutionId);
+            console.log(`Query completed successfully: ${response.QueryExecutionId}`);
         } catch (error) {
             // Enhanced error logging for S3 bucket issues
             if (error instanceof Error) {
-                console.error(`❌ Query execution failed:`, {
+                console.error(`Query execution failed:`, {
                     errorMessage: error.message,
                     queryPreview: query.substring(0, 100),
                     outputLocation,
                     bucketName: this.config.getResultsBucket()
                 });
-                
+
                 // Check for specific S3 bucket errors
-                if (error.message.includes('Cannot find or access the specified bucket') || 
+                if (error.message.includes('Cannot find or access the specified bucket') ||
                     error.message.includes('Access Denied') ||
                     error.message.includes('NoSuchBucket')) {
-                    
-                    console.error(`🚨 S3 Bucket Access Problem Detected:`, {
+
+                    console.error(`S3 Bucket Access Problem Detected:`, {
                         issue: 'The Athena results bucket does not exist or is not accessible',
                         bucketName: this.config.getResultsBucket(),
                         suggestions: [
                             '1. Verify the CDK stack was deployed successfully',
                             '2. Check if the bucket exists in the AWS console',
                             '3. Verify Lambda has s3:PutObject permissions on the bucket',
-                            '4. Check the GLUE_TABLES_BUCKET environment variable is set correctly'
+                            '4. Check the GLUE_TABLES_BUCKET_ARN environment variable is set correctly'
                         ],
                         environmentVariables: {
-                            GLUE_TABLES_BUCKET: process.env.GLUE_TABLES_BUCKET,
-                            S3_TABLES_BUCKET: process.env.S3_TABLES_BUCKET,
+                            GLUE_TABLES_BUCKET_ARN: process.env.GLUE_TABLES_BUCKET_ARN,
+                            S3_TABLES_BUCKET_ARN: process.env.S3_TABLES_BUCKET_ARN,
                             USE_S3_TABLE: process.env.USE_S3_TABLE
                         }
                     });
@@ -149,31 +175,6 @@ export class AthenaUtils {
             }
             throw error;
         }
-    }
-
-    /**
-     * Check if a table exists
-     * NOTE: This uses Glue's GetTablesCommand, which works even if S3 buckets are inaccessible.
-     * This is why table existence checks can succeed while DROP TABLE operations fail.
-     * Use validateAthenaAccess() to test actual Athena + S3 connectivity.
-     */
-    async tableExists(tableName: string, databaseName?: string): Promise<boolean> {
-        const dbName = databaseName || this.config.getReadDatabaseName();
-        console.log(`🔍 Checking if table exists: ${tableName} in database: ${dbName}`);
-        
-        const response = await this._glue.send(new GetTablesCommand({
-            DatabaseName: dbName,
-            Expression: tableName
-        }));
-        
-        if (!response?.TableList) {
-            console.log(`📋 No tables found for ${tableName} in ${dbName}`);
-            return false;
-        }
-        
-        const exists = response.TableList.some(table => table.Name === tableName);
-        console.log(`📋 Table ${tableName} ${exists ? 'EXISTS' : 'DOES NOT EXIST'} in database ${dbName}`);
-        return exists;
     }
 
     /**
@@ -189,11 +190,11 @@ export class AthenaUtils {
                 DatabaseName: dbName,
                 NextToken: nextToken,
             }));
-            
+
             if (!response?.TableList) {
                 break; // No more tables or empty response
             }
-            
+
             allTables.push(...response.TableList);
             nextToken = response.NextToken;
         } while (nextToken);
@@ -205,71 +206,37 @@ export class AthenaUtils {
      * Wait for query to complete
      */
     async waitForQueryCompletion(queryId: string, maxAttempts: number = 30): Promise<void> {
-        return this.waitForCompletion(queryId, maxAttempts);
-    }
-
-    private async waitForCompletion(queryId: string, maxAttempts: number = 30): Promise<void> {
         for (let i = 0; i < maxAttempts; i++) {
             const response = await this.athena.send(new GetQueryExecutionCommand({ QueryExecutionId: queryId }));
             const state = response.QueryExecution?.Status?.State;
 
             if (state === QueryExecutionState.SUCCEEDED) return;
-            
+
             if (state === QueryExecutionState.FAILED || state === QueryExecutionState.CANCELLED) {
                 throw new Error(response.QueryExecution?.Status?.StateChangeReason || "Query failed");
             }
 
             await new Promise(resolve => setTimeout(resolve, 2000));
         }
-        
+
         throw new Error(`Query timed out after ${maxAttempts} attempts`);
     }
 
     /**
      * Drop all Titanic tables for clean deployment
      */
-    async dropAllTitanicTables(databaseName?: string): Promise<void> {
-        const tables = ['package_revision', 'package_tag', 'package_entry'];
-        const targetDatabase = databaseName || this.config.getWriteDatabaseName();
-        console.log(`🗑️ Dropping Titanic tables in target database: ${targetDatabase}`);
-        await this.dropTablesIfExist(tables, targetDatabase);
-    }
+    async dropAllTitanicTables(): Promise<void> {
+        const targetDatabase = this.config.getWriteDatabaseName();
+        const tables = await this.getAllTables(targetDatabase);
+        console.log(`Dropping prior tables ${tables} from target database: ${targetDatabase}`);
 
-    /**
-     * Drop specified tables if they exist
-     * This method provides better separation of concerns for table cleanup
-     */
-    async dropTablesIfExist(tableNames: string[], databaseName?: string): Promise<void> {
-        const targetDatabase = databaseName || this.config.getWriteDatabaseName();
-        console.log(`🗑️ Checking tables to drop in database: ${targetDatabase}`);
-        
-        // Validate Athena + S3 access before attempting any drops
-        const athenaAccessValid = await this.validateAthenaAccess();
-        if (!athenaAccessValid) {
-            console.error(`🚨 Skipping table drops due to Athena + S3 connectivity issues`);
-            console.error(`💡 This usually means the S3 bucket for Athena results doesn't exist or isn't accessible`);
-            console.error(`🔧 Check: 1) CDK deployment success, 2) S3 bucket existence, 3) Lambda permissions`);
-            return;
-        }
-        
-        for (const tableName of tableNames) {
-            try {
-                // Note: tableExists uses Glue API (works even if S3 bucket is broken)
-                // but executeQuery uses Athena API (requires S3 bucket access)
-                const exists = await this.tableExists(tableName, targetDatabase);
-                if (exists) {
-                    console.log(`🗑️ Dropping existing table: ${tableName} from database ${targetDatabase}`);
-                    await this.executeQuery(`DROP TABLE IF EXISTS ${tableName}`);
-                    console.log(`✅ Successfully dropped table: ${tableName}`);
-                } else {
-                    console.log(`⏭️ Table ${tableName} does not exist in ${targetDatabase}, skipping drop`);
-                }
-            } catch (error) {
-                // Log error but don't fail the entire operation
-                console.error(`❌ Failed to drop table ${tableName} from database ${targetDatabase}:`, (error as Error).message);
-            }
+        // actually drop ALL the tables. Don't need to check if they exist
+        for (const table of tables) {
+            // inline query to drop the table
+            const dropQuery = `DROP TABLE IF EXISTS \`${table.Name}\``;
+            console.log(`Dropping table: ${table.Name}`);
+            await this.executeQuery(dropQuery);
+            console.log(`Successfully dropped table: ${table.Name}`);
         }
     }
 }
-
-

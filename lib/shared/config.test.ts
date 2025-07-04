@@ -79,7 +79,7 @@ describe('Config', () => {
       });
 
       // Glue config uses Glue bucket for both tables and results
-      expect(config.getTablesBucket()).toBe('glue-bucket');
+      expect(config.getTargetBucket()).toBe('glue-bucket');
       expect(config.getResultsBucket()).toBe('glue-bucket');
       
       // Should provide ARNs when requested
@@ -121,7 +121,7 @@ describe('Config', () => {
       });
 
       // S3Config uses S3 Tables bucket for tables, Glue bucket for results
-      expect(config.getTablesBucket()).toBe('s3-bucket');
+      expect(config.getTargetBucket()).toBe('s3-bucket');
       expect(config.getResultsBucket()).toBe('glue-bucket');
     });
 

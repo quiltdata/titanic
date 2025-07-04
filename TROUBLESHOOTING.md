@@ -46,9 +46,9 @@ aws s3 ls s3://titanic-glue-tables-{ACCOUNT-ID}-{REGION}/
 
 #### 3. Verify Environment Variables
 Check the Lambda function's environment variables in the AWS Console:
-- `GLUE_TABLES_BUCKET` should be set to `titanic-glue-tables-{ACCOUNT-ID}-{REGION}`
-- `S3_TABLES_BUCKET` should be set to `titanic-s3-tables-{ACCOUNT-ID}-{REGION}`
-- `ATHENA_RESULTS_BUCKET` should be set to the same as `GLUE_TABLES_BUCKET`
+- `GLUE_TABLES_BUCKET_ARN` should be set to `titanic-glue-tables-{ACCOUNT-ID}-{REGION}`
+- `S3_TABLES_BUCKET_ARN` should be set to `titanic-s3-tables-{ACCOUNT-ID}-{REGION}`
+- `ATHENA_RESULTS_BUCKET` should be set to the same as `GLUE_TABLES_BUCKET_ARN`
 
 #### 4. Check IAM Permissions
 The Lambda execution role should have:
@@ -97,7 +97,7 @@ AccessDenied: User is not authorized
 
 **Error Message:**
 ```
-Missing required environment variables: GLUE_DATABASE_NAME, S3TABLE_DATABASE_NAME, GLUE_TABLES_BUCKET, or S3_TABLES_BUCKET
+Missing required environment variables: GLUE_DATABASE_NAME, S3TABLE_DATABASE_NAME, GLUE_TABLES_BUCKET_ARN, or S3_TABLES_BUCKET_ARN
 ```
 
 **Solution:**
@@ -163,8 +163,8 @@ aws logs tail /aws/lambda/TitanicStack-TitanicMergeTables --follow
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
 | `QUILT_DATABASE_NAME` | Yes | Source database name | `userathenadatabase-6fosfzznfasm` |
-| `GLUE_TABLES_BUCKET` | Yes | S3 bucket for Glue tables and Athena results | `titanic-glue-tables-712023778557-us-east-2` |
-| `S3_TABLES_BUCKET` | Yes | S3 Tables bucket for S3 table format | `titanic-s3-tables-712023778557-us-east-2` |
+| `GLUE_TABLES_BUCKET_ARN` | Yes | S3 bucket for Glue tables and Athena results | `titanic-glue-tables-712023778557-us-east-2` |
+| `S3_TABLES_BUCKET_ARN` | Yes | S3 Tables bucket for S3 table format | `titanic-s3-tables-712023778557-us-east-2` |
 | `USE_S3_TABLE` | No | Table format selection | `false` (default) or `true` |
 | `QUILT_READ_POLICY_ARN` | Yes | IAM policy for source bucket access | `arn:aws:iam::account:policy/policy-name` |
 

@@ -57,7 +57,7 @@ describe("Environment Variable Contract Tests", () => {
             });
 
             // Should extract bucket names for operations
-            expect(config.getTablesBucket()).toBe("titanic-glue-tables-123456789012-us-east-2");
+            expect(config.getTargetBucket()).toBe("titanic-glue-tables-123456789012-us-east-2");
             expect(config.getResultsBucket()).toBe("titanic-glue-tables-123456789012-us-east-2");
             
             // Should provide ARNs when needed
@@ -81,7 +81,7 @@ describe("Environment Variable Contract Tests", () => {
             });
 
             // S3Config should use S3 Tables bucket name for tables, Glue bucket name for results
-            expect(config.getTablesBucket()).toBe("titanic-s3-tables-123456789012-us-east-2");
+            expect(config.getTargetBucket()).toBe("titanic-s3-tables-123456789012-us-east-2");
             expect(config.getResultsBucket()).toBe("titanic-glue-tables-123456789012-us-east-2");
             
             // Should format catalog name correctly for Athena S3 Tables
@@ -150,7 +150,7 @@ describe("Environment Variable Contract Tests", () => {
 
             // For Athena query locations (needs bucket names)
             expect(config.getResultsBucket()).toBe("glue-bucket");
-            expect(config.getTablesBucket()).toBe("s3tables-bucket");
+            expect(config.getTargetBucket()).toBe("s3tables-bucket");
             
             // For Athena execution context (needs catalog format for S3 Tables)
             const context = config.getExecutionContext();
