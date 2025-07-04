@@ -37,7 +37,7 @@ export abstract class BaseTable {
     /**
      * Generate CTAS query for empty table creation (mainly for tests)
      */
-    protected generateCreateQuery() {
+    public generateCreateQuery() {
 
         if (this.config.useS3Table) {
             // For S3 tables, use CREATE TABLE with partitioning (no LOCATION)

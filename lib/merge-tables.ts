@@ -9,14 +9,14 @@ const SENTINEL_FILE = '/tmp/tables-initialized';
 
 export async function handler(
     event: EventBridgeEvent<string, PackageEventDetail>,
-    context: Context,
+    _context: Context,
 ): Promise<HandlerResponse> {
     console.log("Starting Titanic merge handler");
-    const { bucket, handle, topHash } = event.detail;
+    const { bucket: sourceBucket, handle, topHash } = event.detail;
     const config = Config.create();
     const athenaUtils = new AthenaUtils(config);
 
-    logStartupInfo(event, bucket, handle, topHash, config);
+    logContext(event, sourceBucket, handle, topHash, config);
 
     // Validate configuration
     if (
@@ -46,18 +46,22 @@ export async function handler(
     await handleFirstRun(tableManager);
 
     const allTables = await athenaUtils.getAllTables(sourceDatabaseName);
-    const sourceTables = filterSourceTables(allTables, bucket);
+    const sourceTables = filterSourceTables(allTables, sourceBucket);
 
-    console.log("Source tables found:", sourceTables.map((t) => t.Name));
-
-    await tableManager.createTables();
+    console.log("Source tables found:", sourceTables);
 
     return await executeMergeOperations(tableManager, sourceTables);
 }
 
 // --- Helper Functions ---
 
-function logStartupInfo(event: any, bucket: string, handle: string, topHash: string, config: any) {
+function logContext(
+    event: EventBridgeEvent<string, PackageEventDetail>,
+    bucket: string,
+    handle: string,
+    topHash: string,
+    config: Config
+): void {
     // Event details
     console.log("EventBridge event:", JSON.stringify(event, null, 2));
     console.log("Event details:", { bucket, handle, topHash });
@@ -86,7 +90,7 @@ function logStartupInfo(event: any, bucket: string, handle: string, topHash: str
     });
 }
 
-async function testAthenaConnectivity(athenaUtils: AthenaUtils) {
+async function testAthenaConnectivity(athenaUtils: AthenaUtils): Promise<void> {
     console.log("Testing Athena connectivity before proceeding...");
     console.log("This test validates:");
     console.log("  - Athena API access (ability to start query executions)");
@@ -107,35 +111,49 @@ async function testAthenaConnectivity(athenaUtils: AthenaUtils) {
     }
 }
 
-async function handleFirstRun(tableManager: TableManager) {
+async function handleFirstRun(tableManager: TableManager): Promise<void> {
     const isFirstRun = !fs.existsSync(SENTINEL_FILE);
     if (isFirstRun) {
         console.log('First run after deployment detected, dropping existing tables if they exist...');
         await tableManager.executeDrops();
+        console.log('Existing tables dropped successfully');
+        console.log('Creating tables on first run...');
+        await tableManager.createTables();
+        console.log('Tables created successfully');
         fs.writeFileSync(SENTINEL_FILE, new Date().toISOString());
         console.log('Created sentinel file, tables will not be dropped on subsequent runs');
     }
 }
 
-function filterSourceTables(allTables: any[], bucket: string) {
-    return allTables?.filter((table) => {
-        console.log("Checking table:", table.Name);
-        if (!table.Name) return false;
-        const isView = table.Name.endsWith("-view");
+function filterSourceTables(allTables: string[], bucket: string): string[] {
+    return allTables?.filter((tableName: string) => {
+        console.log("Checking table:", tableName);
+        if (!tableName) return false;
+        const isView = tableName.endsWith("-view");
         const matchesPrefix = bucket
-            ? table.Name.startsWith(bucket + "_")
+            ? tableName.startsWith(bucket + "_")
             : true;
         return isView && matchesPrefix;
     }) || [];
 }
 
+interface MergeOperationResult {
+    message: string;
+    numTables: number;
+    successfulTables: number;
+    failedTables: number;
+    totalQueries: number;
+}
 
-async function executeMergeOperations(tableManager: TableManager, sourceTables: any[]) {
+async function executeMergeOperations(
+    tableManager: TableManager,
+    sourceTables: string[]
+): Promise<MergeOperationResult> {
     console.log("Starting merge operations for", sourceTables.length, "source tables");
     
     // Separate package views from object views
-    const packageView = sourceTables.find(table => table.Name && table.Name.includes('packages-view'));
-    const objectsView = sourceTables.find(table => table.Name && table.Name.includes('objects-view'));
+    const packageView = sourceTables.find((tableName: string) => tableName && tableName.includes('packages-view'));
+    const objectsView = sourceTables.find((tableName: string) => tableName && tableName.includes('objects-view'));
     
     if (!packageView && !objectsView) {
         console.log("No package or objects views found - skipping merge operations");
@@ -148,7 +166,7 @@ async function executeMergeOperations(tableManager: TableManager, sourceTables: 
         };
     }
     
-    const { successfulTables, failedTables, totalQueries } = await tableManager.executeInserts(packageView?.Name || '', objectsView?.Name || '');
+    const { successfulTables, failedTables, totalQueries } = await tableManager.executeInserts(packageView || '', objectsView || '');
 
     console.log(`Insert operations summary:`);
     console.log(`  - Source tables processed: ${sourceTables.length}`);
@@ -167,34 +185,4 @@ async function executeMergeOperations(tableManager: TableManager, sourceTables: 
         failedTables,
         totalQueries,
     };
-}
-
-function handleError(error: any, event: any, env: any) {
-    const err = error as Error;
-    const isS3AccessError = err.message.toLowerCase().includes('access denied') ||
-        err.message.toLowerCase().includes('accessdenied') ||
-        err.message.toLowerCase().includes('no such bucket') ||
-        err.message.toLowerCase().includes('forbidden') ||
-        err.message.toLowerCase().includes('403');
-
-    console.error("Error merging tables:", {
-        error: err.message,
-        stack: err.stack,
-        glueDatabaseName: env.glueDatabaseName,
-        targetBucket: env.s3TablesBucketArn,
-        isS3AccessError,
-        eventDetails: event.detail,
-    });
-
-    if (isS3AccessError) {
-        console.error("S3 access error detected. This may be due to insufficient permissions or missing buckets.");
-        console.error("Consider checking:");
-        console.error("1. Lambda execution role permissions for S3 buckets");
-        console.error("2. Bucket existence and access policies");
-        console.error("3. Cross-account access configurations");
-    }
-    console.error("Consider checking:");
-    console.error("1. Lambda execution role permissions for S3 buckets");
-    console.error("2. Bucket existence and access policies");
-    console.error("3. Cross-account access configurations");
 }

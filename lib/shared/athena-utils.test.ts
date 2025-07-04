@@ -149,7 +149,7 @@ describe("AthenaUtils", () => {
 
             const result = await athenaUtils.getAllTables("test_db");
             expect(result).toHaveLength(3);
-            expect(result.map(t => t.Name)).toEqual(["table1", "table2", "table3"]);
+            expect(result).toEqual(["table1", "table2", "table3"]);
         });
 
         it("should handle empty table list", async () => {

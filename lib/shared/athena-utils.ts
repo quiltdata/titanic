@@ -180,9 +180,9 @@ export class AthenaUtils {
     /**
      * Get all tables in the database with pagination support
      */
-    async getAllTables(databaseName?: string): Promise<any[]> {
+    async getAllTables(databaseName?: string): Promise<string[]> {
         const dbName = databaseName || this.config.getReadDatabaseName();
-        const allTables = [];
+        const allTables: string[] = [];
         let nextToken = undefined;
 
         do {
@@ -195,7 +195,12 @@ export class AthenaUtils {
                 break; // No more tables or empty response
             }
 
-            allTables.push(...response.TableList);
+            // Extract table names from the table objects
+            const tableNames = response.TableList
+                .map(table => table.Name)
+                .filter((name): name is string => name !== undefined);
+            
+            allTables.push(...tableNames);
             nextToken = response.NextToken;
         } while (nextToken);
 
@@ -220,23 +225,5 @@ export class AthenaUtils {
         }
 
         throw new Error(`Query timed out after ${maxAttempts} attempts`);
-    }
-
-    /**
-     * Drop all Titanic tables for clean deployment
-     */
-    async dropAllTitanicTables(): Promise<void> {
-        const targetDatabase = this.config.getWriteDatabaseName();
-        const tables = await this.getAllTables(targetDatabase);
-        console.log(`Dropping prior tables ${tables} from target database: ${targetDatabase}`);
-
-        // actually drop ALL the tables. Don't need to check if they exist
-        for (const table of tables) {
-            // inline query to drop the table
-            const dropQuery = `DROP TABLE IF EXISTS \`${table.Name}\``;
-            console.log(`Dropping table: ${table.Name}`);
-            await this.executeQuery(dropQuery);
-            console.log(`Successfully dropped table: ${table.Name}`);
-        }
     }
 }

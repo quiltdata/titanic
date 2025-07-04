@@ -1,7 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="108" failures="0" errors="0" time="11.185">
-  <testsuite name="Config" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:22:24" time="2.835" tests="17">
-    <testcase classname="Config Config constructor with ARN inputs should load configuration from provided ARN values" name="Config Config constructor with ARN inputs should load configuration from provided ARN values" time="0.003">
+<testsuites name="jest tests" tests="103" failures="0" errors="0" time="9.039">
+  <testsuite name="Environment Variable Contract Tests" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:45:30" time="2.663" tests="7">
+    <testcase classname="Environment Variable Contract Tests Stack-to-Lambda environment variable contract should pass ARNs consistently with clear naming" name="Environment Variable Contract Tests Stack-to-Lambda environment variable contract should pass ARNs consistently with clear naming" time="0.002">
+    </testcase>
+    <testcase classname="Environment Variable Contract Tests Config class ARN handling and conversion should extract bucket names from ARNs correctly" name="Environment Variable Contract Tests Config class ARN handling and conversion should extract bucket names from ARNs correctly" time="0.001">
+    </testcase>
+    <testcase classname="Environment Variable Contract Tests Config class ARN handling and conversion should handle Glue config with ARN inputs" name="Environment Variable Contract Tests Config class ARN handling and conversion should handle Glue config with ARN inputs" time="0">
+    </testcase>
+    <testcase classname="Environment Variable Contract Tests Config class ARN handling and conversion should handle S3Config with ARN inputs" name="Environment Variable Contract Tests Config class ARN handling and conversion should handle S3Config with ARN inputs" time="0">
+    </testcase>
+    <testcase classname="Environment Variable Contract Tests Environment variable usage in merge-tables handler should expect ARN-named environment variables" name="Environment Variable Contract Tests Environment variable usage in merge-tables handler should expect ARN-named environment variables" time="0.001">
+    </testcase>
+    <testcase classname="Environment Variable Contract Tests CDK stack environment variable output should pass bucket ARNs with clear variable names" name="Environment Variable Contract Tests CDK stack environment variable output should pass bucket ARNs with clear variable names" time="0">
+    </testcase>
+    <testcase classname="Environment Variable Contract Tests Method usage patterns should use appropriate methods for different operations" name="Environment Variable Contract Tests Method usage patterns should use appropriate methods for different operations" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="Config" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:45:30" time="2.701" tests="17">
+    <testcase classname="Config Config constructor with ARN inputs should load configuration from provided ARN values" name="Config Config constructor with ARN inputs should load configuration from provided ARN values" time="0.002">
     </testcase>
     <testcase classname="Config Config constructor with ARN inputs should default to empty strings when no values provided" name="Config Config constructor with ARN inputs should default to empty strings when no values provided" time="0">
     </testcase>
@@ -13,11 +29,11 @@
     </testcase>
     <testcase classname="Config ARN parsing utilities should handle non-ARN strings (pass through)" name="Config ARN parsing utilities should handle non-ARN strings (pass through)" time="0">
     </testcase>
-    <testcase classname="Config Glue Config should provide correct bucket methods for Glue mode" name="Config Glue Config should provide correct bucket methods for Glue mode" time="0">
+    <testcase classname="Config Glue Config should provide correct bucket methods for Glue mode" name="Config Glue Config should provide correct bucket methods for Glue mode" time="0.001">
     </testcase>
-    <testcase classname="Config Glue Config should use Glue database for read and write operations" name="Config Glue Config should use Glue database for read and write operations" time="0">
+    <testcase classname="Config Glue Config should use Glue database for read and write operations" name="Config Glue Config should use Glue database for read and write operations" time="0.001">
     </testcase>
-    <testcase classname="Config Glue Config should provide database-only execution context" name="Config Glue Config should provide database-only execution context" time="0.001">
+    <testcase classname="Config Glue Config should provide database-only execution context" name="Config Glue Config should provide database-only execution context" time="0">
     </testcase>
     <testcase classname="Config S3Config should provide correct bucket methods for S3 Tables mode" name="Config S3Config should provide correct bucket methods for S3 Tables mode" time="0">
     </testcase>
@@ -27,7 +43,7 @@
     </testcase>
     <testcase classname="Config S3Config should provide catalog and database execution context" name="Config S3Config should provide catalog and database execution context" time="0">
     </testcase>
-    <testcase classname="Config Config factory method should create Config instance when USE_S3_TABLE=false" name="Config Config factory method should create Config instance when USE_S3_TABLE=false" time="0.001">
+    <testcase classname="Config Config factory method should create Config instance when USE_S3_TABLE=false" name="Config Config factory method should create Config instance when USE_S3_TABLE=false" time="0">
     </testcase>
     <testcase classname="Config Config factory method should create S3Config instance when USE_S3_TABLE=true" name="Config Config factory method should create S3Config instance when USE_S3_TABLE=true" time="0">
     </testcase>
@@ -36,60 +52,14 @@
     <testcase classname="Config Table name utilities should extract source bucket from table names" name="Config Table name utilities should extract source bucket from table names" time="0">
     </testcase>
   </testsuite>
-  <testsuite name="Package Tables" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:22:24" time="2.878" tests="6">
-    <testcase classname="Package Tables PackageRevisionTable should have correct table name" name="Package Tables PackageRevisionTable should have correct table name" time="0.003">
-    </testcase>
-    <testcase classname="Package Tables PackageRevisionTable should generate insert query with correct WHERE clause" name="Package Tables PackageRevisionTable should generate insert query with correct WHERE clause" time="0.001">
-    </testcase>
-    <testcase classname="Package Tables PackageTagTable should have correct table name" name="Package Tables PackageTagTable should have correct table name" time="0">
-    </testcase>
-    <testcase classname="Package Tables PackageTagTable should generate insert query with correct WHERE clause" name="Package Tables PackageTagTable should generate insert query with correct WHERE clause" time="0.001">
-    </testcase>
-    <testcase classname="Package Tables PackageEntryTable should have correct table name" name="Package Tables PackageEntryTable should have correct table name" time="0.001">
-    </testcase>
-    <testcase classname="Package Tables PackageEntryTable should generate insert query" name="Package Tables PackageEntryTable should generate insert query" time="0.001">
-    </testcase>
-  </testsuite>
-  <testsuite name="Table Schema Configuration" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:22:24" time="2.894" tests="7">
-    <testcase classname="Table Schema Configuration Glue mode (default) should generate CREATE TABLE with WITH clause by default" name="Table Schema Configuration Glue mode (default) should generate CREATE TABLE with WITH clause by default" time="0.002">
-    </testcase>
-    <testcase classname="Table Schema Configuration Glue mode (default) should generate CREATE TABLE with WITH clause when explicitly disabled" name="Table Schema Configuration Glue mode (default) should generate CREATE TABLE with WITH clause when explicitly disabled" time="0">
-    </testcase>
-    <testcase classname="Table Schema Configuration S3 Tables mode should generate CREATE TABLE with partitioning when S3 Tables mode enabled" name="Table Schema Configuration S3 Tables mode should generate CREATE TABLE with partitioning when S3 Tables mode enabled" time="0">
-    </testcase>
-    <testcase classname="Table Schema Configuration Schema generation should correctly combine base schema with partitioning clause for S3 Tables" name="Table Schema Configuration Schema generation should correctly combine base schema with partitioning clause for S3 Tables" time="0">
-    </testcase>
-    <testcase classname="Table Schema Configuration Schema generation should return schema with WITH clause for Glue mode" name="Table Schema Configuration Schema generation should return schema with WITH clause for Glue mode" time="0.001">
-    </testcase>
-    <testcase classname="Table Schema Configuration Schema generation should handle default static property as Glue mode" name="Table Schema Configuration Schema generation should handle default static property as Glue mode" time="0">
-    </testcase>
-    <testcase classname="Table Schema Configuration Schema generation should correctly generate S3 Tables with partitions but no WITH clause" name="Table Schema Configuration Schema generation should correctly generate S3 Tables with partitions but no WITH clause" time="0">
-    </testcase>
-  </testsuite>
-  <testsuite name="Environment Variable Contract Tests" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:22:24" time="2.902" tests="7">
-    <testcase classname="Environment Variable Contract Tests Stack-to-Lambda environment variable contract should pass ARNs consistently with clear naming" name="Environment Variable Contract Tests Stack-to-Lambda environment variable contract should pass ARNs consistently with clear naming" time="0.003">
-    </testcase>
-    <testcase classname="Environment Variable Contract Tests Config class ARN handling and conversion should extract bucket names from ARNs correctly" name="Environment Variable Contract Tests Config class ARN handling and conversion should extract bucket names from ARNs correctly" time="0">
-    </testcase>
-    <testcase classname="Environment Variable Contract Tests Config class ARN handling and conversion should handle Glue config with ARN inputs" name="Environment Variable Contract Tests Config class ARN handling and conversion should handle Glue config with ARN inputs" time="0.001">
-    </testcase>
-    <testcase classname="Environment Variable Contract Tests Config class ARN handling and conversion should handle S3Config with ARN inputs" name="Environment Variable Contract Tests Config class ARN handling and conversion should handle S3Config with ARN inputs" time="0">
-    </testcase>
-    <testcase classname="Environment Variable Contract Tests Environment variable usage in merge-tables handler should expect ARN-named environment variables" name="Environment Variable Contract Tests Environment variable usage in merge-tables handler should expect ARN-named environment variables" time="0.001">
-    </testcase>
-    <testcase classname="Environment Variable Contract Tests CDK stack environment variable output should pass bucket ARNs with clear variable names" name="Environment Variable Contract Tests CDK stack environment variable output should pass bucket ARNs with clear variable names" time="0">
-    </testcase>
-    <testcase classname="Environment Variable Contract Tests Method usage patterns should use appropriate methods for different operations" name="Environment Variable Contract Tests Method usage patterns should use appropriate methods for different operations" time="0">
-    </testcase>
-  </testsuite>
-  <testsuite name="Schema Validation Tests" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:22:24" time="2.921" tests="17">
-    <testcase classname="Schema Validation Tests S3 Tables - CREATE TABLE Operations package_revision S3 CREATE TABLE should generate correct S3 CREATE TABLE schema matching schema.sql" name="Schema Validation Tests S3 Tables - CREATE TABLE Operations package_revision S3 CREATE TABLE should generate correct S3 CREATE TABLE schema matching schema.sql" time="0.002">
+  <testsuite name="Schema Validation Tests" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:45:30" time="2.719" tests="17">
+    <testcase classname="Schema Validation Tests S3 Tables - CREATE TABLE Operations package_revision S3 CREATE TABLE should generate correct S3 CREATE TABLE schema matching schema.sql" name="Schema Validation Tests S3 Tables - CREATE TABLE Operations package_revision S3 CREATE TABLE should generate correct S3 CREATE TABLE schema matching schema.sql" time="0.003">
     </testcase>
     <testcase classname="Schema Validation Tests S3 Tables - CREATE TABLE Operations package_tag S3 CREATE TABLE should generate correct S3 CREATE TABLE schema matching schema.sql" name="Schema Validation Tests S3 Tables - CREATE TABLE Operations package_tag S3 CREATE TABLE should generate correct S3 CREATE TABLE schema matching schema.sql" time="0">
     </testcase>
-    <testcase classname="Schema Validation Tests S3 Tables - CREATE TABLE Operations package_entry S3 CREATE TABLE should generate correct S3 CREATE TABLE schema matching schema.sql" name="Schema Validation Tests S3 Tables - CREATE TABLE Operations package_entry S3 CREATE TABLE should generate correct S3 CREATE TABLE schema matching schema.sql" time="0">
+    <testcase classname="Schema Validation Tests S3 Tables - CREATE TABLE Operations package_entry S3 CREATE TABLE should generate correct S3 CREATE TABLE schema matching schema.sql" name="Schema Validation Tests S3 Tables - CREATE TABLE Operations package_entry S3 CREATE TABLE should generate correct S3 CREATE TABLE schema matching schema.sql" time="0.001">
     </testcase>
-    <testcase classname="Schema Validation Tests Glue Tables - CREATE TABLE AS SELECT (CTAS) Operations package_revision Glue CTAS should generate correct Glue CTAS query matching schema.sql patterns" name="Schema Validation Tests Glue Tables - CREATE TABLE AS SELECT (CTAS) Operations package_revision Glue CTAS should generate correct Glue CTAS query matching schema.sql patterns" time="0.001">
+    <testcase classname="Schema Validation Tests Glue Tables - CREATE TABLE AS SELECT (CTAS) Operations package_revision Glue CTAS should generate correct Glue CTAS query matching schema.sql patterns" name="Schema Validation Tests Glue Tables - CREATE TABLE AS SELECT (CTAS) Operations package_revision Glue CTAS should generate correct Glue CTAS query matching schema.sql patterns" time="0">
     </testcase>
     <testcase classname="Schema Validation Tests Glue Tables - CREATE TABLE AS SELECT (CTAS) Operations package_tag Glue CTAS should generate correct Glue CTAS query matching schema.sql patterns" name="Schema Validation Tests Glue Tables - CREATE TABLE AS SELECT (CTAS) Operations package_tag Glue CTAS should generate correct Glue CTAS query matching schema.sql patterns" time="0">
     </testcase>
@@ -107,7 +77,7 @@
     </testcase>
     <testcase classname="Schema Validation Tests Schema Structure Validation should have consistent schema between S3 and Glue configurations" name="Schema Validation Tests Schema Structure Validation should have consistent schema between S3 and Glue configurations" time="0">
     </testcase>
-    <testcase classname="Schema Validation Tests Schema Structure Validation should validate multihash generation patterns match schema.sql" name="Schema Validation Tests Schema Structure Validation should validate multihash generation patterns match schema.sql" time="0">
+    <testcase classname="Schema Validation Tests Schema Structure Validation should validate multihash generation patterns match schema.sql" name="Schema Validation Tests Schema Structure Validation should validate multihash generation patterns match schema.sql" time="0.001">
     </testcase>
     <testcase classname="Schema Validation Tests Schema Structure Validation should validate source table formatting flexibility" name="Schema Validation Tests Schema Structure Validation should validate source table formatting flexibility" time="0">
     </testcase>
@@ -118,58 +88,78 @@
     <testcase classname="Schema Validation Tests CREATE and DROP TABLE Operations should generate DROP TABLE SQL" name="Schema Validation Tests CREATE and DROP TABLE Operations should generate DROP TABLE SQL" time="0">
     </testcase>
   </testsuite>
-  <testsuite name="TableManager" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:22:24" time="2.959" tests="2">
-    <testcase classname="TableManager executeInserts should handle complete table processing failures" name="TableManager executeInserts should handle complete table processing failures" time="0.03">
+  <testsuite name="Table Schema Configuration" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:45:30" time="2.801" tests="7">
+    <testcase classname="Table Schema Configuration Glue mode (default) should generate CREATE TABLE with WITH clause by default" name="Table Schema Configuration Glue mode (default) should generate CREATE TABLE with WITH clause by default" time="0.002">
     </testcase>
-    <testcase classname="TableManager executeInserts should handle successful insertions" name="TableManager executeInserts should handle successful insertions" time="0.005">
+    <testcase classname="Table Schema Configuration Glue mode (default) should generate CREATE TABLE with WITH clause when explicitly disabled" name="Table Schema Configuration Glue mode (default) should generate CREATE TABLE with WITH clause when explicitly disabled" time="0.001">
+    </testcase>
+    <testcase classname="Table Schema Configuration S3 Tables mode should generate CREATE TABLE with partitioning when S3 Tables mode enabled" name="Table Schema Configuration S3 Tables mode should generate CREATE TABLE with partitioning when S3 Tables mode enabled" time="0">
+    </testcase>
+    <testcase classname="Table Schema Configuration Schema generation should correctly combine base schema with partitioning clause for S3 Tables" name="Table Schema Configuration Schema generation should correctly combine base schema with partitioning clause for S3 Tables" time="0">
+    </testcase>
+    <testcase classname="Table Schema Configuration Schema generation should return schema with WITH clause for Glue mode" name="Table Schema Configuration Schema generation should return schema with WITH clause for Glue mode" time="0.001">
+    </testcase>
+    <testcase classname="Table Schema Configuration Schema generation should handle default static property as Glue mode" name="Table Schema Configuration Schema generation should handle default static property as Glue mode" time="0">
+    </testcase>
+    <testcase classname="Table Schema Configuration Schema generation should correctly generate S3 Tables with partitions but no WITH clause" name="Table Schema Configuration Schema generation should correctly generate S3 Tables with partitions but no WITH clause" time="0">
     </testcase>
   </testsuite>
-  <testsuite name="merge-tables lambda" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:22:24" time="5.204" tests="14">
-    <testcase classname="merge-tables lambda Mode-specific behavior should return skip message if environment variables are missing" name="merge-tables lambda Mode-specific behavior should return skip message if environment variables are missing" time="0.03">
+  <testsuite name="TableManager" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:45:30" time="2.823" tests="2">
+    <testcase classname="TableManager executeInserts should handle complete table processing failures" name="TableManager executeInserts should handle complete table processing failures" time="0.026">
     </testcase>
-    <testcase classname="merge-tables lambda should respect custom timeout configuration" name="merge-tables lambda should respect custom timeout configuration" time="0.009">
+    <testcase classname="TableManager executeInserts should handle successful insertions" name="TableManager executeInserts should handle successful insertions" time="0.004">
     </testcase>
-    <testcase classname="merge-tables lambda S3Config-specific behavior should use S3Config methods for database and bucket configuration" name="merge-tables lambda S3Config-specific behavior should use S3Config methods for database and bucket configuration" time="0.012">
+  </testsuite>
+  <testsuite name="Package Tables" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:45:30" time="2.85" tests="6">
+    <testcase classname="Package Tables PackageRevisionTable should have correct table name" name="Package Tables PackageRevisionTable should have correct table name" time="0.002">
     </testcase>
-    <testcase classname="merge-tables lambda S3Config-specific behavior should use S3Config getExecutionContext with Catalog parameter" name="merge-tables lambda S3Config-specific behavior should use S3Config getExecutionContext with Catalog parameter" time="0.018">
+    <testcase classname="Package Tables PackageRevisionTable should generate insert query with correct WHERE clause" name="Package Tables PackageRevisionTable should generate insert query with correct WHERE clause" time="0.001">
     </testcase>
-    <testcase classname="merge-tables lambda S3Config-specific behavior should generate S3-specific table creation queries with PARTITIONED BY" name="merge-tables lambda S3Config-specific behavior should generate S3-specific table creation queries with PARTITIONED BY" time="0.01">
+    <testcase classname="Package Tables PackageTagTable should have correct table name" name="Package Tables PackageTagTable should have correct table name" time="0.001">
     </testcase>
-    <testcase classname="merge-tables lambda S3Config-specific behavior should use S3Config getResultsBucket for Athena results location" name="merge-tables lambda S3Config-specific behavior should use S3Config getResultsBucket for Athena results location" time="0.009">
+    <testcase classname="Package Tables PackageTagTable should generate insert query with correct WHERE clause" name="Package Tables PackageTagTable should generate insert query with correct WHERE clause" time="0">
     </testcase>
-    <testcase classname="merge-tables lambda S3Config-specific behavior should handle S3Config mode differences from Glue mode" name="merge-tables lambda S3Config-specific behavior should handle S3Config mode differences from Glue mode" time="0.01">
+    <testcase classname="Package Tables PackageEntryTable should have correct table name" name="Package Tables PackageEntryTable should have correct table name" time="0.001">
     </testcase>
-    <testcase classname="merge-tables lambda first run sentinel file handling should handle first run when sentinel file doesn&apos;t exist" name="merge-tables lambda first run sentinel file handling should handle first run when sentinel file doesn&apos;t exist" time="0.011">
+    <testcase classname="Package Tables PackageEntryTable should generate insert query" name="Package Tables PackageEntryTable should generate insert query" time="0">
     </testcase>
-    <testcase classname="merge-tables lambda error handling scenarios should handle errors during table ensure operations" name="merge-tables lambda error handling scenarios should handle errors during table ensure operations" time="0.03">
+  </testsuite>
+  <testsuite name="merge-tables lambda" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:45:30" time="2.904" tests="9">
+    <testcase classname="merge-tables lambda Mode-specific behavior should return skip message if environment variables are missing" name="merge-tables lambda Mode-specific behavior should return skip message if environment variables are missing" time="0.028">
     </testcase>
-    <testcase classname="merge-tables lambda error handling scenarios should detect and handle S3 access errors" name="merge-tables lambda error handling scenarios should detect and handle S3 access errors" time="0.013">
+    <testcase classname="merge-tables lambda should respect custom timeout configuration" name="merge-tables lambda should respect custom timeout configuration" time="0.006">
     </testcase>
-    <testcase classname="merge-tables lambda error handling scenarios should detect and handle S3 AccessDenied errors" name="merge-tables lambda error handling scenarios should detect and handle S3 AccessDenied errors" time="0.007">
+    <testcase classname="merge-tables lambda first run sentinel file handling should handle first run when sentinel file doesn&apos;t exist" name="merge-tables lambda first run sentinel file handling should handle first run when sentinel file doesn&apos;t exist" time="0.022">
     </testcase>
-    <testcase classname="merge-tables lambda error handling scenarios should detect and handle S3 no such bucket errors" name="merge-tables lambda error handling scenarios should detect and handle S3 no such bucket errors" time="0.006">
+    <testcase classname="merge-tables lambda error handling scenarios should handle errors during table ensure operations" name="merge-tables lambda error handling scenarios should handle errors during table ensure operations" time="0.012">
     </testcase>
-    <testcase classname="merge-tables lambda error handling scenarios should detect and handle S3 forbidden errors" name="merge-tables lambda error handling scenarios should detect and handle S3 forbidden errors" time="0.004">
+    <testcase classname="merge-tables lambda error handling scenarios should detect and handle S3 access errors" name="merge-tables lambda error handling scenarios should detect and handle S3 access errors" time="0.008">
+    </testcase>
+    <testcase classname="merge-tables lambda error handling scenarios should detect and handle S3 AccessDenied errors" name="merge-tables lambda error handling scenarios should detect and handle S3 AccessDenied errors" time="0.006">
+    </testcase>
+    <testcase classname="merge-tables lambda error handling scenarios should detect and handle S3 no such bucket errors" name="merge-tables lambda error handling scenarios should detect and handle S3 no such bucket errors" time="0.005">
+    </testcase>
+    <testcase classname="merge-tables lambda error handling scenarios should detect and handle S3 forbidden errors" name="merge-tables lambda error handling scenarios should detect and handle S3 forbidden errors" time="0.011">
     </testcase>
     <testcase classname="merge-tables lambda error handling scenarios should detect and handle HTTP 403 errors" name="merge-tables lambda error handling scenarios should detect and handle HTTP 403 errors" time="0.005">
     </testcase>
   </testsuite>
-  <testsuite name="AthenaUtils" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:22:24" time="8.899" tests="19">
-    <testcase classname="AthenaUtils waitForQueryCompletion should resolve when query succeeds" name="AthenaUtils waitForQueryCompletion should resolve when query succeeds" time="0.005">
+  <testsuite name="AthenaUtils" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:45:30" time="6.898" tests="19">
+    <testcase classname="AthenaUtils waitForQueryCompletion should resolve when query succeeds" name="AthenaUtils waitForQueryCompletion should resolve when query succeeds" time="0.007">
     </testcase>
-    <testcase classname="AthenaUtils waitForQueryCompletion should reject when query fails" name="AthenaUtils waitForQueryCompletion should reject when query fails" time="0.008">
+    <testcase classname="AthenaUtils waitForQueryCompletion should reject when query fails" name="AthenaUtils waitForQueryCompletion should reject when query fails" time="0.006">
     </testcase>
-    <testcase classname="AthenaUtils waitForQueryCompletion should reject when query is cancelled" name="AthenaUtils waitForQueryCompletion should reject when query is cancelled" time="0.019">
+    <testcase classname="AthenaUtils waitForQueryCompletion should reject when query is cancelled" name="AthenaUtils waitForQueryCompletion should reject when query is cancelled" time="0.002">
     </testcase>
-    <testcase classname="AthenaUtils waitForQueryCompletion should timeout after max attempts" name="AthenaUtils waitForQueryCompletion should timeout after max attempts" time="4.004">
+    <testcase classname="AthenaUtils waitForQueryCompletion should timeout after max attempts" name="AthenaUtils waitForQueryCompletion should timeout after max attempts" time="4.006">
     </testcase>
-    <testcase classname="AthenaUtils executeQuery should execute query successfully with Glue config" name="AthenaUtils executeQuery should execute query successfully with Glue config" time="0.028">
+    <testcase classname="AthenaUtils executeQuery should execute query successfully with Glue config" name="AthenaUtils executeQuery should execute query successfully with Glue config" time="0.023">
     </testcase>
     <testcase classname="AthenaUtils executeQuery should execute query successfully with S3 config" name="AthenaUtils executeQuery should execute query successfully with S3 config" time="0.003">
     </testcase>
     <testcase classname="AthenaUtils executeQuery should handle missing QueryExecutionId" name="AthenaUtils executeQuery should handle missing QueryExecutionId" time="0.005">
     </testcase>
-    <testcase classname="AthenaUtils getAllTables should return all tables with pagination" name="AthenaUtils getAllTables should return all tables with pagination" time="0.002">
+    <testcase classname="AthenaUtils getAllTables should return all tables with pagination" name="AthenaUtils getAllTables should return all tables with pagination" time="0.003">
     </testcase>
     <testcase classname="AthenaUtils getAllTables should handle empty table list" name="AthenaUtils getAllTables should handle empty table list" time="0.002">
     </testcase>
@@ -183,19 +173,19 @@
     </testcase>
     <testcase classname="AthenaUtils S3Config-specific tests should generate different createTableQuery for S3Config vs Config" name="AthenaUtils S3Config-specific tests should generate different createTableQuery for S3Config vs Config" time="0.002">
     </testcase>
-    <testcase classname="AthenaUtils S3Config-specific tests should provide different execution contexts for S3Config vs Config" name="AthenaUtils S3Config-specific tests should provide different execution contexts for S3Config vs Config" time="0.001">
+    <testcase classname="AthenaUtils S3Config-specific tests should provide different execution contexts for S3Config vs Config" name="AthenaUtils S3Config-specific tests should provide different execution contexts for S3Config vs Config" time="0.002">
     </testcase>
     <testcase classname="AthenaUtils S3Config-specific tests should execute queries with S3Config execution context including catalog" name="AthenaUtils S3Config-specific tests should execute queries with S3Config execution context including catalog" time="0.003">
     </testcase>
-    <testcase classname="AthenaUtils S3Config-specific tests should use S3Config getReadDatabaseName consistently" name="AthenaUtils S3Config-specific tests should use S3Config getReadDatabaseName consistently" time="0.002">
+    <testcase classname="AthenaUtils S3Config-specific tests should use S3Config getReadDatabaseName consistently" name="AthenaUtils S3Config-specific tests should use S3Config getReadDatabaseName consistently" time="0.001">
     </testcase>
     <testcase classname="AthenaUtils S3Config-specific tests should handle dropTableQuery identically for both configs" name="AthenaUtils S3Config-specific tests should handle dropTableQuery identically for both configs" time="0.002">
     </testcase>
     <testcase classname="AthenaUtils S3Config-specific tests should extract source bucket names consistently for both config types" name="AthenaUtils S3Config-specific tests should extract source bucket names consistently for both config types" time="0.002">
     </testcase>
   </testsuite>
-  <testsuite name="TitanicStack" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:22:24" time="10.775" tests="19">
-    <testcase classname="TitanicStack Shared functionality (mode-independent) Glue mode should create regular S3 bucket with correct properties" name="TitanicStack Shared functionality (mode-independent) Glue mode should create regular S3 bucket with correct properties" time="0.003">
+  <testsuite name="TitanicStack" errors="0" failures="0" skipped="0" timestamp="2025-07-04T03:45:30" time="8.673" tests="19">
+    <testcase classname="TitanicStack Shared functionality (mode-independent) Glue mode should create regular S3 bucket with correct properties" name="TitanicStack Shared functionality (mode-independent) Glue mode should create regular S3 bucket with correct properties" time="0.002">
     </testcase>
     <testcase classname="TitanicStack Shared functionality (mode-independent) Glue mode should create EventBridge rule with correct event pattern" name="TitanicStack Shared functionality (mode-independent) Glue mode should create EventBridge rule with correct event pattern" time="0">
     </testcase>
@@ -211,11 +201,11 @@
     </testcase>
     <testcase classname="TitanicStack Shared functionality (mode-independent) S3 Tables mode should grant required Athena permissions" name="TitanicStack Shared functionality (mode-independent) S3 Tables mode should grant required Athena permissions" time="0">
     </testcase>
-    <testcase classname="TitanicStack Shared functionality (mode-independent) S3 Tables mode should grant required Glue permissions" name="TitanicStack Shared functionality (mode-independent) S3 Tables mode should grant required Glue permissions" time="0">
+    <testcase classname="TitanicStack Shared functionality (mode-independent) S3 Tables mode should grant required Glue permissions" name="TitanicStack Shared functionality (mode-independent) S3 Tables mode should grant required Glue permissions" time="0.001">
     </testcase>
     <testcase classname="TitanicStack Shared functionality (mode-independent) S3 Tables mode should grant S3 bucket location permissions" name="TitanicStack Shared functionality (mode-independent) S3 Tables mode should grant S3 bucket location permissions" time="0">
     </testcase>
-    <testcase classname="TitanicStack Shared functionality (mode-independent) should support custom Lambda timeout configuration" name="TitanicStack Shared functionality (mode-independent) should support custom Lambda timeout configuration" time="0.92">
+    <testcase classname="TitanicStack Shared functionality (mode-independent) should support custom Lambda timeout configuration" name="TitanicStack Shared functionality (mode-independent) should support custom Lambda timeout configuration" time="0.876">
     </testcase>
     <testcase classname="TitanicStack Glue mode (default) should create both regular S3 bucket and S3 Tables bucket" name="TitanicStack Glue mode (default) should create both regular S3 bucket and S3 Tables bucket" time="0">
     </testcase>
@@ -223,15 +213,15 @@
     </testcase>
     <testcase classname="TitanicStack Glue mode (default) should configure Lambda function with Glue-specific settings" name="TitanicStack Glue mode (default) should configure Lambda function with Glue-specific settings" time="0">
     </testcase>
-    <testcase classname="TitanicStack Glue mode (default) Database name usage should use the database name provided in QUILT_DATABASE_NAME environment variable" name="TitanicStack Glue mode (default) Database name usage should use the database name provided in QUILT_DATABASE_NAME environment variable" time="0.886">
+    <testcase classname="TitanicStack Glue mode (default) Database name usage should use the database name provided in QUILT_DATABASE_NAME environment variable" name="TitanicStack Glue mode (default) Database name usage should use the database name provided in QUILT_DATABASE_NAME environment variable" time="0.923">
     </testcase>
-    <testcase classname="TitanicStack Glue mode (default) Database name usage should throw error if QUILT_DATABASE_NAME not set" name="TitanicStack Glue mode (default) Database name usage should throw error if QUILT_DATABASE_NAME not set" time="0.009">
+    <testcase classname="TitanicStack Glue mode (default) Database name usage should throw error if QUILT_DATABASE_NAME not set" name="TitanicStack Glue mode (default) Database name usage should throw error if QUILT_DATABASE_NAME not set" time="0.008">
     </testcase>
-    <testcase classname="TitanicStack S3 Tables mode should create S3 TableBucket in addition to regular S3 bucket" name="TitanicStack S3 Tables mode should create S3 TableBucket in addition to regular S3 bucket" time="0.001">
+    <testcase classname="TitanicStack S3 Tables mode should create S3 TableBucket in addition to regular S3 bucket" name="TitanicStack S3 Tables mode should create S3 TableBucket in addition to regular S3 bucket" time="0">
     </testcase>
     <testcase classname="TitanicStack S3 Tables mode should configure Lambda function with S3 Tables-specific settings" name="TitanicStack S3 Tables mode should configure Lambda function with S3 Tables-specific settings" time="0">
     </testcase>
-    <testcase classname="TitanicStack S3 Tables mode should grant required S3 Tables permissions" name="TitanicStack S3 Tables mode should grant required S3 Tables permissions" time="0">
+    <testcase classname="TitanicStack S3 Tables mode should grant required S3 Tables permissions" name="TitanicStack S3 Tables mode should grant required S3 Tables permissions" time="0.001">
     </testcase>
   </testsuite>
 </testsuites>
