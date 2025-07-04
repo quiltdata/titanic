@@ -183,7 +183,7 @@ describe("AthenaUtils", () => {
 
         it("should generate different createTableQuery for S3Config vs Config", () => {
             const tableName = "test_table";
-            const columns = "id STRING, name STRING";
+            const columns = "id VARCHAR, name VARCHAR";
             
             const configQuery = config.createTableQuery(tableName, columns);
             const s3ConfigQuery = s3Config.createTableQuery(tableName, columns);

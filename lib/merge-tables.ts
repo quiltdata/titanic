@@ -118,7 +118,14 @@ async function handleFirstRun(tableManager: TableManager): Promise<void> {
         await tableManager.executeDrops();
         console.log('Existing tables dropped successfully');
         console.log('Creating tables on first run...');
-        await tableManager.createTables();
+        const createResult = await tableManager.createTables();
+        
+        if (createResult.failedTables > 0) {
+            const errorMessage = `Table creation failed: ${createResult.failedTables} out of ${createResult.totalQueries} tables failed to create. Cannot proceed with merge operations.`;
+            console.error(errorMessage);
+            throw new Error(errorMessage);
+        }
+        
         console.log('Tables created successfully');
         fs.writeFileSync(SENTINEL_FILE, new Date().toISOString());
         console.log('Created sentinel file, tables will not be dropped on subsequent runs');

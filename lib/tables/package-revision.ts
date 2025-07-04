@@ -8,12 +8,12 @@ export class PackageRevisionTable extends BaseTable {
 
     protected getColumnDefinitions(): ColumnDefinitions {
         return {
-            'registry': 'STRING',
-            'pkg_name': 'STRING',
-            'top_hash': 'STRING',
+            'registry': 'VARCHAR',
+            'pkg_name': 'VARCHAR',
+            'top_hash': 'VARCHAR',
             'timestamp': 'TIMESTAMP',
-            'message': 'STRING',
-            'metadata': 'STRING'
+            'message': 'VARCHAR',
+            'metadata': 'VARCHAR'
         };
     }
 

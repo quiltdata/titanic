@@ -8,13 +8,13 @@ export class PackageEntryTable extends BaseTable {
 
     protected getColumnDefinitions(): ColumnDefinitions {
         return {
-            'registry': 'STRING',
-            'top_hash': 'STRING',
-            'logical_key': 'STRING',
-            'physical_key': 'STRING',
-            'multihash': 'STRING',
+            'registry': 'VARCHAR',
+            'top_hash': 'VARCHAR',
+            'logical_key': 'VARCHAR',
+            'physical_key': 'VARCHAR',
+            'multihash': 'VARCHAR',
             'size': 'BIGINT',
-            'metadata': 'STRING'
+            'metadata': 'VARCHAR'
         };
     }
 

@@ -8,10 +8,10 @@ export class PackageTagTable extends BaseTable {
 
     protected getColumnDefinitions(): ColumnDefinitions {
         return {
-            'registry': 'STRING',
-            'pkg_name': 'STRING',
-            'tag_name': 'STRING',
-            'top_hash': 'STRING'
+            'registry': 'VARCHAR',
+            'pkg_name': 'VARCHAR',
+            'tag_name': 'VARCHAR',
+            'top_hash': 'VARCHAR'
         };
     }
 
