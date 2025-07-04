@@ -5,9 +5,16 @@ module.exports = {
   transform: {
     '^.+\\.tsx?$': 'ts-jest'
   },
+  globals: {
+    'ts-jest': {
+      tsconfig: 'tsconfig.json'
+    }
+  },
   verbose: true,
-  bail: false, // Continue running all tests even if some fail
+  bail: false,
   errorOnDeprecated: true,
+  collectCoverage: false, // turn on manually with CLI if needed
+  transformIgnorePatterns: ['/node_modules/', '/cdk.out/'],
   reporters: [
     'default',
     ['jest-junit', {

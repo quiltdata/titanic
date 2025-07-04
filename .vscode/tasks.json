@@ -3,28 +3,28 @@
 	"tasks": [
 		{
 			"label": "Run Tests",
-			"type": "shell",
+			"type": "process",
 			"command": "npm",
 			"args": [
 				"test"
 			],
 			"group": "test",
 			"isBackground": false,
-			"problemMatcher": [
-				"$eslint-stylish"
-			],
+			"problemMatcher": [],
+			"runOptions": {
+			},
 			"presentation": {
 				"echo": true,
 				"reveal": "always",
-				"focus": false,
+				"focus": true,
 				"panel": "shared",
 				"showReuseMessage": true,
-				"clear": false
+				"clear": true
 			}
 		},
 		{
 			"label": "Run Tests (Watch Mode)",
-			"type": "shell",
+			"type": "process",
 			"command": "npm",
 			"args": [
 				"run",
@@ -33,22 +33,21 @@
 				"--watch"
 			],
 			"group": "test",
-			"isBackground": true,
-			"problemMatcher": [
-				"$eslint-stylish"
-			],
+			"problemMatcher": [],
+			"runOptions": {
+			},
 			"presentation": {
 				"echo": true,
 				"reveal": "always",
 				"focus": false,
 				"panel": "shared",
 				"showReuseMessage": true,
-				"clear": false
+				"clear": true
 			}
 		},
 		{
 			"label": "Run Tests (Coverage)",
-			"type": "shell",
+			"type": "process",
 			"command": "npm",
 			"args": [
 				"run",
@@ -58,21 +57,21 @@
 			],
 			"group": "test",
 			"isBackground": false,
-			"problemMatcher": [
-				"$eslint-stylish"
-			],
+			"problemMatcher": [],
+			"runOptions": {
+			},
 			"presentation": {
 				"echo": true,
 				"reveal": "always",
 				"focus": false,
 				"panel": "shared",
 				"showReuseMessage": true,
-				"clear": false
+				"clear": true
 			}
 		},
 		{
 			"label": "Run Specific Test File",
-			"type": "shell",
+			"type": "process",
 			"command": "npm",
 			"args": [
 				"run",
@@ -82,16 +81,38 @@
 			],
 			"group": "test",
 			"isBackground": false,
-			"problemMatcher": [
-				"$eslint-stylish"
-			],
+			"problemMatcher": [],
+			"runOptions": {
+			},
 			"presentation": {
 				"echo": true,
 				"reveal": "always",
-				"focus": false,
+				"focus": true,
 				"panel": "shared",
 				"showReuseMessage": true,
-				"clear": false
+				"clear": true
+			}
+		},
+		{
+			"label": "Run Fast Tests",
+			"type": "process",
+			"command": "jest",
+			"args": [
+				"--runInBand",
+				"--no-cache"
+			],
+			"group": "test",
+			"isBackground": false,
+			"problemMatcher": [],
+			"runOptions": {
+			},
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": true,
+				"panel": "shared",
+				"showReuseMessage": true,
+				"clear": true
 			}
 		}
 	],
