@@ -24,38 +24,67 @@ export abstract class BaseTable {
     protected abstract generateWhereClauseForCtas(sourceAlias: string): string;
 
 
-    /*
-    * Generate a list of columns in the specified pattern
-    * Example pattern: "${name} ${type}"
-    */
+    /**
+     * Generate a list of columns in the specified pattern
+     * Example pattern: "${name} ${type}"
+     */
     protected generateColumnList(pattern: string): string {
+        if (!pattern || pattern.trim() === '') {
+            throw new Error('Pattern cannot be empty');
+        }
+
         const columns = this.getColumnDefinitions();
+        if (!columns || Object.keys(columns).length === 0) {
+            throw new Error('No column definitions found');
+        }
+
         const entries = Object.entries(columns);
-        return entries.map(([name, type]) => pattern.replace(/\${name}/g, name).replace(/\${type}/g, type)).join(', ');
+        return entries.map(([name, type]) => {
+            if (!name || !type) {
+                throw new Error(`Invalid column definition: name='${name}', type='${type}'`);
+            }
+            return pattern.replace(/\${name}/g, name).replace(/\${type}/g, type);
+        }).join(', ');
     }
 
     /**
      * Generate CTAS query for empty table creation (mainly for tests)
      */
-    public generateCreateQuery() {
-
+    public generateCreateQuery(): string {
         if (this.config.useS3Table) {
-            // For S3 tables, use CREATE TABLE with partitioning (no LOCATION)
-            const columnDefs = this.generateColumnList("${name} ${type}");
-            const partitioning = this.getPartitioningClause();
-            return `CREATE TABLE ${this.tableName} (${columnDefs}) ${partitioning}`;
+            return this.generateS3TableCreateQuery();
         } else {
-            // For Glue tables, generate CTAS with CAST(NULL AS ...) for each column
-            const selectColumns = this.generateColumnList("CAST(NULL AS ${type}) AS ${name}");
-
-            return `CREATE TABLE ${this.tableName} WITH (
-                format = 'PARQUET',
-                write_compression = 'SNAPPY',
-                location = 's3://${this.config.getTargetBucket()}/iceberg_catalog/${this.tableName}',
-                table_type = 'ICEBERG',
-                is_external = false
-            ) AS SELECT ${selectColumns} WHERE 1=0`;
+            return this.generateGlueTableCreateQuery();
         }
+    }
+
+    /**
+     * Generate CREATE TABLE query for S3 tables
+     */
+    private generateS3TableCreateQuery(): string {
+        const columnDefs = this.generateColumnList("${name} ${type}");
+        const partitioning = this.getPartitioningClause();
+        return `CREATE TABLE ${this.tableName} (${columnDefs}) ${partitioning}`;
+    }
+
+    /**
+     * Generate CTAS query for Glue tables
+     */
+    private generateGlueTableCreateQuery(): string {
+        const selectColumns = this.generateColumnList("CAST(NULL AS ${type}) AS ${name}");
+        const targetBucket = this.config.getTargetBucket();
+        
+        if (!targetBucket) {
+            throw new Error('Target bucket is required for Glue table creation');
+        }
+
+        return `CREATE TABLE ${this.tableName} WITH (
+            format = 'PARQUET',
+            write_compression = 'SNAPPY',
+            location = 's3://${targetBucket}/iceberg_catalog/${this.tableName}',
+            table_type = 'ICEBERG',
+            is_external = false
+        ) AS SELECT ${selectColumns} WHERE 1=0`;
     }
 
     /**
