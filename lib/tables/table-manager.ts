@@ -68,20 +68,22 @@ export class TableManager {
         let totalQueries = 0;
         let successfulTables = 0;
         let failedTables = 0;
+        const successfulTableNames: string[] = [];
+        const failedTableNames: string[] = [];
 
         for (const table of this.targetTables) {
             try {
                 const query = table.query(type, packagesView, objectsView);
-                console.log(`Executing ${type} on ${table.tableName}:`, query);
                 await this.athenaUtils.executeQuery(query);
                 totalQueries++;
                 successfulTables++;
-                console.log(`✅ Successfully executed ${type} on ${table.tableName}`);
+                successfulTableNames.push(table.tableName);
             } catch (error) {
                 const err = error as Error;
                 totalQueries++;
                 failedTables++;
-                console.error(`❌ Failed to execute ${type} on ${table.tableName}:`, {
+                failedTableNames.push(table.tableName);
+                console.error(`Failed to execute ${type} on ${table.tableName}:`, {
                     error: err.message,
                     isS3AccessError: this.isS3AccessError(err),
                 });
@@ -92,6 +94,8 @@ export class TableManager {
             successfulTables,
             failedTables,
             totalQueries,
+            successfulTableNames,
+            failedTableNames
         });
 
         return { successfulTables, failedTables, totalQueries };

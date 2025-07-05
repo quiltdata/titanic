@@ -116,15 +116,11 @@ export class AthenaUtils {
             database,
             outputLocation,
             configType: this.config.constructor.name,
-            queryPreview: query.substring(0, 100) + (query.length > 100 ? '...' : '')
-        });
-
-        // Log bucket information for diagnostics
-        console.log(`S3 Configuration:`, {
             resultsBucket: this.config.getResultsBucket(),
             tablesBucket: this.config.getTargetBucket(),
-            bucketFromEnv: process.env.GLUE_TABLES_BUCKET_ARN,
-            s3BucketFromEnv: process.env.S3_TABLES_BUCKET_ARN
+            gluebucketFromEnv: process.env.GLUE_TABLES_BUCKET_ARN,
+            s3BucketFromEnv: process.env.S3_TABLES_BUCKET_ARN,
+            queryPreview: query.substring(0, 100) + (query.length > 100 ? '...' : '')
         });
 
         try {

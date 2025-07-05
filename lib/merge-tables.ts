@@ -43,7 +43,7 @@ export async function handler(
 
     const results = await tableManager.ensureExists();
     console.log("TableManager ensureExists results:", results);
-    
+
     const allTables = await athenaUtils.getAllTables(sourceDatabaseName);
     const sourceTables = filterSourceTables(allTables, sourceBucket);
 
@@ -79,21 +79,23 @@ function logContext(
         athenaOutputLocation: `s3://${config.getResultsBucket()}/athena-results/`
     };
 
-    console.log("Context:", {
-        event: event,
-        eventDetails: { bucket, handle, topHash },
+    console.log("Execution Context:", {
         env: envSummary,
-        config: configSummary
+        eventDetails: { bucket, handle, topHash },
+        config: configSummary,
+        event: event
     });
 }
 
 async function testAthenaConnectivity(athenaUtils: AthenaUtils): Promise<void> {
-    console.log("Testing Athena connectivity before proceeding...");
-    console.log("This test validates:");
-    console.log("  - Athena API access (ability to start query executions)");
-    console.log("  - S3 bucket write permissions for query results");
-    console.log("  - Query execution context and database access");
-    console.log("  - Overall end-to-end Athena + S3 integration");
+    console.log("Testing Athena+S3 connectivity before proceeding...", {
+        checks: [
+            "Athena API access (ability to start query executions)",
+            "S3 bucket write permissions for query results",
+            "Query execution context and database access",
+            "Overall end-to-end Athena + S3 integration"
+        ]
+    });
 
     const athenaTestResult = await athenaUtils.validateAthenaAccess();
 
@@ -110,15 +112,35 @@ async function testAthenaConnectivity(athenaUtils: AthenaUtils): Promise<void> {
 
 
 function filterSourceTables(allTables: string[], bucket: string): string[] {
-    return allTables?.filter((tableName: string) => {
-        console.log("Checking table:", tableName);
-        if (!tableName) return false;
+    const selectedTables: string[] = [];
+    const ignoredTables: string[] = [];
+
+    allTables?.forEach((tableName: string) => {
+        if (!tableName) {
+            return; // Skip invalid table names
+        }
+        
         const isView = tableName.endsWith("-view");
         const matchesPrefix = bucket
             ? tableName.startsWith(bucket + "_")
             : true;
-        return isView && matchesPrefix;
-    }) || [];
+        
+        if (isView && matchesPrefix) {
+            selectedTables.push(tableName);
+        } else {
+            ignoredTables.push(tableName);
+        }
+    });
+
+    // Log summary
+    console.log("Table filtering summary:", {
+        selected: selectedTables.length,
+        ignored: ignoredTables.length,
+        selectedTables: selectedTables,
+        ignoredTables: ignoredTables.length > 0 ? ignoredTables : undefined
+    });
+
+    return selectedTables;
 }
 
 interface MergeOperationResult {
@@ -134,22 +156,22 @@ async function executeMergeOperations(
     sourceTables: string[]
 ): Promise<MergeOperationResult> {
     console.log("Starting merge operations for", sourceTables.length, "source tables");
-    
+
     // Separate package views from object views
     const packageView = sourceTables.find((tableName: string) => tableName && tableName.includes('packages-view'));
     const objectsView = sourceTables.find((tableName: string) => tableName && tableName.includes('objects-view'));
-    
+
     if (!packageView && !objectsView) {
         console.log("No package or objects views found - skipping merge operations");
-        return { 
+        return {
             message: "No package or objects views found - skipping merge operations",
             numTables: sourceTables.length,
-            successfulTables: 0, 
-            failedTables: 0, 
-            totalQueries: 0 
+            successfulTables: 0,
+            failedTables: 0,
+            totalQueries: 0
         };
     }
-    
+
     const { successfulTables, failedTables, totalQueries } = await tableManager.executeInserts(packageView || '', objectsView || '');
 
     console.log(`Insert operations summary:`);
