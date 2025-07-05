@@ -41,8 +41,9 @@ export async function handler(
         targetBucket
     );
 
-    await handleFirstRun(tableManager);
-
+    const results = await tableManager.ensureExists();
+    console.log("TableManager ensureExists results:", results);
+    
     const allTables = await athenaUtils.getAllTables(sourceDatabaseName);
     const sourceTables = filterSourceTables(allTables, sourceBucket);
 
@@ -60,31 +61,29 @@ function logContext(
     topHash: string,
     config: Config
 ): void {
-    // Event details
-    console.log("EventBridge event:", JSON.stringify(event, null, 2));
-    console.log("Event details:", { bucket, handle, topHash });
-
-    // Environment variables
-    const envVars = {
+    const envSummary = {
         glueDatabaseName: process.env.GLUE_DATABASE_NAME,
         s3TableDatabaseName: process.env.S3TABLE_DATABASE_NAME,
         glueTablesBucketArn: process.env.GLUE_TABLES_BUCKET_ARN,
         s3TablesBucketArn: process.env.S3_TABLES_BUCKET_ARN,
-    };
-    console.log("Environment variables:", {
-        ...envVars,
         configType: config.constructor.name,
         useS3Table: process.env.USE_S3_TABLE
-    });
+    };
 
-    // Configuration summary
-    console.log("Configuration Summary:", {
+    const configSummary = {
         mode: config.useS3Table ? 'S3 Tables' : 'Glue Tables',
         readDatabase: config.getReadDatabaseName(),
         writeDatabase: config.getWriteDatabaseName(),
         resultsBucket: config.getResultsBucket(),
         tablesBucket: config.getTargetBucket(),
         athenaOutputLocation: `s3://${config.getResultsBucket()}/athena-results/`
+    };
+
+    console.log("Context:", {
+        event: event,
+        eventDetails: { bucket, handle, topHash },
+        env: envSummary,
+        config: configSummary
     });
 }
 
@@ -109,24 +108,6 @@ async function testAthenaConnectivity(athenaUtils: AthenaUtils): Promise<void> {
     }
 }
 
-
-// No-op: no sentinel file, no auto-drop, no auto-create
-async function handleFirstRun(_tableManager: TableManager): Promise<void> {
-    // No initialization needed
-}
-
-
-// Only create tables if they do not already exist
-async function initializeTables(tableManager: TableManager): Promise<void> {
-    console.log('Ensuring tables exist (will not drop existing tables)...');
-    const createResult = await tableManager.ensureExists();
-    if (createResult.failedTables > 0) {
-        const errorMessage = `Table creation failed: ${createResult.failedTables} out of ${createResult.totalQueries} tables failed to create. Cannot proceed with merge operations.`;
-        console.error(errorMessage);
-        throw new Error(errorMessage);
-    }
-    console.log('Tables created or already exist');
-}
 
 function filterSourceTables(allTables: string[], bucket: string): string[] {
     return allTables?.filter((tableName: string) => {
