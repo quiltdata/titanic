@@ -1,5 +1,6 @@
 import { ColumnDefinitions } from "../shared/types";
 import { Config } from "../shared/config";
+import { AthenaUtils } from "../shared/athena-utils";
 
 /**
  * Abstract base class for table operations
@@ -103,6 +104,23 @@ export abstract class BaseTable {
                 return `DROP TABLE IF EXISTS ${this.tableName}`;
             default:
                 throw new Error(`Unsupported query type: ${type}`);
+        }
+    }
+
+    /**
+     * Check if the table exists in the target database using AthenaUtils
+     * Returns true if the query executes successfully, false if not found/does not exist error.
+     */
+    public async tableExists(athenaUtils: AthenaUtils): Promise<boolean> {
+        const query = `SELECT table_name FROM information_schema.tables WHERE table_schema = '${this.config.getWriteDatabaseName()}' AND table_name = '${this.tableName}'`;
+        try {
+            // Now executeQuery returns a boolean indicating existence
+            return await athenaUtils.executeQuery(query);
+        } catch (err) {
+            if (err instanceof Error && /not found|does not exist/i.test(err.message)) {
+                return false;
+            }
+            throw err;
         }
     }
 

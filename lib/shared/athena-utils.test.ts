@@ -94,7 +94,7 @@ describe("AthenaUtils", () => {
                 }
             });
 
-            await expect(athenaUtils.executeQuery("SELECT 1")).resolves.toBeUndefined();
+            await expect(athenaUtils.executeQuery("SELECT 1")).resolves.toBe(true);
             
             expect(athenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(1);
             const call = athenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)[0];
@@ -115,7 +115,7 @@ describe("AthenaUtils", () => {
                 }
             });
 
-            await expect(s3AthenaUtils.executeQuery("CREATE TABLE test AS SELECT 1")).resolves.toBeUndefined();
+            await expect(s3AthenaUtils.executeQuery("CREATE TABLE test AS SELECT 1")).resolves.toBe(true);
             
             expect(s3AthenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(1);
             const call = s3AthenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)[0];
@@ -132,7 +132,7 @@ describe("AthenaUtils", () => {
         it("should handle missing QueryExecutionId", async () => {
             athenaUtils.athenaMock.on(StartQueryExecutionCommand).resolves({});
 
-            await expect(athenaUtils.executeQuery("SELECT 1")).rejects.toThrow("Failed to start query");
+            await expect(athenaUtils.executeQuery("SELECT 1")).resolves.toBe(false);
         });
     });
 
@@ -214,7 +214,7 @@ describe("AthenaUtils", () => {
                 }
             });
 
-            await expect(s3AthenaUtils.executeQuery("SELECT * FROM test_table")).resolves.toBeUndefined();
+            await expect(s3AthenaUtils.executeQuery("SELECT * FROM test_table")).resolves.toBe(true);
             
             expect(s3AthenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(1);
             const call = s3AthenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)[0];

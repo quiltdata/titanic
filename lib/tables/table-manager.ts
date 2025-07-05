@@ -98,6 +98,42 @@ export class TableManager {
     }
 
     /**
+     * Ensure all managed tables exist: check existence, log, and create if necessary
+     * Returns { successfulTables, failedTables, totalQueries }
+     */
+    public async ensureExists(): Promise<{ successfulTables: number; failedTables: number; totalQueries: number }> {
+        let successfulTables = 0;
+        let failedTables = 0;
+        let totalQueries = 0;
+        for (const table of this.targetTables) {
+            try {
+                const exists = await table.tableExists(this.athenaUtils);
+                totalQueries++;
+                if (exists) {
+                    console.log(`✅ Table exists: ${table.tableName}`);
+                    successfulTables++;
+                } else {
+                    console.log(`⚠️  Table does not exist, creating: ${table.tableName}`);
+                    const createdOk = await this.athenaUtils.executeQuery(table.query('create'));
+                    totalQueries++;
+                    if (createdOk) {
+                        console.log(`✅ Table created: ${table.tableName}`);
+                        successfulTables++;
+                    } else {
+                        console.error(`❌ Failed to create table: ${table.tableName}`);
+                        failedTables++;
+                    }
+                }
+            } catch (err) {
+                console.error(`❌ Error ensuring table ${table.tableName}:`, err);
+                failedTables++;
+                totalQueries++;
+            }
+        }
+        return { successfulTables, failedTables, totalQueries };
+    }
+
+    /**
      * Check if an error is related to S3 access issues
      */
     private isS3AccessError(error: Error): boolean {

@@ -90,6 +90,43 @@ export class AthenaTest extends AthenaUtils {
     }
 
     /**
+     * Mock query execution success/failure returning boolean
+     */
+    mockQueryResult(success: boolean, executionId: string = "test-execution-id"): void {
+        if (success) {
+            this.athenaMock.on(StartQueryExecutionCommand).resolves({
+                QueryExecutionId: executionId
+            });
+
+            this.athenaMock.on(GetQueryExecutionCommand, {
+                QueryExecutionId: executionId
+            }).resolves({
+                QueryExecution: {
+                    Status: {
+                        State: QueryExecutionState.SUCCEEDED
+                    }
+                }
+            });
+        } else {
+            // Mock a failed query execution that returns false instead of throwing
+            this.athenaMock.on(StartQueryExecutionCommand).resolves({
+                QueryExecutionId: executionId
+            });
+
+            this.athenaMock.on(GetQueryExecutionCommand, {
+                QueryExecutionId: executionId
+            }).resolves({
+                QueryExecution: {
+                    Status: {
+                        State: QueryExecutionState.FAILED,
+                        StateChangeReason: "Query failed"
+                    }
+                }
+            });
+        }
+    }
+
+    /**
      * Mock query execution with custom execution ID
      */
     mockQueryExecution(executionId: string = "test-execution-id"): void {

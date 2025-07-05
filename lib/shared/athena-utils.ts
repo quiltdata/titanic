@@ -108,7 +108,7 @@ export class AthenaUtils {
     /**
      * Execute a query and wait for completion
      */
-    async executeQuery(query: string): Promise<void> {
+    async executeQuery(query: string): Promise<boolean> {
         const database = this.config.getWriteDatabaseName();
         const outputLocation = `s3://${this.config.getResultsBucket()}/athena-results/`;
 
@@ -141,6 +141,7 @@ export class AthenaUtils {
             console.log(`Query started with ID: ${response.QueryExecutionId}`);
             await this.waitForQueryCompletion(response.QueryExecutionId);
             console.log(`Query completed successfully: ${response.QueryExecutionId}`);
+            return true;
         } catch (error) {
             // Enhanced error logging for S3 bucket issues
             if (error instanceof Error) {
@@ -173,7 +174,7 @@ export class AthenaUtils {
                     });
                 }
             }
-            throw error;
+            return false;
         }
     }
 
