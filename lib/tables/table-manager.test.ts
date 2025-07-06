@@ -35,10 +35,9 @@ describe("TableManager", () => {
 
             const result = await tableManager.executeInserts(packageView, objectsView);
 
-            // The implementation now counts only actual failed queries, not all tables
-            // If the implementation logs errors but still counts as successful, update expectations:
-            expect(result.failedTables).toBe(0); // No failedTables, as errors are not counted as failedTables
-            expect(result.successfulTables).toBe(3); // All 3 tables are attempted and counted as successful
+            // All 3 queries should fail due to the mock error
+            expect(result.failedTables).toBe(3);
+            expect(result.successfulTables).toBe(0);
             expect(result.totalQueries).toBe(3);
         });
 
@@ -100,7 +99,7 @@ describe("TableManager", () => {
                 .mockResolvedValueOnce(true)
                 .mockResolvedValueOnce(false)
                 .mockResolvedValueOnce(false);
-            mockExecuteQuery.mockResolvedValue(true);
+            mockExecuteQuery.mockResolvedValue({ success: true, rowsReturned: 0 });
             const result = await tableManager.ensureExists();
             expect(result.successfulTables).toBe(3);
             expect(result.failedTables).toBe(0);
@@ -114,8 +113,8 @@ describe("TableManager", () => {
                 .mockResolvedValueOnce(false)
                 .mockResolvedValueOnce(false);
             mockExecuteQuery
-                .mockResolvedValueOnce(false)
-                .mockResolvedValueOnce(true);
+                .mockResolvedValueOnce({ success: false, rowsReturned: 0, error: "Create failed" })
+                .mockResolvedValueOnce({ success: true, rowsReturned: 0 });
             const result = await tableManager.ensureExists();
             expect(result.successfulTables).toBe(2);
             expect(result.failedTables).toBe(1);
@@ -127,7 +126,7 @@ describe("TableManager", () => {
                 .mockResolvedValueOnce(true)
                 .mockRejectedValueOnce(new Error('fail'))
                 .mockResolvedValueOnce(false);
-            mockExecuteQuery.mockResolvedValue(true);
+            mockExecuteQuery.mockResolvedValue({ success: true, rowsReturned: 0 });
             const result = await tableManager.ensureExists();
             expect(result.successfulTables).toBe(2);
             expect(result.failedTables).toBe(1);

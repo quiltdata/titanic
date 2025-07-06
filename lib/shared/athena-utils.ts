@@ -1,4 +1,4 @@
-import { AthenaClient, GetQueryExecutionCommand, QueryExecutionState, StartQueryExecutionCommand } from "@aws-sdk/client-athena";
+import { AthenaClient, GetQueryExecutionCommand, QueryExecution, QueryExecutionState, StartQueryExecutionCommand } from "@aws-sdk/client-athena";
 import { GlueClient, GetTablesCommand, GetTablesCommandOutput } from "@aws-sdk/client-glue";
 import { Config } from './config';
 
@@ -78,14 +78,15 @@ export class AthenaUtils {
         try {
             console.log(`Testing Athena + S3 connectivity...`);
             // Use a simple SELECT 1 query to test Athena + S3 integration
-            await this.executeQuery(testQuery);
+            const result = await this.executeQuery(testQuery);
             console.log(`Athena + S3 connectivity test passed`);
             return {
-                success: true,
+                success: result.success,
                 executionContext,
                 outputLocation,
                 testQuery,
-                configType
+                configType,
+                error: result.error
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -108,7 +109,7 @@ export class AthenaUtils {
     /**
      * Execute a query and wait for completion
      */
-    async executeQuery(query: string): Promise<boolean> {
+    async executeQuery(query: string): Promise<{ success: boolean; rowsReturned: number; error?: string; queryId?: string }> {
         const database = this.config.getWriteDatabaseName();
         const outputLocation = `s3://${this.config.getResultsBucket()}/athena-results/`;
 
@@ -131,13 +132,29 @@ export class AthenaUtils {
             }));
 
             if (!response?.QueryExecutionId) {
-                throw new Error("Failed to start query");
+                return {
+                    success: false,
+                    rowsReturned: 0,
+                    error: "Failed to start query"
+                };
             }
 
             console.log(`Query started with ID: ${response.QueryExecutionId}`);
-            await this.waitForQueryCompletion(response.QueryExecutionId);
+            const queryExecution = await this.waitForQueryCompletion(response.QueryExecutionId);
             console.log(`Query completed successfully: ${response.QueryExecutionId}`);
-            return true;
+            
+            // For most queries, we can't easily get row count without additional API calls
+            // For table existence checks, we'll use a simple heuristic:
+            // - If query succeeded and scanned data, assume rows were returned
+            // - For CREATE/DROP/INSERT queries, row count isn't meaningful
+            const rowsReturned = queryExecution?.Statistics?.DataScannedInBytes ? 
+                (queryExecution.Statistics.DataScannedInBytes > 0 ? 1 : 0) : 0;
+            
+            return {
+                success: true,
+                rowsReturned,
+                queryId: response.QueryExecutionId
+            };
         } catch (error) {
             // Enhanced error logging for S3 bucket issues
             if (error instanceof Error) {
@@ -169,8 +186,18 @@ export class AthenaUtils {
                         }
                     });
                 }
+                
+                return {
+                    success: false,
+                    rowsReturned: 0,
+                    error: error.message
+                };
             }
-            return false;
+            return {
+                success: false,
+                rowsReturned: 0,
+                error: String(error)
+            };
         }
     }
 
@@ -207,12 +234,14 @@ export class AthenaUtils {
     /**
      * Wait for query to complete
      */
-    async waitForQueryCompletion(queryId: string, maxAttempts: number = 30): Promise<void> {
+    async waitForQueryCompletion(queryId: string, maxAttempts: number = 30): Promise<QueryExecution> {
         for (let i = 0; i < maxAttempts; i++) {
             const response = await this.athena.send(new GetQueryExecutionCommand({ QueryExecutionId: queryId }));
             const state = response.QueryExecution?.Status?.State;
 
-            if (state === QueryExecutionState.SUCCEEDED) return;
+            if (state === QueryExecutionState.SUCCEEDED) {
+                return response.QueryExecution!;
+            }
 
             if (state === QueryExecutionState.FAILED || state === QueryExecutionState.CANCELLED) {
                 throw new Error(response.QueryExecution?.Status?.StateChangeReason || "Query failed");

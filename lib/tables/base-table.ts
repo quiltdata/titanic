@@ -109,13 +109,14 @@ export abstract class BaseTable {
 
     /**
      * Check if the table exists in the target database using AthenaUtils
-     * Returns true if the query executes successfully, false if not found/does not exist error.
+     * Returns true if the query executes successfully and returns rows, false otherwise.
      */
     public async tableExists(athenaUtils: AthenaUtils): Promise<boolean> {
         const query = `SELECT table_name FROM information_schema.tables WHERE table_schema = '${this.config.getWriteDatabaseName()}' AND table_name = '${this.tableName}'`;
         try {
-            // Now executeQuery returns a boolean indicating existence
-            return await athenaUtils.executeQuery(query);
+            const result = await athenaUtils.executeQuery(query);
+            // Table exists if query succeeded and returned rows
+            return result.success && result.rowsReturned > 0;
         } catch (err) {
             if (err instanceof Error && /not found|does not exist/i.test(err.message)) {
                 return false;

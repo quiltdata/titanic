@@ -74,10 +74,16 @@ export class TableManager {
         for (const table of this.targetTables) {
             try {
                 const query = table.query(type, packagesView, objectsView);
-                await this.athenaUtils.executeQuery(query);
+                const result = await this.athenaUtils.executeQuery(query);
                 totalQueries++;
-                successfulTables++;
-                successfulTableNames.push(table.tableName);
+                if (result.success) {
+                    successfulTables++;
+                    successfulTableNames.push(table.tableName);
+                } else {
+                    failedTables++;
+                    failedTableNames.push(table.tableName);
+                    console.error(`Query execution failed for ${type} on ${table.tableName}:`, result.error);
+                }
             } catch (error) {
                 const err = error as Error;
                 totalQueries++;
@@ -118,13 +124,13 @@ export class TableManager {
                     successfulTables++;
                 } else {
                     console.log(`⚠️  Table does not exist, creating: ${table.tableName}`);
-                    const createdOk = await this.athenaUtils.executeQuery(table.query('create'));
+                    const createResult = await this.athenaUtils.executeQuery(table.query('create'));
                     totalQueries++;
-                    if (createdOk) {
+                    if (createResult.success) {
                         console.log(`✅ Table created: ${table.tableName}`);
                         successfulTables++;
                     } else {
-                        console.error(`❌ Failed to create table: ${table.tableName}`);
+                        console.error(`❌ Failed to create table: ${table.tableName}`, createResult.error);
                         failedTables++;
                     }
                 }
