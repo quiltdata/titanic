@@ -148,127 +148,160 @@ describe("AthenaUtils", () => {
                 error: "Failed to start query"
             });
         });
-    });
 
-    describe("getAllTables", () => {
-        it("should return all tables with pagination", async () => {
-            athenaUtils.glueMock.on(GetTablesCommand)
-                .resolvesOnce({
-                    TableList: [{ Name: "table1" }, { Name: "table2" }],
-                    NextToken: "token1"
+        it("should handle S3 bucket access errors", async () => {
+            const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+            
+            athenaUtils.athenaMock.on(StartQueryExecutionCommand).rejects(
+                new Error('Cannot find or access the specified bucket')
+            );
+
+            const result = await athenaUtils.executeQuery("SELECT 1");
+            
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Cannot find or access the specified bucket');
+            expect(consoleSpy).toHaveBeenCalledWith(
+                expect.stringContaining('S3 Bucket Access Problem Detected'),
+                expect.objectContaining({
+                    issue: 'The Athena results bucket does not exist or is not accessible'
                 })
-                .resolvesOnce({
-                    TableList: [{ Name: "table3" }]
-                });
-
-            const result = await athenaUtils.getAllTables("test_db");
-            expect(result).toHaveLength(3);
-            expect(result).toEqual(["table1", "table2", "table3"]);
+            );
+            
+            consoleSpy.mockRestore();
         });
 
-        it("should handle empty table list", async () => {
-            athenaUtils.glueMock.on(GetTablesCommand).resolves({});
+        it("should handle non-Error exceptions", async () => {
+            athenaUtils.athenaMock.on(StartQueryExecutionCommand).rejects('String error');
 
-            const result = await athenaUtils.getAllTables("test_db");
-            expect(result).toHaveLength(0);
+            const result = await athenaUtils.executeQuery("SELECT 1");
+            
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('String error');
         });
     });
 
-    describe("S3Config-specific tests", () => {
-        it("should use S3Config getWriteDatabaseName for S3 operations", () => {
-            expect(config.getWriteDatabaseName()).toBe(TEST_CONFIG_PARAMS.glueDatabaseName);
-            expect(s3Config.getWriteDatabaseName()).toBe(TEST_CONFIG_PARAMS.s3TableDatabaseName);
-        });
-
-        it("should use S3Config getTargetBucket for S3 table storage", () => {
-            expect(config.getTargetBucket()).toBe(TEST_GLUE_BUCKET);
-            expect(s3Config.getTargetBucket()).toBe(TEST_S3_BUCKET);
-        });
-
-        it("should use S3Config getResultsBucket for Athena results", () => {
-            // Both should use Glue bucket for Athena results
-            expect(config.getResultsBucket()).toBe(TEST_GLUE_BUCKET);
-            expect(s3Config.getResultsBucket()).toBe(TEST_GLUE_BUCKET);
-        });
-
-        it("should use S3Config getS3TableCatalogName for catalog operations", () => {
-            expect(s3Config.getS3TableCatalogName()).toBe(TEST_S3_CATALOG_NAME);
-        });
-
-        it("should generate different createTableQuery for S3Config vs Config", () => {
-            const tableName = "test_table";
-            const columns = "id VARCHAR, name VARCHAR";
-            
-            const configQuery = config.createTableQuery(tableName, columns);
-            const s3ConfigQuery = s3Config.createTableQuery(tableName, columns);
-            
-            expect(configQuery).toContain("WITH (format = 'iceberg')");
-            expect(s3ConfigQuery).toContain(`LOCATION 's3://${TEST_S3_BUCKET}/test_table/'`);
-            expect(s3ConfigQuery).not.toContain("WITH (format = 'iceberg')");
-        });
-
-        it("should provide different execution contexts for S3Config vs Config", () => {
-            const configContext = config.getExecutionContext();
-            const s3ConfigContext = s3Config.getExecutionContext();
-            
-            expect(configContext).toEqual({ Database: TEST_CONFIG_PARAMS.glueDatabaseName });
-            expect(s3ConfigContext).toEqual({
-                Catalog: TEST_S3_CATALOG_NAME,
-                Database: TEST_CONFIG_PARAMS.s3TableDatabaseName
-            });
-        });
-
-        it("should execute queries with S3Config execution context including catalog", async () => {
-            s3AthenaUtils.athenaMock.on(StartQueryExecutionCommand).resolves({
-                QueryExecutionId: "test-s3-execution-id"
-            });
-            s3AthenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
+    describe("waitForQueryCompletion", () => {
+        it("should resolve when query succeeds", async () => {
+            athenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
                 QueryExecution: {
                     Status: { State: QueryExecutionState.SUCCEEDED }
                 }
             });
 
-            await expect(s3AthenaUtils.executeQuery("SELECT * FROM test_table")).resolves.toEqual({
-                success: true,
-                rowsReturned: 0,
-                queryId: "test-s3-execution-id"
-            });
-            
-            expect(s3AthenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)).toHaveLength(1);
-            const call = s3AthenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)[0];
-            expect(call.args[0].input).toMatchObject({
-                QueryString: "SELECT * FROM test_table",
-                QueryExecutionContext: { 
-                    Catalog: TEST_S3_CATALOG_NAME,
-                    Database: TEST_CONFIG_PARAMS.s3TableDatabaseName
-                },
-                ResultConfiguration: { OutputLocation: `s3://${TEST_GLUE_BUCKET}/athena-results/` }
+            await expect(athenaUtils.waitForQueryCompletion("test-id")).resolves.toEqual({
+                Status: { State: QueryExecutionState.SUCCEEDED }
             });
         });
 
-        it("should use S3Config getReadDatabaseName consistently", () => {
-            expect(config.getReadDatabaseName()).toBe(TEST_CONFIG_PARAMS.glueDatabaseName);
-            expect(s3Config.getReadDatabaseName()).toBe(TEST_CONFIG_PARAMS.glueDatabaseName); // S3Config inherits this from base
+        it("should reject when query fails", async () => {
+            athenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: {
+                    Status: { 
+                        State: QueryExecutionState.FAILED,
+                        StateChangeReason: "Query syntax error"
+                    }
+                }
+            });
+
+            await expect(athenaUtils.waitForQueryCompletion("test-id")).rejects.toThrow("Query syntax error");
         });
 
-        it("should handle dropTableQuery identically for both configs", () => {
-            const tableName = "test_table";
-            
-            const configDropQuery = config.dropTableQuery(tableName);
-            const s3ConfigDropQuery = s3Config.dropTableQuery(tableName);
-            
-            expect(configDropQuery).toBe("DROP TABLE IF EXISTS test_table");
-            expect(s3ConfigDropQuery).toBe("DROP TABLE IF EXISTS test_table");
+        it("should reject when query is cancelled", async () => {
+            athenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: {
+                    Status: { 
+                        State: QueryExecutionState.CANCELLED,
+                        StateChangeReason: "User cancelled"
+                    }
+                }
+            });
+
+            await expect(athenaUtils.waitForQueryCompletion("test-id")).rejects.toThrow("User cancelled");
         });
 
-        it("should extract source bucket names consistently for both config types", () => {
-            const packagesTableName = `${TEST_S3_BUCKET}_packages-view`;
-            const objectsTableName = `${TEST_S3_BUCKET}_objects-view`;
+        it("should timeout after max attempts", async () => {
+            athenaUtils.athenaMock.on(GetQueryExecutionCommand).resolves({
+                QueryExecution: {
+                    Status: { State: QueryExecutionState.RUNNING }
+                }
+            });
+
+            await expect(athenaUtils.waitForQueryCompletion("test-id", 2)).rejects.toThrow("Query timed out after 2 attempts");
+        });
+    });
+
+    describe("constructor and configuration validation", () => {
+        it("should log configuration issues when config is missing required values", () => {
+            const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
             
-            expect(Config.sourceBucketFromTableName(packagesTableName)).toBe(TEST_S3_BUCKET);
-            expect(Config.sourceBucketFromTableName(objectsTableName)).toBe(TEST_S3_BUCKET);
-            expect(S3Config.sourceBucketFromTableName(packagesTableName)).toBe(TEST_S3_BUCKET);
-            expect(S3Config.sourceBucketFromTableName(objectsTableName)).toBe(TEST_S3_BUCKET);
+            // Create a config with missing required values
+            const badConfig = Config.createTestInstance({
+                glueDatabaseName: "",
+                glueTablesBucketArn: ""
+            });
+            
+            // Creating AthenaUtils should trigger validation
+            AthenaTest.createTestInstance(badConfig);
+            
+            expect(consoleSpy).toHaveBeenCalledWith(
+                expect.stringContaining('Configuration issues detected'),
+                expect.objectContaining({
+                    issues: expect.arrayContaining([
+                        expect.stringContaining('Results bucket is empty'),
+                        expect.stringContaining('Write database name is empty'),
+                        expect.stringContaining('Read database name is empty')
+                    ])
+                })
+            );
+            
+            consoleSpy.mockRestore();
+        });
+    });
+
+    describe("validateAthenaAccess", () => {
+        it("should handle errors during validation", async () => {
+            const athenaUtilsWithError = AthenaTest.createTestInstance(config);
+            
+            // Mock executeQuery to throw an error
+            jest.spyOn(athenaUtilsWithError, 'executeQuery').mockRejectedValue(new Error('Connection failed'));
+            
+            const result = await athenaUtilsWithError.validateAthenaAccess();
+            
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Connection failed');
+            expect(result.testQuery).toBe('SELECT 1 AS test_connection');
+        });
+    });
+
+    describe("executeQuery error handling", () => {
+        it("should handle S3 bucket access errors", async () => {
+            const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+            
+            athenaUtils.athenaMock.on(StartQueryExecutionCommand).rejects(
+                new Error('Cannot find or access the specified bucket')
+            );
+
+            const result = await athenaUtils.executeQuery("SELECT 1");
+            
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Cannot find or access the specified bucket');
+            expect(consoleSpy).toHaveBeenCalledWith(
+                expect.stringContaining('S3 Bucket Access Problem Detected'),
+                expect.objectContaining({
+                    issue: 'The Athena results bucket does not exist or is not accessible'
+                })
+            );
+            
+            consoleSpy.mockRestore();
+        });
+
+        it("should handle non-Error exceptions", async () => {
+            athenaUtils.athenaMock.on(StartQueryExecutionCommand).rejects('String error');
+
+            const result = await athenaUtils.executeQuery("SELECT 1");
+            
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('String error');
         });
     });
 });

@@ -2,6 +2,9 @@ import { PackageRevisionTable } from "./package-revision";
 import { PackageTagTable } from "./package-tag";
 import { PackageEntryTable } from "./package-entry";
 import { createTableTestSetup } from "../shared/test-utils";
+import { BaseTable } from "./base-table";
+import { Config } from "../shared/config";
+import { ColumnDefinitions } from "../shared/types";
 
 /**
  * Consolidated test suite for all package-related tables.
@@ -133,6 +136,136 @@ describe("Package Tables", () => {
                 const call = mockAthenaUtils.executeQuery.mock.calls[0][0];
                 expect(call).toContain("table_schema = 'test-db'");
                 expect(call).toContain("table_name = 'package_revision'");
+            });
+        });
+    });
+
+    describe("BaseTable error handling", () => {
+        // Create a concrete test implementation of BaseTable for testing
+        class TestTable extends BaseTable {
+            public get tableName(): string {
+                return "test_table";
+            }
+
+            protected getColumnDefinitions(): ColumnDefinitions {
+                return { id: "bigint", name: "varchar(255)" };
+            }
+
+            protected getPartitioningClause(): string {
+                return "PARTITIONED BY (year)";
+            }
+
+            protected generateInsertQuery(packagesView: string, objectsView: string): string {
+                return `INSERT INTO ${this.tableName} SELECT * FROM ${packagesView}`;
+            }
+
+            protected generateSelectClause(registryName: string, sourceAlias: string): string {
+                return `${sourceAlias}.id, ${sourceAlias}.name`;
+            }
+
+            protected generateWhereClauseForCtas(sourceAlias: string): string {
+                return `${sourceAlias}.id > 0`;
+            }
+        }
+
+        // Test implementation with no column definitions
+        class EmptyColumnsTable extends BaseTable {
+            public get tableName(): string {
+                return "empty_table";
+            }
+
+            protected getColumnDefinitions(): ColumnDefinitions {
+                return {};
+            }
+
+            protected getPartitioningClause(): string {
+                return "";
+            }
+
+            protected generateInsertQuery(packagesView: string, objectsView: string): string {
+                return `INSERT INTO ${this.tableName} SELECT * FROM ${packagesView}`;
+            }
+
+            protected generateSelectClause(registryName: string, sourceAlias: string): string {
+                return "";
+            }
+
+            protected generateWhereClauseForCtas(sourceAlias: string): string {
+                return "";
+            }
+        }
+
+        // Test implementation with invalid column definitions
+        class InvalidColumnsTable extends BaseTable {
+            public get tableName(): string {
+                return "invalid_table";
+            }
+
+            protected getColumnDefinitions(): ColumnDefinitions {
+                return { "": "bigint", "name": "" };
+            }
+
+            protected getPartitioningClause(): string {
+                return "";
+            }
+
+            protected generateInsertQuery(packagesView: string, objectsView: string): string {
+                return `INSERT INTO ${this.tableName} SELECT * FROM ${packagesView}`;
+            }
+
+            protected generateSelectClause(registryName: string, sourceAlias: string): string {
+                return "";
+            }
+
+            protected generateWhereClauseForCtas(sourceAlias: string): string {
+                return "";
+            }
+        }
+
+        describe("generateColumnList", () => {
+            it("should throw error when pattern is empty", () => {
+                const table = new TestTable(testSetup.mockConfig);
+                expect(() => table['generateColumnList']("")).toThrow("Pattern cannot be empty");
+            });
+
+            it("should throw error when pattern is only whitespace", () => {
+                const table = new TestTable(testSetup.mockConfig);
+                expect(() => table['generateColumnList']("   ")).toThrow("Pattern cannot be empty");
+            });
+
+            it("should throw error when no column definitions found", () => {
+                const table = new EmptyColumnsTable(testSetup.mockConfig);
+                expect(() => table['generateColumnList']("${name} ${type}")).toThrow("No column definitions found");
+            });
+
+            it("should throw error when column definitions are invalid", () => {
+                const table = new InvalidColumnsTable(testSetup.mockConfig);
+                expect(() => table['generateColumnList']("${name} ${type}")).toThrow("Invalid column definition");
+            });
+        });
+
+        describe("generateCreateQuery", () => {
+            it("should throw error when target bucket is missing for Glue table creation", () => {
+                // Create a config with missing target bucket
+                const configWithoutBucket = Config.createTestInstance({
+                    glueDatabaseName: "test-db",
+                    glueTablesBucketArn: ""
+                });
+                
+                const table = new TestTable(configWithoutBucket);
+                expect(() => table.generateCreateQuery()).toThrow("Target bucket is required for Glue table creation");
+            });
+        });
+
+        describe("query method", () => {
+            it("should throw error for unsupported query type", () => {
+                const table = new TestTable(testSetup.mockConfig);
+                expect(() => table.query('unknown' as any)).toThrow("Unsupported query type: unknown");
+            });
+
+            it("should throw error for insert query without required views", () => {
+                const table = new TestTable(testSetup.mockConfig);
+                expect(() => table.query('insert')).toThrow("At least one of packagesView or objectsView is required for insert queries");
             });
         });
     });
