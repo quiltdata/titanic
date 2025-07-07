@@ -1,170 +1,128 @@
-import { executeQuery, tableExists } from "../shared/athena-utils";
-import { TableContext } from "../shared/types";
+import { ColumnDefinitions } from "../shared/types";
+import { Config } from "../shared/config";
+import { AthenaUtils } from "../shared/athena-utils";
 
 /**
- * Abstract base class for Iceberg table operations
+ * Abstract base class for table operations
  * Provides common functionality for table creation and data insertion
+ * Uses the new Config architecture to handle both Glue and S3 table strategies
  */
 export abstract class BaseTable {
+    protected readonly config: Config;
+
+    constructor(config: Config) {
+        this.config = config;
+    }
+
     // Abstract properties that subclasses must implement
-    protected abstract get tableName(): string;
-    protected abstract getCreateTableSchema(databaseName: string): string;
+    public abstract get tableName(): string;
+    protected abstract getColumnDefinitions(): ColumnDefinitions;
     protected abstract getPartitioningClause(): string;
-    protected abstract generateInsertQuery(context: TableContext, sourceTableName: string): string;
-    
+    protected abstract generateInsertQuery(packagesView: string, objectsView: string): string;
+
     // New abstract methods for cleaner CTAS generation
     protected abstract generateSelectClause(registryName: string, sourceAlias: string): string;
     protected abstract generateWhereClauseForCtas(sourceAlias: string): string;
 
+
     /**
-     * Ensure table exists using appropriate strategy based on table type
-     * S3 tables: CREATE empty table with partitions
-     * Iceberg tables: CTAS (CREATE TABLE AS SELECT) with initial data
+     * Generate a list of columns in the specified pattern
+     * Example pattern: "${name} ${type}"
      */
-    static async ensureExists(
-        databaseName: string,
-        targetBucket: string,
-        sourceView: string,
-        useS3Table?: boolean
-    ): Promise<void> {
-        const instance = new (this as any)();
-        
-        if (await tableExists(databaseName, instance.tableName)) {
-            return;
+    protected generateColumnList(pattern: string): string {
+        if (!pattern || pattern.trim() === '') {
+            throw new Error('Pattern cannot be empty');
         }
 
-        const shouldUseS3Table = useS3Table || false;
-        
-        if (shouldUseS3Table) {
-            // S3 table: create empty table with partitions
-            console.log(`Creating ${instance.tableName} S3 table (empty, partitioned)`);
-            await instance.createEmptyTable(databaseName, targetBucket, true);
+        const columns = this.getColumnDefinitions();
+        if (!columns || Object.keys(columns).length === 0) {
+            throw new Error('No column definitions found');
+        }
+
+        const entries = Object.entries(columns);
+        return entries.map(([name, type]) => {
+            if (!name || !type) {
+                throw new Error(`Invalid column definition: name='${name}', type='${type}'`);
+            }
+            return pattern.replace(/\${name}/g, name).replace(/\${type}/g, type);
+        }).join(', ');
+    }
+
+    /**
+     * Generate CTAS query for empty table creation (mainly for tests)
+     */
+    public generateCreateQuery(): string {
+        if (this.config.useS3Table) {
+            return this.generateS3TableCreateQuery();
         } else {
-            // Iceberg table: use CTAS to create with initial data
-            console.log(`Creating ${instance.tableName} Iceberg table using CTAS`);
-            await instance.createTableAsSelect(databaseName, targetBucket, sourceView);
+            return this.generateGlueTableCreateQuery();
         }
     }
 
     /**
-     * Create an empty table with the schema defined by the subclass (for S3 tables)
+     * Generate CREATE TABLE query for S3 tables
      */
-    private async createEmptyTable(
-        databaseName: string,
-        targetBucket: string,
-        useS3Table: boolean
-    ): Promise<void> {
-        const createQuery = this.getCompleteCreateTableSchema(databaseName, targetBucket, useS3Table);
-        console.log(`Creating empty ${this.tableName} table with SQL:`, createQuery);
-        await executeQuery(createQuery, targetBucket);
+    private generateS3TableCreateQuery(): string {
+        const columnDefs = this.generateColumnList("${name} ${type}");
+        const partitioning = this.getPartitioningClause();
+        return `CREATE TABLE ${this.tableName} (${columnDefs}) ${partitioning}`;
     }
 
     /**
-     * Create table using CTAS (CREATE TABLE AS SELECT) for Iceberg tables
+     * Generate CTAS query for Glue tables
      */
-    private async createTableAsSelect(
-        databaseName: string,
-        targetBucket: string,
-        sourceView: string
-    ): Promise<void> {
-        const ctasQuery = this.generateCtasQuery(databaseName, targetBucket, sourceView);
-        console.log(`Creating ${this.tableName} table with CTAS:`, ctasQuery);
-        await executeQuery(ctasQuery, targetBucket);
-    }
-
-    /**
-     * Generate CTAS query for Iceberg tables
-     */
-    protected generateCtasQuery(databaseName: string, targetBucket: string, sourceView: string): string {
-        const withClause = this.getWithClause(targetBucket);
-        const selectQuery = this.generateSelectForCtas(databaseName, sourceView);
+    private generateGlueTableCreateQuery(): string {
+        const selectColumns = this.generateColumnList("CAST(NULL AS ${type}) AS ${name}");
+        const targetBucket = this.config.getTargetBucket();
         
-        return `CREATE TABLE "${databaseName}"."${this.tableName}"${withClause}
-AS ${selectQuery}`;
-    }
-
-    /**
-     * Generate the SELECT portion for CTAS using dedicated methods
-     */
-    protected generateSelectForCtas(databaseName: string, sourceView: string): string {
-        const registryName = this.extractRegistryFromSourceView(sourceView);
-        const sourceAlias = 's';
-        
-        const selectClause = this.generateSelectClause(registryName, sourceAlias);
-        const whereClause = this.generateWhereClauseForCtas(sourceAlias);
-        
-        let query = `SELECT DISTINCT ${selectClause} FROM "${databaseName}"."${sourceView}" ${sourceAlias}`;
-        
-        if (whereClause) {
-            query += ` WHERE ${whereClause}`;
+        if (!targetBucket) {
+            throw new Error('Target bucket is required for Glue table creation');
         }
-        
-        return query;
+
+        return `CREATE TABLE ${this.tableName} WITH (
+            format = 'PARQUET',
+            write_compression = 'SNAPPY',
+            location = 's3://${targetBucket}/iceberg_catalog/${this.tableName}',
+            table_type = 'ICEBERG',
+            is_external = false
+        ) AS SELECT ${selectColumns} WHERE 1=0`;
     }
 
     /**
-     * Extract registry name from source view name
+     * Generate a query of the specified type
      */
-    private extractRegistryFromSourceView(sourceView: string): string {
-        // Extract registry from source view name (e.g., "bucket_name_packages-view" -> "bucket_name")
-        const match = sourceView.match(/^(.+?)_(?:packages|objects)-view$/);
-        return match ? match[1] : sourceView;
-    }
-
-    /**
-     * Generate the complete CREATE TABLE schema with conditional partitioning and WITH clause
-     * useS3Table=true: S3 table with partitions, no WITH clause
-     * useS3Table=false: Iceberg table with WITH clause, no partitions
-     */
-    protected getCompleteCreateTableSchema(databaseName: string, targetBucket: string, useS3Table?: boolean): string {
-        const baseSchema = this.getCreateTableSchema(databaseName);
-        const partitioningClause = this.getPartitioningClause();
-        
-        // Check runtime configuration, defaulting to false (Iceberg)
-        const shouldUseS3Table = useS3Table || false;
-        
-        let completeSchema = baseSchema.trim();
-        
-        if (shouldUseS3Table && partitioningClause) {
-            // S3 table: add partitioning, no WITH clause
-            completeSchema += `\n            ${partitioningClause}`;
-        } else {
-            // Iceberg table: add WITH clause, no partitioning
-            completeSchema += this.getWithClause(targetBucket);
+    query(type: 'create' | 'insert' | 'drop', packagesView?: string, objectsView?: string): string {
+        switch (type) {
+            case 'create':
+                return this.generateCreateQuery();
+            case 'insert':
+                if (!packagesView && !objectsView) {
+                    throw new Error('At least one of packagesView or objectsView is required for insert queries');
+                }
+                return this.generateInsertQuery(packagesView || '', objectsView || '');
+            case 'drop':
+                return `DROP TABLE IF EXISTS ${this.tableName}`;
+            default:
+                throw new Error(`Unsupported query type: ${type}`);
         }
-        
-        return completeSchema;
     }
 
     /**
-     * Generate the WITH clause for Iceberg table properties
+     * Check if the table exists in the target database using AthenaUtils
+     * Returns true if the query executes successfully and returns rows, false otherwise.
      */
-    protected getWithClause(targetBucket: string): string {
-        return `
-            WITH (
-                format = 'PARQUET',
-                write_compression = 'SNAPPY',
-                location = 's3://${targetBucket}/iceberg_catalog/${this.tableName}/',
-                table_type = 'ICEBERG',
-                is_external = false
-            )`;
+    public async tableExists(athenaUtils: AthenaUtils): Promise<boolean> {
+        const query = `SELECT table_name FROM information_schema.tables WHERE table_schema = '${this.config.getWriteDatabaseName()}' AND table_name = '${this.tableName}'`;
+        try {
+            const result = await athenaUtils.executeQuery(query);
+            // Table exists if query succeeded and returned rows
+            return result.success && result.rowsReturned > 0;
+        } catch (err) {
+            if (err instanceof Error && /not found|does not exist/i.test(err.message)) {
+                return false;
+            }
+            throw err;
+        }
     }
 
-    /**
-     * Insert data into the table using the query generated by the subclass
-     */
-    static async insert(context: TableContext, sourceTableName: string): Promise<void> {
-        const instance = new (this as any)();
-        const query = instance.generateInsertQuery(context, sourceTableName);
-        console.log(`Inserting into ${instance.tableName} with SQL:`, query);
-        await executeQuery(query, context.targetBucket);
-    }
-
-    /**
-     * Generate the static insert query (for backward compatibility)
-     */
-    static generateInsertQuery(context: TableContext, sourceTableName: string): string {
-        const instance = new (this as any)();
-        return instance.generateInsertQuery(context, sourceTableName);
-    }
 }

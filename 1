@@ -1,0 +1,567 @@
+PASS lib/tables/schema-validation.test.ts
+  Schema Validation Tests
+    S3 Tables - CREATE TABLE Operations
+      package_revision S3 CREATE TABLE
+        ✓ should generate correct S3 CREATE TABLE schema matching schema.sql (2 ms)
+      package_tag S3 CREATE TABLE
+        ✓ should generate correct S3 CREATE TABLE schema matching schema.sql (1 ms)
+      package_entry S3 CREATE TABLE
+        ✓ should generate correct S3 CREATE TABLE schema matching schema.sql
+    Glue Tables - CREATE TABLE AS SELECT (CTAS) Operations
+      package_revision Glue CTAS
+        ✓ should generate correct Glue CTAS query matching schema.sql patterns (1 ms)
+      package_tag Glue CTAS
+        ✓ should generate correct Glue CTAS query matching schema.sql patterns
+      package_entry Glue CTAS
+        ✓ should generate correct Glue CTAS query matching schema.sql patterns
+    Glue Tables - INSERT Operations
+      ✓ should generate INSERT SQL for package_revision matching schema.sql patterns (1 ms)
+      ✓ should generate INSERT SQL for package_tag matching schema.sql patterns
+      ✓ should generate INSERT SQL for package_entry matching schema.sql patterns
+    DROP TABLE Operations
+      ✓ should generate correct DROP statements for Glue tables matching schema.sql patterns (1 ms)
+      ✓ should generate correct DROP statements for S3 tables matching schema.sql patterns
+    Schema Structure Validation
+      ✓ should have consistent schema between S3 and Glue configurations
+      ✓ should validate multihash generation patterns match schema.sql (1 ms)
+      ✓ should validate source table formatting flexibility
+      ✓ should validate all tables support proper JOIN conditions for data integrity (1 ms)
+    CREATE and DROP TABLE Operations
+      ✓ should generate CREATE TABLE SQL
+      ✓ should generate DROP TABLE SQL
+
+PASS lib/shared/config.test.ts
+  Config
+    Config constructor with ARN inputs
+      ✓ should load configuration from provided ARN values (2 ms)
+      ✓ should default to empty strings when no values provided (1 ms)
+      ✓ should correctly interpret environment variables
+    ARN parsing utilities
+      ✓ should extract bucket name from S3 bucket ARN
+      ✓ should extract bucket name from S3 Tables ARN
+      ✓ should handle non-ARN strings (pass through)
+    Glue Config
+      ✓ should provide correct bucket methods for Glue mode
+      ✓ should use Glue database for read and write operations (1 ms)
+      ✓ should provide database-only execution context
+    S3Config
+      ✓ should provide correct bucket methods for S3 Tables mode
+      ✓ should use different databases for read vs write operations
+      ✓ should format S3 Tables catalog name correctly
+      ✓ should provide catalog and database execution context (1 ms)
+    Config factory method
+      ✓ should create Config instance when USE_S3_TABLE=false
+      ✓ should create S3Config instance when USE_S3_TABLE=true
+      ✓ should default to Config when USE_S3_TABLE not set
+    Table name utilities
+      ✓ should extract source bucket from table names
+
+PASS lib/tables/table-manager.test.ts
+  TableManager
+    executeInserts
+      ✓ should handle complete table processing failures (25 ms)
+      ✓ should handle successful insertions (4 ms)
+
+PASS lib/tables/partitioning.test.ts
+  Table Schema Configuration
+    Glue mode (default)
+      ✓ should generate CREATE TABLE with WITH clause by default (2 ms)
+      ✓ should generate CREATE TABLE with WITH clause when explicitly disabled (1 ms)
+    S3 Tables mode
+      ✓ should generate CREATE TABLE with partitioning when S3 Tables mode enabled
+    Schema generation
+      ✓ should correctly combine base schema with partitioning clause for S3 Tables
+      ✓ should return schema with WITH clause for Glue mode
+      ✓ should handle default static property as Glue mode
+      ✓ should correctly generate S3 Tables with partitions but no WITH clause (1 ms)
+
+PASS lib/envar-passing.test.ts
+  Environment Variable Contract Tests
+    Stack-to-Lambda environment variable contract
+      ✓ should pass ARNs consistently with clear naming (2 ms)
+    Config class ARN handling and conversion
+      ✓ should extract bucket names from ARNs correctly (1 ms)
+      ✓ should handle Glue config with ARN inputs
+      ✓ should handle S3Config with ARN inputs
+    Environment variable usage in merge-tables handler
+      ✓ should expect ARN-named environment variables
+    CDK stack environment variable output
+      ✓ should pass bucket ARNs with clear variable names
+    Method usage patterns
+      ✓ should use appropriate methods for different operations
+
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.84kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for public.ecr.aws/sam/build-nodejs18.x:latest
+#2 DONE 0.6s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [ 1/12] FROM public.ecr.aws/sam/build-nodejs18.x:latest@sha256:6fa14e5889f9c3481ebe7998f821bbd5fbac41f02ed315ad01b19b0b07b341bf
+#4 resolve public.ecr.aws/sam/build-nodejs18.x:latest@sha256:6fa14e5889f9c3481ebe7998f821bbd5fbac41f02ed315ad01b19b0b07b341bf done
+#4 DONE 0.0s
+
+#5 [ 6/12] RUN npm install --global --unsafe-perm=true esbuild@0.21
+#5 CACHED
+
+#6 [10/12] RUN npm config --global set update-notifier false
+#6 CACHED
+
+#7 [ 4/12] RUN npm install --global bun@1.1.30
+#7 CACHED
+
+#8 [ 2/12] RUN npm install --global yarn@1.22.5
+#8 CACHED
+
+#9 [ 7/12] RUN mkdir /tmp/npm-cache &&     chmod -R 777 /tmp/npm-cache &&     npm config --global set cache /tmp/npm-cache
+#9 CACHED
+
+#10 [ 5/12] RUN npm install --global typescript
+#10 CACHED
+
+#11 [ 3/12] RUN npm install --global pnpm@7.30.5
+#11 CACHED
+
+#12 [ 9/12] RUN mkdir /tmp/pnpm-cache &&     chmod -R 777 /tmp/pnpm-cache &&     pnpm config --global set store-dir /tmp/pnpm-cache
+#12 CACHED
+
+#13 [11/12] RUN /sbin/useradd -u 1000 user && chmod 711 /
+#13 CACHED
+
+#14 [ 8/12] RUN mkdir /tmp/yarn-cache &&     chmod -R 777 /tmp/yarn-cache &&     yarn config set cache-folder /tmp/yarn-cache
+#14 CACHED
+
+#15 [12/12] RUN mkdir /tmp/bun-cache &&     chmod -R 777 /tmp/bun-cache &&     echo -e "[install.cache]\ndir = "/tmp/bun-cache"\ndisable = true" >> /home/user/.bunfig.toml
+#15 CACHED
+
+#16 exporting to image
+#16 exporting layers done
+#16 exporting manifest sha256:9cc04bff5e65c5463651456fa132977837cd2d1a55fbb70319aca8181a682c60 done
+#16 exporting config sha256:9a654c6b4281e4fc57b6a5f22b380d450d593449c7d13f8d76356984ac390c3d done
+#16 exporting attestation manifest sha256:b50125ea4012233179b03ae1580692455a845c41a54199dc24fd30196d97cf03 done
+#16 exporting manifest list sha256:b5d22c4d0f26378204d7d71065773052fb2fc3c7397f90f6fad8e203076ff435 done
+#16 naming to docker.io/library/cdk-40cae9aa8c7c0fdc5eecdf29caa37103aee1fc4acc837a2ffe920f8630c54126:latest done
+#16 DONE 0.0s
+Bundling asset SharedGlueStack/TitanicMergeTables/Code/Stage...
+esbuild cannot run locally. Switching to Docker bundling.
+WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested
+
+  asset-output/index.js  28.9kb
+
+⚡ Done in 103ms
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.84kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for public.ecr.aws/sam/build-nodejs18.x:latest
+FAIL lib/tables/base-table.test.ts
+  ● Test suite failed to run
+
+    [96mlib/tables/base-table.test.ts[0m:[93m4[0m:[93m10[0m - [91merror[0m[90m TS2724: [0m'"../shared/test-utils"' has no exported member named 'createTableTestSuite'. Did you mean 'createTableTestSetup'?
+
+    [7m4[0m import { createTableTestSuite } from "../shared/test-utils";
+    [7m [0m [91m         ~~~~~~~~~~~~~~~~~~~~[0m
+
+      [96mlib/shared/test-utils.ts[0m:[93m23[0m:[93m17[0m
+        [7m23[0m export function createTableTestSetup(): TableTestSetup {
+        [7m  [0m [96m                ~~~~~~~~~~~~~~~~~~~~[0m
+        'createTableTestSetup' is declared here.
+
+#2 DONE 0.2s
+FAIL lib/merge-tables.test.ts
+  ● Test suite failed to run
+
+    [96mlib/merge-tables.test.ts[0m:[93m499[0m:[93m1[0m - [91merror[0m[90m TS1005: [0m'}' expected.
+
+    [7m499[0m 
+    [7m   [0m [91m[0m
+
+      [96mlib/merge-tables.test.ts[0m:[93m57[0m:[93m39[0m
+        [7m57[0m describe("merge-tables lambda", () => {
+        [7m  [0m [96m                                      ~[0m
+        The parser expected to find a '}' to match the '{' token here.
+
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [ 1/12] FROM public.ecr.aws/sam/build-nodejs18.x:latest@sha256:6fa14e5889f9c3481ebe7998f821bbd5fbac41f02ed315ad01b19b0b07b341bf
+#4 resolve public.ecr.aws/sam/build-nodejs18.x:latest@sha256:6fa14e5889f9c3481ebe7998f821bbd5fbac41f02ed315ad01b19b0b07b341bf done
+#4 DONE 0.0s
+
+#5 [ 2/12] RUN npm install --global yarn@1.22.5
+#5 CACHED
+
+#6 [ 4/12] RUN npm install --global bun@1.1.30
+#6 CACHED
+
+#7 [ 7/12] RUN mkdir /tmp/npm-cache &&     chmod -R 777 /tmp/npm-cache &&     npm config --global set cache /tmp/npm-cache
+#7 CACHED
+
+#8 [ 9/12] RUN mkdir /tmp/pnpm-cache &&     chmod -R 777 /tmp/pnpm-cache &&     pnpm config --global set store-dir /tmp/pnpm-cache
+#8 CACHED
+
+#9 [11/12] RUN /sbin/useradd -u 1000 user && chmod 711 /
+#9 CACHED
+
+#10 [ 5/12] RUN npm install --global typescript
+#10 CACHED
+
+#11 [ 6/12] RUN npm install --global --unsafe-perm=true esbuild@0.21
+#11 CACHED
+
+#12 [10/12] RUN npm config --global set update-notifier false
+#12 CACHED
+
+#13 [ 3/12] RUN npm install --global pnpm@7.30.5
+#13 CACHED
+
+#14 [ 8/12] RUN mkdir /tmp/yarn-cache &&     chmod -R 777 /tmp/yarn-cache &&     yarn config set cache-folder /tmp/yarn-cache
+#14 CACHED
+
+#15 [12/12] RUN mkdir /tmp/bun-cache &&     chmod -R 777 /tmp/bun-cache &&     echo -e "[install.cache]\ndir = "/tmp/bun-cache"\ndisable = true" >> /home/user/.bunfig.toml
+#15 CACHED
+
+#16 exporting to image
+#16 exporting layers done
+#16 exporting manifest sha256:9cc04bff5e65c5463651456fa132977837cd2d1a55fbb70319aca8181a682c60 done
+#16 exporting config sha256:9a654c6b4281e4fc57b6a5f22b380d450d593449c7d13f8d76356984ac390c3d done
+#16 exporting attestation manifest sha256:ce3d40e3fb840bbb36cac421500450f4fb7eff07ed9b6c911aaf3a6c4ebec84b done
+#16 exporting manifest list sha256:7cb6f65ce5159a4d42da70e2bf12a7328a3ae76cddcf3a2ee2cee051d4ae850e done
+#16 naming to docker.io/library/cdk-40cae9aa8c7c0fdc5eecdf29caa37103aee1fc4acc837a2ffe920f8630c54126:latest done
+#16 DONE 0.0s
+Bundling asset SharedS3TablesStack/TitanicMergeTables/Code/Stage...
+esbuild cannot run locally. Switching to Docker bundling.
+WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested
+
+  asset-output/index.js  28.9kb
+
+⚡ Done in 89ms
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.84kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for public.ecr.aws/sam/build-nodejs18.x:latest
+#2 DONE 0.3s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [ 1/12] FROM public.ecr.aws/sam/build-nodejs18.x:latest@sha256:6fa14e5889f9c3481ebe7998f821bbd5fbac41f02ed315ad01b19b0b07b341bf
+#4 resolve public.ecr.aws/sam/build-nodejs18.x:latest@sha256:6fa14e5889f9c3481ebe7998f821bbd5fbac41f02ed315ad01b19b0b07b341bf done
+#4 DONE 0.0s
+
+#5 [ 4/12] RUN npm install --global bun@1.1.30
+#5 CACHED
+
+#6 [ 6/12] RUN npm install --global --unsafe-perm=true esbuild@0.21
+#6 CACHED
+
+#7 [ 8/12] RUN mkdir /tmp/yarn-cache &&     chmod -R 777 /tmp/yarn-cache &&     yarn config set cache-folder /tmp/yarn-cache
+#7 CACHED
+
+#8 [11/12] RUN /sbin/useradd -u 1000 user && chmod 711 /
+#8 CACHED
+
+#9 [ 5/12] RUN npm install --global typescript
+#9 CACHED
+
+#10 [ 9/12] RUN mkdir /tmp/pnpm-cache &&     chmod -R 777 /tmp/pnpm-cache &&     pnpm config --global set store-dir /tmp/pnpm-cache
+#10 CACHED
+
+#11 [10/12] RUN npm config --global set update-notifier false
+#11 CACHED
+
+#12 [ 3/12] RUN npm install --global pnpm@7.30.5
+#12 CACHED
+
+#13 [ 7/12] RUN mkdir /tmp/npm-cache &&     chmod -R 777 /tmp/npm-cache &&     npm config --global set cache /tmp/npm-cache
+#13 CACHED
+
+#14 [ 2/12] RUN npm install --global yarn@1.22.5
+#14 CACHED
+
+#15 [12/12] RUN mkdir /tmp/bun-cache &&     chmod -R 777 /tmp/bun-cache &&     echo -e "[install.cache]\ndir = "/tmp/bun-cache"\ndisable = true" >> /home/user/.bunfig.toml
+#15 CACHED
+
+#16 exporting to image
+#16 exporting layers done
+#16 exporting manifest sha256:9cc04bff5e65c5463651456fa132977837cd2d1a55fbb70319aca8181a682c60 done
+#16 exporting config sha256:9a654c6b4281e4fc57b6a5f22b380d450d593449c7d13f8d76356984ac390c3d done
+#16 exporting attestation manifest sha256:d16614b69fce5fbec25c045146e64d23d7dfd00947a58049fc76565fb05919e0 done
+#16 exporting manifest list sha256:8aa1dba4626ffd8a3a9aabbbb8cee094994c46f95f1f79a180a14886717428d4 done
+#16 naming to docker.io/library/cdk-40cae9aa8c7c0fdc5eecdf29caa37103aee1fc4acc837a2ffe920f8630c54126:latest done
+#16 DONE 0.0s
+Bundling asset CustomTimeoutStack/TitanicMergeTables/Code/Stage...
+esbuild cannot run locally. Switching to Docker bundling.
+WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested
+
+  asset-output/index.js  28.9kb
+
+⚡ Done in 93ms
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.84kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for public.ecr.aws/sam/build-nodejs18.x:latest
+#2 DONE 0.3s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [ 1/12] FROM public.ecr.aws/sam/build-nodejs18.x:latest@sha256:6fa14e5889f9c3481ebe7998f821bbd5fbac41f02ed315ad01b19b0b07b341bf
+#4 resolve public.ecr.aws/sam/build-nodejs18.x:latest@sha256:6fa14e5889f9c3481ebe7998f821bbd5fbac41f02ed315ad01b19b0b07b341bf done
+#4 DONE 0.0s
+
+#5 [ 7/12] RUN mkdir /tmp/npm-cache &&     chmod -R 777 /tmp/npm-cache &&     npm config --global set cache /tmp/npm-cache
+#5 CACHED
+
+#6 [ 2/12] RUN npm install --global yarn@1.22.5
+#6 CACHED
+
+#7 [ 6/12] RUN npm install --global --unsafe-perm=true esbuild@0.21
+#7 CACHED
+
+#8 [ 5/12] RUN npm install --global typescript
+#8 CACHED
+
+#9 [ 9/12] RUN mkdir /tmp/pnpm-cache &&     chmod -R 777 /tmp/pnpm-cache &&     pnpm config --global set store-dir /tmp/pnpm-cache
+#9 CACHED
+
+#10 [10/12] RUN npm config --global set update-notifier false
+#10 CACHED
+
+#11 [11/12] RUN /sbin/useradd -u 1000 user && chmod 711 /
+#11 CACHED
+
+#12 [ 4/12] RUN npm install --global bun@1.1.30
+#12 CACHED
+
+#13 [ 8/12] RUN mkdir /tmp/yarn-cache &&     chmod -R 777 /tmp/yarn-cache &&     yarn config set cache-folder /tmp/yarn-cache
+#13 CACHED
+
+#14 [ 3/12] RUN npm install --global pnpm@7.30.5
+#14 CACHED
+
+#15 [12/12] RUN mkdir /tmp/bun-cache &&     chmod -R 777 /tmp/bun-cache &&     echo -e "[install.cache]\ndir = "/tmp/bun-cache"\ndisable = true" >> /home/user/.bunfig.toml
+#15 CACHED
+
+#16 exporting to image
+#16 exporting layers done
+#16 exporting manifest sha256:9cc04bff5e65c5463651456fa132977837cd2d1a55fbb70319aca8181a682c60 done
+#16 exporting config sha256:9a654c6b4281e4fc57b6a5f22b380d450d593449c7d13f8d76356984ac390c3d done
+#16 exporting attestation manifest sha256:9ca25a636d2afe6c6bb39c9b856092e09a3d51adbde09d83b8fedfaed0fc31e4 done
+#16 exporting manifest list sha256:8e70b72da79344bcbcbac5c1a8aee59e661b91c700777a8bda6b427fe57121d5 done
+#16 naming to docker.io/library/cdk-40cae9aa8c7c0fdc5eecdf29caa37103aee1fc4acc837a2ffe920f8630c54126:latest done
+#16 DONE 0.0s
+Bundling asset GlueStack/TitanicMergeTables/Code/Stage...
+esbuild cannot run locally. Switching to Docker bundling.
+WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested
+
+  asset-output/index.js  28.9kb
+
+⚡ Done in 97ms
+PASS lib/shared/athena-utils.test.ts (6.866 s)
+  AthenaUtils
+    waitForQueryCompletion
+      ✓ should resolve when query succeeds (8 ms)
+      ✓ should reject when query fails (6 ms)
+      ✓ should reject when query is cancelled (2 ms)
+      ✓ should timeout after max attempts (4004 ms)
+    executeQuery
+      ✓ should execute query successfully with Glue config (18 ms)
+      ✓ should execute query successfully with S3 config (3 ms)
+      ✓ should handle missing QueryExecutionId (5 ms)
+    getAllTables
+      ✓ should return all tables with pagination (2 ms)
+      ✓ should handle empty table list (2 ms)
+    S3Config-specific tests
+      ✓ should use S3Config getWriteDatabaseName for S3 operations (2 ms)
+      ✓ should use S3Config getTargetBucket for S3 table storage (2 ms)
+      ✓ should use S3Config getResultsBucket for Athena results (1 ms)
+      ✓ should use S3Config getS3TableCatalogName for catalog operations (2 ms)
+      ✓ should generate different createTableQuery for S3Config vs Config (2 ms)
+      ✓ should provide different execution contexts for S3Config vs Config (1 ms)
+      ✓ should execute queries with S3Config execution context including catalog (3 ms)
+      ✓ should use S3Config getReadDatabaseName consistently (2 ms)
+      ✓ should handle dropTableQuery identically for both configs (2 ms)
+      ✓ should extract source bucket names consistently for both config types (1 ms)
+
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.84kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for public.ecr.aws/sam/build-nodejs18.x:latest
+#2 DONE 0.2s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [ 1/12] FROM public.ecr.aws/sam/build-nodejs18.x:latest@sha256:6fa14e5889f9c3481ebe7998f821bbd5fbac41f02ed315ad01b19b0b07b341bf
+#4 resolve public.ecr.aws/sam/build-nodejs18.x:latest@sha256:6fa14e5889f9c3481ebe7998f821bbd5fbac41f02ed315ad01b19b0b07b341bf done
+#4 DONE 0.0s
+
+#5 [11/12] RUN /sbin/useradd -u 1000 user && chmod 711 /
+#5 CACHED
+
+#6 [ 8/12] RUN mkdir /tmp/yarn-cache &&     chmod -R 777 /tmp/yarn-cache &&     yarn config set cache-folder /tmp/yarn-cache
+#6 CACHED
+
+#7 [ 7/12] RUN mkdir /tmp/npm-cache &&     chmod -R 777 /tmp/npm-cache &&     npm config --global set cache /tmp/npm-cache
+#7 CACHED
+
+#8 [ 4/12] RUN npm install --global bun@1.1.30
+#8 CACHED
+
+#9 [ 9/12] RUN mkdir /tmp/pnpm-cache &&     chmod -R 777 /tmp/pnpm-cache &&     pnpm config --global set store-dir /tmp/pnpm-cache
+#9 CACHED
+
+#10 [ 6/12] RUN npm install --global --unsafe-perm=true esbuild@0.21
+#10 CACHED
+
+#11 [10/12] RUN npm config --global set update-notifier false
+#11 CACHED
+
+#12 [ 2/12] RUN npm install --global yarn@1.22.5
+#12 CACHED
+
+#13 [ 5/12] RUN npm install --global typescript
+#13 CACHED
+
+#14 [ 3/12] RUN npm install --global pnpm@7.30.5
+#14 CACHED
+
+#15 [12/12] RUN mkdir /tmp/bun-cache &&     chmod -R 777 /tmp/bun-cache &&     echo -e "[install.cache]\ndir = "/tmp/bun-cache"\ndisable = true" >> /home/user/.bunfig.toml
+#15 CACHED
+
+#16 exporting to image
+#16 exporting layers done
+#16 exporting manifest sha256:9cc04bff5e65c5463651456fa132977837cd2d1a55fbb70319aca8181a682c60 done
+#16 exporting config sha256:9a654c6b4281e4fc57b6a5f22b380d450d593449c7d13f8d76356984ac390c3d done
+#16 exporting attestation manifest sha256:8fd99a3de554ef4561975f41c94e3b56de55fa859f61971ca2f83fa9c66e7cfc done
+#16 exporting manifest list sha256:3bfb23600f3d0b9e6e47f0aa6bf30a4865f2aaf779f90dc7a332c8a9932721ce done
+#16 naming to docker.io/library/cdk-40cae9aa8c7c0fdc5eecdf29caa37103aee1fc4acc837a2ffe920f8630c54126:latest done
+#16 DONE 0.0s
+Bundling asset GlueEnvDbStack/TitanicMergeTables/Code/Stage...
+esbuild cannot run locally. Switching to Docker bundling.
+WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested
+
+  asset-output/index.js  28.9kb
+
+⚡ Done in 94ms
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.84kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for public.ecr.aws/sam/build-nodejs18.x:latest
+#2 DONE 0.2s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [ 1/12] FROM public.ecr.aws/sam/build-nodejs18.x:latest@sha256:6fa14e5889f9c3481ebe7998f821bbd5fbac41f02ed315ad01b19b0b07b341bf
+#4 resolve public.ecr.aws/sam/build-nodejs18.x:latest@sha256:6fa14e5889f9c3481ebe7998f821bbd5fbac41f02ed315ad01b19b0b07b341bf done
+#4 DONE 0.0s
+
+#5 [11/12] RUN /sbin/useradd -u 1000 user && chmod 711 /
+#5 CACHED
+
+#6 [ 9/12] RUN mkdir /tmp/pnpm-cache &&     chmod -R 777 /tmp/pnpm-cache &&     pnpm config --global set store-dir /tmp/pnpm-cache
+#6 CACHED
+
+#7 [ 6/12] RUN npm install --global --unsafe-perm=true esbuild@0.21
+#7 CACHED
+
+#8 [ 7/12] RUN mkdir /tmp/npm-cache &&     chmod -R 777 /tmp/npm-cache &&     npm config --global set cache /tmp/npm-cache
+#8 CACHED
+
+#9 [ 3/12] RUN npm install --global pnpm@7.30.5
+#9 CACHED
+
+#10 [ 5/12] RUN npm install --global typescript
+#10 CACHED
+
+#11 [ 2/12] RUN npm install --global yarn@1.22.5
+#11 CACHED
+
+#12 [ 8/12] RUN mkdir /tmp/yarn-cache &&     chmod -R 777 /tmp/yarn-cache &&     yarn config set cache-folder /tmp/yarn-cache
+#12 CACHED
+
+#13 [ 4/12] RUN npm install --global bun@1.1.30
+#13 CACHED
+
+#14 [10/12] RUN npm config --global set update-notifier false
+#14 CACHED
+
+#15 [12/12] RUN mkdir /tmp/bun-cache &&     chmod -R 777 /tmp/bun-cache &&     echo -e "[install.cache]\ndir = "/tmp/bun-cache"\ndisable = true" >> /home/user/.bunfig.toml
+#15 CACHED
+
+#16 exporting to image
+#16 exporting layers done
+#16 exporting manifest sha256:9cc04bff5e65c5463651456fa132977837cd2d1a55fbb70319aca8181a682c60 done
+#16 exporting config sha256:9a654c6b4281e4fc57b6a5f22b380d450d593449c7d13f8d76356984ac390c3d done
+#16 exporting attestation manifest sha256:e560193b3c0bf12c0f4d9710074ed9f252d92a00da1b8525a724cc218308de28 done
+#16 exporting manifest list sha256:30574728a25a180aec4489802727773bc8612f13ebec1eac9ad1462a1f12a5eb done
+#16 naming to docker.io/library/cdk-40cae9aa8c7c0fdc5eecdf29caa37103aee1fc4acc837a2ffe920f8630c54126:latest done
+#16 DONE 0.0s
+Bundling asset S3TablesStack/TitanicMergeTables/Code/Stage...
+esbuild cannot run locally. Switching to Docker bundling.
+WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested
+
+  asset-output/index.js  28.9kb
+
+⚡ Done in 94ms
+PASS lib/titanic-stack.test.ts (8.548 s)
+  TitanicStack
+    Shared functionality (mode-independent)
+      ✓ should support custom Lambda timeout configuration (879 ms)
+      Glue mode
+        ✓ should create regular S3 bucket with correct properties (2 ms)
+        ✓ should create EventBridge rule with correct event pattern (1 ms)
+        ✓ should grant required Athena permissions
+        ✓ should grant required Glue permissions (1 ms)
+        ✓ should grant S3 bucket location permissions (1 ms)
+      S3 Tables mode
+        ✓ should create regular S3 bucket with correct properties
+        ✓ should create EventBridge rule with correct event pattern
+        ✓ should grant required Athena permissions (1 ms)
+        ✓ should grant required Glue permissions
+        ✓ should grant S3 bucket location permissions
+    Glue mode (default)
+      ✓ should create both regular S3 bucket and S3 Tables bucket
+      ✓ should not create Glue database (assumes database already exists)
+      ✓ should configure Lambda function with Glue-specific settings
+      Database name usage
+        ✓ should use the database name provided in QUILT_DATABASE_NAME environment variable (860 ms)
+        ✓ should throw error if QUILT_DATABASE_NAME not set (7 ms)
+    S3 Tables mode
+      ✓ should create S3 TableBucket in addition to regular S3 bucket
+      ✓ should configure Lambda function with S3 Tables-specific settings
+      ✓ should grant required S3 Tables permissions (1 ms)
+
+Test Suites: 2 failed, 7 passed, 9 total
+Tests:       88 passed, 88 total
+Snapshots:   0 total
+Time:        8.901 s, estimated 13 s
+Ran all test suites.

@@ -19,6 +19,7 @@
     "inlineSources": true,
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
+    "isolatedModules": true,
     "typeRoots": [
       "./node_modules/@types"
     ],

@@ -3,10 +3,12 @@
 DROP TABLE IF EXISTS package_revision;
 DROP TABLE IF EXISTS package_tag;
 DROP TABLE IF EXISTS package_entry;
-DROP TABLE IF EXISTS package_revision_entry;
 
+---
+--- CREATE alternatives
+---
 
--- Create Iceberg tables with the proper schema and partitioning
+-- S3_Tables: Uses explicit Create Tables + Partitions
 
 CREATE TABLE package_revision (
   registry     STRING,   
@@ -20,13 +22,6 @@ PARTITIONED BY (
   registry,
   bucket(8, pkg_name),
   bucket(8, top_hash)
-)
-WITH (
-  format = 'PARQUET',
-  write_compression = 'SNAPPY',
-  location = 's3://${targetBucket}/iceberg_catalog/',
-  table_type = 'ICEBERG',
-  is_external = false
 );
 
 CREATE TABLE package_tag (
@@ -39,16 +34,9 @@ PARTITIONED BY (
   registry,
   tag_name,
   bucket(8, pkg_name)
-)
-WITH (
-  format = 'PARQUET',
-  write_compression = 'SNAPPY',
-  location = 's3://${targetBucket}/iceberg_catalog/',
-  table_type = 'ICEBERG',
-  is_external = false
 );
 
-CREATE TABLE IF NOT EXISTS package_entry (
+CREATE TABLE package_entry (
   registry     STRING,    
   top_hash     STRING,
   logical_key  STRING,    
@@ -62,7 +50,61 @@ PARTITIONED BY (
   bucket(64, physical_key)
 );
 
--- Insert all four Iceberg tables for the `quilt-bake` registry
+-- Glue_Tables: Uses CTAS with NULL values for empty table initialization
+
+CREATE TABLE package_revision
+WITH (
+  format = 'PARQUET',
+  write_compression = 'SNAPPY',
+  location = 's3://${targetBucket}/iceberg_catalog/package_revision',
+  table_type = 'ICEBERG',
+  is_external = false
+) AS
+SELECT
+  CAST(NULL AS STRING) AS registry,
+  CAST(NULL AS STRING) AS pkg_name,
+  CAST(NULL AS STRING) AS top_hash,
+  CAST(NULL AS TIMESTAMP) AS timestamp,
+  CAST(NULL AS STRING) AS message,
+  CAST(NULL AS STRING) AS metadata
+WHERE 1=0;
+
+CREATE TABLE package_tag
+WITH (
+  format = 'PARQUET',
+  write_compression = 'SNAPPY',
+  location = 's3://${targetBucket}/iceberg_catalog/package_tag',
+  table_type = 'ICEBERG',
+  is_external = false
+) AS
+SELECT
+  CAST(NULL AS STRING) AS registry,
+  CAST(NULL AS STRING) AS pkg_name,
+  CAST(NULL AS STRING) AS tag_name,
+  CAST(NULL AS STRING) AS top_hash
+WHERE 1=0;
+
+CREATE TABLE package_entry
+WITH (
+  format = 'PARQUET',
+  write_compression = 'SNAPPY',
+  location = 's3://${targetBucket}/iceberg_catalog/package_entry',
+  table_type = 'ICEBERG',
+  is_external = false
+) AS
+SELECT
+  CAST(NULL AS STRING) AS registry,
+  CAST(NULL AS STRING) AS top_hash,
+  CAST(NULL AS STRING) AS logical_key,
+  CAST(NULL AS STRING) AS physical_key,
+  CAST(NULL AS STRING) AS multihash,
+  CAST(NULL AS BIGINT) AS size,
+  CAST(NULL AS STRING) AS metadata
+WHERE 1=0;
+
+---
+--- INSERT examples
+---
 
 -- package_revision Write Policy: Immutable - only insert new rows, never update or delete
 INSERT INTO package_revision (registry, pkg_name, top_hash, timestamp, message, metadata)
@@ -123,7 +165,9 @@ LEFT JOIN package_entry t
 -- Insert only new entries that do not already exist in package_entry
 WHERE t.logical_key IS NULL;
 
+---
 --- SELECT examples
+---
 
 SELECT e.size, e.logical_key, e.physical_key, e.registry, e.multihash
 FROM package_entry e

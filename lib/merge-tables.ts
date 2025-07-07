@@ -1,133 +1,194 @@
 import { Context, EventBridgeEvent } from "aws-lambda";
-import { GetTablesCommand, GetTablesCommandOutput } from "@aws-sdk/client-glue";
-import { glueClient } from "./shared/athena-utils";
+import { AthenaUtils } from "./shared/athena-utils";
 import { PackageEventDetail, HandlerResponse } from "./shared/types";
 import { TableManager } from "./tables/table-manager";
+import { Config } from "./shared/config";
+// Removed fs and sentinel file logic
 
 export async function handler(
     event: EventBridgeEvent<string, PackageEventDetail>,
-    context: Context,
+    _context: Context,
 ): Promise<HandlerResponse> {
-    const databaseName = process.env.DATABASE_NAME;
-    const targetBucket = process.env.TARGET_BUCKET;
-    const useS3Table = process.env.USE_S3_TABLE === "true";
-    console.log("Environment variables:", {
-        databaseName,
-        targetBucket,
-        useS3Table,
-    });
+    console.log("Starting Titanic merge handler");
+    const { bucket: sourceBucket, handle, topHash } = event.detail;
+    const config = Config.create();
+    const athenaUtils = new AthenaUtils(config);
 
-    if (!databaseName || !targetBucket) {
+    logContext(event, sourceBucket, handle, topHash, config);
+
+    // Validate configuration
+    if (
+        !config.getReadDatabaseName() ||
+        !config.getWriteDatabaseName() ||
+        !config.getTargetBucket() ||
+        !config.getResultsBucket()
+    ) {
         throw new Error(
-            "Missing required environment variables DATABASE_NAME or TARGET_BUCKET",
+            "Missing required configuration: read/write database name, tables bucket, or results bucket"
         );
     }
 
-    try {
-        // Extract details from EventBridge event
-        console.log("EventBridge event:", JSON.stringify(event, null, 2));
-        const { bucket, handle, topHash } = event.detail;
-        console.log("Event details:", { bucket, handle, topHash });
+    await testAthenaConnectivity(athenaUtils);
 
-        // Get all tables in the database
-        console.log("Fetching tables from Glue database:", databaseName);
-        let allTables = [];
-        let nextToken = undefined;
+    const sourceDatabaseName = config.getReadDatabaseName();
+    const targetDatabaseName = config.getWriteDatabaseName();
+    const targetBucket = config.getTargetBucket();
 
-        do {
-            const tablesResponse: GetTablesCommandOutput = await glueClient.send(
-                new GetTablesCommand({
-                    DatabaseName: databaseName,
-                    NextToken: nextToken,
-                })
-            );
-            if (!tablesResponse.TableList) {
-                throw new Error(
-                    `Unable to list tables in database ${databaseName}`,
-                );
-            }
-            allTables.push(...tablesResponse.TableList);
-            nextToken = tablesResponse.NextToken;
-        } while (nextToken);
+    const tableManager = new TableManager(
+        config,
+        sourceDatabaseName,
+        targetDatabaseName,
+        targetBucket
+    );
 
-        // Derive table prefix from bucket name (source registry name)
+    const results = await tableManager.ensureExists();
+    console.log("TableManager ensureExists results:", results);
 
-        // Filter for source tables (excluding the merged table)
-        const sourceTables = allTables?.filter((table) => {
-            console.log("Checking table:", table.Name);
-            if (!table.Name) return false;
+    const allTables = await athenaUtils.getAllTables(sourceDatabaseName);
+    const sourceTables = filterSourceTables(allTables, sourceBucket);
 
-            // Check if table name ends with -view
-            const isView = table.Name.endsWith("-view");
-            
-            // Match bucket name - table names use format: bucket_tabletype-view
-            // The bucket name in the table keeps its original format (with hyphens)
-            const matchesPrefix = bucket
-                ? table.Name.startsWith(bucket + "_")
-                : true;
+    console.log("Source tables found:", sourceTables);
 
-            return isView && matchesPrefix;
-        }) || [];
+    return await executeMergeOperations(tableManager, sourceTables);
+}
 
-        console.log("Source tables found:", sourceTables.map((t) => t.Name));
+// --- Helper Functions ---
 
-        // Initialize table manager
-        const tableManager = new TableManager(databaseName, targetBucket, useS3Table);
+function logContext(
+    event: EventBridgeEvent<string, PackageEventDetail>,
+    bucket: string,
+    handle: string,
+    topHash: string,
+    config: Config
+): void {
+    const envSummary = {
+        glueDatabaseName: process.env.GLUE_DATABASE_NAME,
+        s3TableDatabaseName: process.env.S3TABLE_DATABASE_NAME,
+        glueTablesBucketArn: process.env.GLUE_TABLES_BUCKET_ARN,
+        s3TablesBucketArn: process.env.S3_TABLES_BUCKET_ARN,
+        configType: config.constructor.name,
+        useS3Table: process.env.USE_S3_TABLE
+    };
 
-        // Ensure all required tables exist
-        try {
-            await tableManager.ensureTablesExist(sourceTables);
-        } catch (error) {
-            const err = error as Error;
-            console.error("Error ensuring tables exist:", {
-                error: err.message,
-                stack: err.stack,
-            });
-            // Continue with insert operations even if some table creation failed
-        }
+    const configSummary = {
+        mode: config.useS3Table ? 'S3 Tables' : 'Glue Tables',
+        readDatabase: config.getReadDatabaseName(),
+        writeDatabase: config.getWriteDatabaseName(),
+        resultsBucket: config.getResultsBucket(),
+        tablesBucket: config.getTargetBucket(),
+        athenaOutputLocation: `s3://${config.getResultsBucket()}/athena-results/`
+    };
 
-        // Check for empty source tables
-        if (sourceTables.length === 0) {
-            return {
-                message: "Created tables (no source tables found)",
-                numTables: 0,
-            };
-        }
+    console.log("Execution Context:", {
+        env: envSummary,
+        eventDetails: { bucket, handle, topHash },
+        config: configSummary,
+        event: event
+    });
+}
 
-        // Execute merge operations
-        console.log("Starting merge operations for", sourceTables.length, "source tables");
-        const queryCount = await tableManager.executeInserts(sourceTables);
-        console.log(`Executed ${queryCount} queries successfully`);
+async function testAthenaConnectivity(athenaUtils: AthenaUtils): Promise<void> {
+    console.log("Testing Athena+S3 connectivity before proceeding...", {
+        checks: [
+            "Athena API access (ability to start query executions)",
+            "S3 bucket write permissions for query results",
+            "Query execution context and database access",
+            "Overall end-to-end Athena + S3 integration"
+        ]
+    });
 
-        return {
-            message: `Merge operations completed: ${queryCount} successful queries`,
-            numTables: sourceTables.length,
-        };
-    } catch (error) {
-        const err = error as Error;
-        const isS3AccessError = err.message.toLowerCase().includes('access denied') ||
-                               err.message.toLowerCase().includes('accessdenied') ||
-                               err.message.toLowerCase().includes('no such bucket') ||
-                               err.message.toLowerCase().includes('forbidden') ||
-                               err.message.toLowerCase().includes('403');
+    const athenaTestResult = await athenaUtils.validateAthenaAccess();
 
-        console.error("Error merging tables:", {
-            error: err.message,
-            stack: err.stack,
-            databaseName,
-            targetBucket,
-            isS3AccessError,
-            eventDetails: event.detail,
-        });
-
-        if (isS3AccessError) {
-            console.error("S3 access error detected. This may be due to insufficient permissions or missing buckets.");
-            console.error("Consider checking:");
-            console.error("1. Lambda execution role permissions for S3 buckets");
-            console.error("2. Bucket existence and access policies");
-            console.error("3. Cross-account access configurations");
-        }
-
-        throw err;
+    console.log(`Athena connectivity test: ${athenaTestResult.success}`, {
+        configType: athenaTestResult.configType,
+        testQuery: athenaTestResult.testQuery,
+        executionContext: athenaTestResult.executionContext,
+        outputLocation: athenaTestResult.outputLocation,
+    });
+    if (athenaTestResult.error) {
+        console.error(`Error details: ${athenaTestResult.error}`);
     }
+}
+
+
+function filterSourceTables(allTables: string[], bucket: string): string[] {
+    const selectedTables: string[] = [];
+    const ignoredTables: string[] = [];
+
+    allTables?.forEach((tableName: string) => {
+        if (!tableName) {
+            return; // Skip invalid table names
+        }
+        
+        const isView = tableName.endsWith("-view");
+        const matchesPrefix = bucket
+            ? tableName.startsWith(bucket + "_")
+            : true;
+        
+        if (isView && matchesPrefix) {
+            selectedTables.push(tableName);
+        } else {
+            ignoredTables.push(tableName);
+        }
+    });
+
+    // Log summary
+    console.log("Table filtering summary:", {
+        selected: selectedTables.length,
+        ignored: ignoredTables.length,
+        selectedTables: selectedTables,
+        ignoredTables: ignoredTables.length > 0 ? ignoredTables : undefined
+    });
+
+    return selectedTables;
+}
+
+interface MergeOperationResult {
+    message: string;
+    numTables: number;
+    successfulTables: number;
+    failedTables: number;
+    totalQueries: number;
+}
+
+async function executeMergeOperations(
+    tableManager: TableManager,
+    sourceTables: string[]
+): Promise<MergeOperationResult> {
+    console.log("Starting merge operations for", sourceTables.length, "source tables");
+
+    // Separate package views from object views
+    const packageView = sourceTables.find((tableName: string) => tableName && tableName.includes('packages-view'));
+    const objectsView = sourceTables.find((tableName: string) => tableName && tableName.includes('objects-view'));
+
+    if (!packageView && !objectsView) {
+        console.log("No package or objects views found - skipping merge operations");
+        return {
+            message: "No package or objects views found - skipping merge operations",
+            numTables: sourceTables.length,
+            successfulTables: 0,
+            failedTables: 0,
+            totalQueries: 0
+        };
+    }
+
+    const { successfulTables, failedTables, totalQueries } = await tableManager.executeInserts(packageView || '', objectsView || '');
+
+    console.log(`Insert operations summary:`);
+    console.log(`  - Source tables processed: ${sourceTables.length}`);
+    console.log(`  - Tables with successful operations: ${successfulTables}`);
+    console.log(`  - Tables with failed operations: ${failedTables}`);
+    console.log(`  - Total queries executed: ${totalQueries}`);
+
+    if (failedTables > 0) {
+        console.warn(`${failedTables} tables had some failed operations. Check logs above for details.`);
+    }
+
+    return {
+        message: `Merge operations completed: ${successfulTables} tables successful, ${failedTables} failed, ${totalQueries} total queries`,
+        numTables: sourceTables.length,
+        successfulTables,
+        failedTables,
+        totalQueries,
+    };
 }

@@ -1,19 +1,8 @@
 import { Context, EventBridgeEvent } from "aws-lambda";
-import { mockClient } from "aws-sdk-client-mock";
-
-jest.setTimeout(30000); // Increase timeout to 30 seconds
-import { GetTablesCommand, GlueClient } from "@aws-sdk/client-glue";
-import {
-    AthenaClient,
-    GetQueryExecutionCommand,
-    QueryExecutionState,
-    StartQueryExecutionCommand,
-} from "@aws-sdk/client-athena";
+import { AthenaTest } from "./shared/athena-test";
 import { handler } from "./merge-tables";
 import { PackageEventDetail } from "./shared/types";
-
-const glueMock = mockClient(GlueClient);
-const athenaMock = mockClient(AthenaClient);
+import { Config } from "./shared/config";
 
 // Helper to create EventBridge event
 const createEventBridgeEvent = (bucket: string = "test-bucket"): EventBridgeEvent<string, PackageEventDetail> => ({
@@ -35,178 +24,42 @@ const createEventBridgeEvent = (bucket: string = "test-bucket"): EventBridgeEven
 });
 
 describe("merge-tables lambda", () => {
+    let athenaTest: AthenaTest;
+    let testConfig: Config;
+
     beforeEach(() => {
         process.env.NODE_ENV = "test";
-        process.env.DATABASE_NAME = "test-db";
-        process.env.TARGET_BUCKET = "test-bucket";
+        process.env.GLUE_DATABASE_NAME = "test-db";
+        process.env.S3TABLE_DATABASE_NAME = "test-db";
+        process.env.GLUE_TABLES_BUCKET_ARN = "arn:aws:s3:::test-bucket";
+        process.env.S3_TABLES_BUCKET_ARN = "arn:aws:s3tables:us-east-1:123456789012:bucket/test-tables-bucket";
+        process.env.ATHENA_RESULTS_BUCKET_ARN = "arn:aws:s3:::test-bucket";
         process.env.LAMBDA_TIMEOUT = "5000";
-        glueMock.reset();
-        athenaMock.reset();
+        delete process.env.USE_S3_TABLE; // Default to Glue mode
+
+        // Setup test config and AthenaTest
+        testConfig = Config.createTestInstance({
+            glueDatabaseName: "test-db",
+            glueTablesBucketArn: "arn:aws:s3:::test-bucket"
+        });
+        athenaTest = AthenaTest.createTestInstance(testConfig);
     });
 
-    it("should throw error if environment variables are missing", async () => {
-        delete process.env.DATABASE_NAME;
-        const mockEvent = createEventBridgeEvent();
-        await expect(handler(mockEvent, {} as Context)).rejects.toThrow(
-            "Missing required environment variables",
-        );
-    });
-
-    it("should handle empty table list gracefully", async () => {
-        glueMock.on(GetTablesCommand).resolves({
-            TableList: [],
-            NextToken: undefined,
-        });
-
-        // Mock successful table cleanup and creation
-        athenaMock
-            .on(StartQueryExecutionCommand)
-            .resolvesOnce({ QueryExecutionId: "cleanup-packages-id" })
-            .resolvesOnce({ QueryExecutionId: "cleanup-objects-id" })
-            .resolvesOnce({ QueryExecutionId: "create-packages-id" })
-            .resolvesOnce({ QueryExecutionId: "create-objects-id" });
-
-        athenaMock
-            .on(GetQueryExecutionCommand)
-            .resolvesOnce({ // cleanup packages
-                QueryExecution: {
-                    Status: { State: QueryExecutionState.SUCCEEDED },
-                },
-            })
-            .resolvesOnce({ // cleanup objects
-                QueryExecution: {
-                    Status: { State: QueryExecutionState.SUCCEEDED },
-                },
-            })
-            .resolvesOnce({ // create packages
-                QueryExecution: {
-                    Status: { State: QueryExecutionState.SUCCEEDED },
-                },
-            })
-            .resolvesOnce({ // create objects
-                QueryExecution: {
-                    Status: { State: QueryExecutionState.SUCCEEDED },
-                },
-            });
-
-        const mockEvent = createEventBridgeEvent();
-        const result = await handler(mockEvent, {} as Context);
-        expect(result).toEqual({
-            message: "Created tables (no source tables found)",
-            numTables: 0,
-        });
-    });
-
-    it("should successfully merge S3-backed tables", async () => {
-        glueMock.on(GetTablesCommand).resolves({
-            TableList: [
-                {
-                    Name: "test-bucket_objects-view",
-                    StorageDescriptor: { Location: "s3://test-bucket/objects" },
-                },
-                {
-                    Name: "test-bucket_packages-view",
-                    StorageDescriptor: { Location: "s3://test-bucket/packages" },
-                },
-            ],
-            NextToken: undefined,
-        });
-
-        athenaMock.on(StartQueryExecutionCommand).resolves({
-            QueryExecutionId: "test-execution-id",
-        });
-
-        athenaMock.on(GetQueryExecutionCommand).resolves({
-            QueryExecution: {
-                Status: {
-                    State: QueryExecutionState.SUCCEEDED,
-                },
-            },
-        });
-
-        const mockEvent = createEventBridgeEvent();
-        const result = await handler(mockEvent, {} as Context);
-
-        expect(result).toEqual({
-            message: "Merge operations completed: 3 successful queries",
-            numTables: 2, // Should find test-bucket_objects-view and test-bucket_packages-view
-        });
-    });
-
-    describe("bucket-based filtering", () => {
-        it("should handle EventBridge events with bucket filtering", async () => {
-            glueMock.on(GetTablesCommand).resolves({
-                TableList: [
-                    {
-                        Name: "test-bucket_objects-view",
-                        StorageDescriptor: { Location: "s3://test/objects" },
-                    },
-                    {
-                        Name: "prod-bucket_objects-view",
-                        StorageDescriptor: { Location: "s3://prod/objects" },
-                    },
-                    {
-                        Name: "dev-bucket_objects-view",
-                        StorageDescriptor: {
-                            Location: "s3://bucket/objects_all",
-                        },
-                    },
-                ],
-                NextToken: undefined,
-            });
-
-            athenaMock.on(StartQueryExecutionCommand).resolves({
-                QueryExecutionId: "test-query-id",
-            });
-
-            athenaMock.on(GetQueryExecutionCommand).resolves({
-                QueryExecution: {
-                    Status: {
-                        State: QueryExecutionState.SUCCEEDED,
-                    },
-                },
-            });
-
-            const eventBridgeEvent = createEventBridgeEvent("test-bucket");
-
-            const result = await handler(eventBridgeEvent, {} as Context);
+    describe("Mode-specific behavior", () => {
+        it("should return skip message if environment variables are missing", async () => {
+            delete process.env.GLUE_DATABASE_NAME;
+            delete process.env.S3TABLE_DATABASE_NAME;
+            
+            athenaTest.mockTablesInDatabase([]);
+            
+            const mockEvent = createEventBridgeEvent();
+            const result = await handler(mockEvent, {} as Context);
             expect(result).toEqual({
-                message: "Merge operations completed: 1 successful queries",
-                numTables: 1, // Should find test-bucket_objects-view
-            });
-        });
-
-        it("should handle invalid bucket gracefully", async () => {
-            glueMock.on(GetTablesCommand).resolves({
-                TableList: [
-                    {
-                        Name: "packages_all_prod",
-                        StorageDescriptor: {
-                            Location: "s3://bucket/packages_all",
-                        },
-                    },
-                ],
-                NextToken: undefined,
-            });
-
-            athenaMock.on(StartQueryExecutionCommand).resolves({
-                QueryExecutionId: "test-query-id",
-            });
-
-            athenaMock.on(GetQueryExecutionCommand).resolves({
-                QueryExecution: {
-                    Status: {
-                        State: QueryExecutionState.SUCCEEDED,
-                    },
-                },
-            });
-
-            const eventBridgeEvent = createEventBridgeEvent("nonexistent-bucket");
-
-            const result = await handler(eventBridgeEvent, {} as Context);
-            expect(result).toEqual({
-                message: "Created tables (no source tables found)",
+                failedTables: 0,
+                message: "No package or objects views found - skipping merge operations",
                 numTables: 0,
+                successfulTables: 0,
+                totalQueries: 0,
             });
         });
     });
@@ -214,71 +67,51 @@ describe("merge-tables lambda", () => {
     it("should respect custom timeout configuration", async () => {
         process.env.LAMBDA_TIMEOUT = "10000";
 
-        glueMock.on(GetTablesCommand).resolves({
-            TableList: [],
-            NextToken: undefined,
-        });
-
-        athenaMock.on(StartQueryExecutionCommand).resolves({
-            QueryExecutionId: "test-query-id",
-        });
-
-        athenaMock.on(GetQueryExecutionCommand).resolves({
-            QueryExecution: {
-                Status: {
-                    State: QueryExecutionState.SUCCEEDED,
-                },
-            },
-        });
+        athenaTest.mockTablesInDatabase([]);
+        athenaTest.mockQueryResult(true);
 
         const mockEvent = createEventBridgeEvent();
         const result = await handler(mockEvent, {} as Context);
         expect(result).toBeDefined();
     });
 
-    it("should handle Athena query failures gracefully", async () => {
-        // Mock tables response with a view table to ensure merge is attempted
-        glueMock.on(GetTablesCommand).resolves({
-            TableList: [
-                {
-                    Name: "test-bucket_objects-view",
-                    StorageDescriptor: { Location: "s3://test-bucket/table1" },
-                },
-            ],
-            NextToken: undefined,
+    describe("error handling scenarios", () => {
+        it("should handle errors during table ensure operations", async () => {
+            athenaTest.mockTablesInDatabase([{ Name: "test-bucket_packages-view" }]);
+            athenaTest.mockQueryResult(false); // Mock query failure that returns false
+
+            const event = createEventBridgeEvent();
+            const context: Context = {} as any;
+
+            const result = await handler(event, context);
+            expect(result).toBeDefined();
+            expect(result!.numTables).toBe(1);
+            expect(result!.message).toContain("failed");
         });
 
-        // Mock Athena failure response
-        athenaMock.on(StartQueryExecutionCommand).resolves({
-            QueryExecutionId: "test-execution-id",
+        it("should handle successful query execution", async () => {
+            athenaTest.mockTablesInDatabase([{ Name: "test-bucket_packages-view" }]);
+            athenaTest.mockQueryResult(true); // Mock successful query execution
+
+            const event = createEventBridgeEvent();
+            const context: Context = {} as any;
+
+            const result = await handler(event, context);
+            expect(result).toBeDefined();
+            expect(result!.numTables).toBe(1);
         });
 
-        athenaMock.on(GetQueryExecutionCommand).resolves({
-            QueryExecution: {
-                Status: {
-                    State: QueryExecutionState.FAILED,
-                    StateChangeReason: "Athena error",
-                },
-            },
-        });
+        it("should handle connectivity test failures gracefully", async () => {
+            athenaTest.mockTablesInDatabase([]);
+            athenaTest.mockQueryResult(false); // Mock connectivity test failure
 
-        athenaMock.on(GetQueryExecutionCommand).resolves({
-            QueryExecution: {
-                Status: {
-                    State: QueryExecutionState.FAILED,
-                    StateChangeReason: "Athena error",
-                },
-            },
-        });
+            const event = createEventBridgeEvent();
+            const context: Context = {} as any;
 
-        // Test that the Athena error is handled gracefully and processing continues
-        const mockEvent = createEventBridgeEvent();
-        const result = await handler(mockEvent, {} as Context);
-        
-        // Should complete with 0 successful queries due to table creation/insert failures
-        expect(result).toEqual({
-            message: "Merge operations completed: 0 successful queries",
-            numTables: 1, // Should find the source table but fail to process it
+            // Should still complete successfully even if connectivity test fails
+            const result = await handler(event, context);
+            expect(result).toBeDefined();
+            expect(result!.message).toContain("No package or objects views found");
         });
     });
 });

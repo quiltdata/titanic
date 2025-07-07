@@ -1,0 +1,11 @@
+{
+    "jest.jestCommandLine": "npm test --",
+    "jest.runMode": "on-demand",
+    "jest.coverageFormatter": "DefaultFormatter",
+    "jest.outputConfig": {
+        "revealOutput": "on-run",
+        "revealWithFocus": "none",
+        "clearOnRun": "terminal"
+    },
+    "testing.automaticallyOpenTestResults": "neverOpen"
+}
