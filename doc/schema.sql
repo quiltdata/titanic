@@ -1,4 +1,4 @@
--- NOTE: Requires Athena session for that Iceberg Catalog
+-- NOTE: Requires Athena session for the Apache Iceberg Catalog
 
 DROP TABLE IF EXISTS package_revision;
 DROP TABLE IF EXISTS package_tag;

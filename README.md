@@ -112,7 +112,7 @@ When switching table modes:
 npm install
 ```
 
-1. Set environment variables:
+2. Set environment variables:
 
 ```bash
 export QUILT_DATABASE_NAME=your_database_name  # For Glue tables (Default: userathenadatabase)
@@ -120,7 +120,7 @@ export CDK_DEFAULT_ACCOUNT=your_aws_account_id  # S3 Tables use hardcoded "quilt
 export CDK_DEFAULT_REGION=your_aws_region
 ```
 
-1. Deploy:
+3. Deploy:
 
 ```bash
 npm run cdk
@@ -187,7 +187,7 @@ For detailed development information, see [doc/DEVELOP.md](doc/DEVELOP.md).
 
 ### Reference Files
 - [doc/schema.sql](doc/schema.sql) - Complete SQL schema definitions for both table formats
-- [doc/schema.md](doc/schema.md) - Schema design motivation and decisions
+- [doc/SCHEMA.md](doc/SCHEMA.md) - Schema design motivation and decisions
 
 ### Quick Commands
 

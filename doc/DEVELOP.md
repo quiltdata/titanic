@@ -7,7 +7,7 @@ This guide covers the internal architecture, development patterns, and extension
 - **README.md** - Essential user information, deployment, and basic usage
 - **doc/DEVELOP.md** (this file) - Developer architecture, patterns, and extension points
 - **doc/schema.sql** - Complete SQL schema reference for both table formats
-- **doc/schema.md** - Schema design decisions and motivation
+- **doc/SCHEMA.md** - Schema design decisions and motivation
 
 ## Architecture
 
@@ -47,19 +47,19 @@ interface TableInterface {
 
 ### Table Format Modes
 
-There are two different types of buckets.
+The system supports two distinct table storage formats that can be selected at deployment time:
 
-- S3 Table Buckets store the Iceberg catalog directly in a special bucket
-- Standard buckets use the Glue Catalog to define the tables
+- S3 Tables mode stores the catalog metadata directly in a specialized S3 Tables bucket
+- Glue mode uses the AWS Glue Data Catalog to define the tables
 
-We always create one Titanic bucket for each.  
-S3 Table Buckets always write their Athena output on the standard bucket.
+We always create one target bucket for each mode.  
+S3 Tables mode always writes Athena query results to the standard bucket.
 We pass in the existing (source) database, which is also where we create Glue tables.
 
 On first run we drop both tables (if they exist),
 then create the tables.
 We always read from the existing views in the Glue Catalog,
-but may write the S3 Table Catalog if USE_S3_TABLE is set.
+but may write the S3 Tables Catalog if USE_S3_TABLE is set.
 
 #### Glue Tables (`USE_S3_TABLE=false`)
 - **Implementation**: CREATE TABLE AS SELECT (CTAS) with Glue catalog
