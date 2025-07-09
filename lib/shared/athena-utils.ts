@@ -121,7 +121,7 @@ export class AthenaUtils {
             tablesBucket: this.config.getTargetBucket(),
             gluebucketFromEnv: process.env.GLUE_TABLES_BUCKET_ARN,
             s3BucketFromEnv: process.env.S3_TABLES_BUCKET_ARN,
-            queryPreview: query.substring(0, 100) + (query.length > 100 ? '...' : '')
+            query: query // query.substring(0, 100) + (query.length > 100 ? '...' : '')
         });
 
         try {

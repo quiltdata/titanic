@@ -45,11 +45,11 @@ export async function handler(
     console.log("TableManager ensureExists results:", results);
 
     const allTables = await athenaUtils.getAllTables(sourceDatabaseName);
-    const sourceTables = filterSourceTables(allTables, sourceBucket);
+    const buckets = selectBuckets(allTables, sourceBucket);
 
-    console.log("Source tables found:", sourceTables);
+    console.log("Buckets found:", buckets);
 
-    return await executeMergeOperations(tableManager, sourceTables);
+    return await executeMergeOperations(tableManager, buckets, allTables);
 }
 
 // --- Helper Functions ---
@@ -111,9 +111,9 @@ async function testAthenaConnectivity(athenaUtils: AthenaUtils): Promise<void> {
 }
 
 
-function filterSourceTables(allTables: string[], bucket: string): string[] {
-    const selectedTables: string[] = [];
-    const ignoredTables: string[] = [];
+function selectBuckets(allTables: string[], targetBucket?: string): string[] {
+    const buckets = new Set<string>();
+    const skippedViews: string[] = [];
 
     allTables?.forEach((tableName: string) => {
         if (!tableName) {
@@ -121,31 +121,48 @@ function filterSourceTables(allTables: string[], bucket: string): string[] {
         }
         
         const isView = tableName.endsWith("-view");
-        const matchesPrefix = bucket
-            ? tableName.startsWith(bucket + "_")
-            : true;
-        
-        if (isView && matchesPrefix) {
-            selectedTables.push(tableName);
+        if (!isView) {
+            return; // Ignore non-view tables entirely
+        }
+
+        // Extract bucket name from table name (assuming format: bucket_something-view)
+        const bucketMatch = tableName.match(/^(.*?)(?:_packages-view|_objects-view)$/);
+        if (bucketMatch) {
+            const bucketName = bucketMatch[1];
+            
+            // Skip processing if we already have this bucket (optimization)
+            if (buckets.has(bucketName)) {
+                return;
+            }
+            
+            // If targetBucket is specified, only include matching buckets
+            if (!targetBucket || bucketName === targetBucket) {
+                buckets.add(bucketName);
+            } else {
+                skippedViews.push(tableName); // Track skipped views
+            }
         } else {
-            ignoredTables.push(tableName);
+            skippedViews.push(tableName); // Track views that don't match expected format
         }
     });
 
+    const selectedBuckets = Array.from(buckets);
+
     // Log summary
-    console.log("Table filtering summary:", {
-        selected: selectedTables.length,
-        ignored: ignoredTables.length,
-        selectedTables: selectedTables,
-        ignoredTables: ignoredTables.length > 0 ? ignoredTables : undefined
+    console.log(`Bucket selection summary: ${selectedBuckets.length} selected, ${skippedViews.length} skipped`, {
+        selectedBuckets,
+        skippedViews,
     });
 
-    return selectedTables;
+    return selectedBuckets;
 }
 
-interface MergeOperationResult {
+// Export for testing
+export { selectBuckets };
+
+export interface MergeOperationResult {
     message: string;
-    numTables: number;
+    numTables: number; // Now represents number of buckets processed
     successfulTables: number;
     failedTables: number;
     totalQueries: number;
@@ -153,42 +170,73 @@ interface MergeOperationResult {
 
 async function executeMergeOperations(
     tableManager: TableManager,
-    sourceTables: string[]
+    buckets: string[],
+    allTables: string[]
 ): Promise<MergeOperationResult> {
-    console.log("Starting merge operations for", sourceTables.length, "source tables");
+    console.log("Starting merge operations for", buckets.length, "buckets");
 
-    // Separate package views from object views
-    const packageView = sourceTables.find((tableName: string) => tableName && tableName.includes('packages-view'));
-    const objectsView = sourceTables.find((tableName: string) => tableName && tableName.includes('objects-view'));
+    let totalSuccessfulTables = 0;
+    let totalFailedTables = 0;
+    let totalQueries = 0;
 
-    if (!packageView && !objectsView) {
-        console.log("No package or objects views found - skipping merge operations");
-        return {
-            message: "No package or objects views found - skipping merge operations",
-            numTables: sourceTables.length,
-            successfulTables: 0,
-            failedTables: 0,
-            totalQueries: 0
-        };
+    for (const bucket of buckets) {
+        console.log(`Processing bucket: ${bucket}`);
+
+        // Reconstruct packageView and objectView for this bucket
+        const packageView = allTables.find((tableName: string) => 
+            tableName && tableName === `${bucket}_packages-view`
+        );
+        const objectsView = allTables.find((tableName: string) => 
+            tableName && tableName === `${bucket}_objects-view`
+        );
+
+        if (!packageView && !objectsView) {
+            console.log(`No package or objects views found for bucket ${bucket} - skipping`);
+            continue;
+        }
+
+        console.log(`Found views for bucket ${bucket}:`, {
+            packageView: packageView || 'none',
+            objectsView: objectsView || 'none'
+        });
+
+        try {
+            const { successfulTables, failedTables, totalQueries: bucketQueries } = 
+                await tableManager.executeInserts(packageView || '', objectsView || '');
+
+            totalSuccessfulTables += successfulTables;
+            totalFailedTables += failedTables;
+            totalQueries += bucketQueries;
+
+            console.log(`Bucket ${bucket} operations summary:`);
+            console.log(`  - Successful operations: ${successfulTables}`);
+            console.log(`  - Failed operations: ${failedTables}`);
+            console.log(`  - Queries executed: ${bucketQueries}`);
+
+        } catch (error) {
+            console.error(`Error processing bucket ${bucket}:`, error);
+            totalFailedTables++;
+        }
     }
 
-    const { successfulTables, failedTables, totalQueries } = await tableManager.executeInserts(packageView || '', objectsView || '');
-
-    console.log(`Insert operations summary:`);
-    console.log(`  - Source tables processed: ${sourceTables.length}`);
-    console.log(`  - Tables with successful operations: ${successfulTables}`);
-    console.log(`  - Tables with failed operations: ${failedTables}`);
+    console.log(`All merge operations summary:`);
+    console.log(`  - Buckets processed: ${buckets.length}`);
+    console.log(`  - Tables with successful operations: ${totalSuccessfulTables}`);
+    console.log(`  - Tables with failed operations: ${totalFailedTables}`);
     console.log(`  - Total queries executed: ${totalQueries}`);
 
-    if (failedTables > 0) {
-        console.warn(`${failedTables} tables had some failed operations. Check logs above for details.`);
+    if (totalFailedTables > 0) {
+        console.warn(`${totalFailedTables} tables had some failed operations. Check logs above for details.`);
     }
 
     return {
-        message: `Merge operations completed: ${successfulTables} tables successful, ${failedTables} failed, ${totalQueries} total queries`,
-        numTables: sourceTables.length,
-        successfulTables,
-        failedTables,
+        message: `Merge operations completed: ${totalSuccessfulTables} tables successful, ${totalFailedTables} failed, ${totalQueries} total queries`,
+        numTables: buckets.length,
+        successfulTables: totalSuccessfulTables,
+        failedTables: totalFailedTables,
         totalQueries,
     };
 }
+
+// Export for testing
+export { executeMergeOperations };

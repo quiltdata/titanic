@@ -7,11 +7,9 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf cdk.out */**/{*.js,*.d.ts}",
-    "cdk": "npm run test && npx cdk deploy --require-approval never && npm run event:bake && npm run logs:delayed",
+    "cdk": "npm run test && npx cdk deploy --require-approval never && npm run event && npm run logs:delayed",
     "lint": "eslint . --ext .ts --fix",
-    "event:all": "aws events put-events --entries file://doc/event-all.json",
-    "event:bake": "aws events put-events --entries file://doc/event-quilt-bake.json",
-    "event:staff": "aws events put-events --entries file://doc/event-staff.json",
+    "event": "./bin/send-event.sh",
     "logs": "./bin/monitor-logs.sh",
     "logs:delayed": "sleep 20 && npm run logs recent 1",
     "outputs": "aws cloudformation describe-stacks --stack-name TitanicStack --query 'Stacks[0].Outputs'",

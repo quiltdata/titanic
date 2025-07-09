@@ -4,8 +4,8 @@ Draft 1a
 
 ## Motivation
 
-The existing packages_view and object_view tables have a number of limitations.
-This is a unique opportunity to clean them up before formalizing the Iceberg format.
+The existing packages_view and objects_view tables have a number of limitations.
+This is a unique opportunity to clean them up before formalizing the Apache Iceberg format.
 This will be especially important if/when we allow 'Iceberg-native' packages that are not tied to physical manifests.
 
 ### Challenges
