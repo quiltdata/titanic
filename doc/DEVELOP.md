@@ -157,7 +157,8 @@ npm run deploy:package -- v1.2.3
 
 **Script Details:**
 - Uses `./bin/package-artifacts.sh`
-- Requires `npm run deploy:templates` to be run first (or will run it automatically)
+- **Requires** `npm run deploy:templates` to be run first
+- Validates that all required inputs exist before proceeding
 - Copies pre-written deployment scripts instead of generating them
 - Creates self-contained packages that work without the original repository
 
@@ -276,13 +277,18 @@ project-root/
 
 ### Workflow Dependencies
 
-The scripts have clear dependencies:
+The scripts have clear dependencies and will error with helpful messages if prerequisites are missing:
 
-1. **`npm run deploy:templates`** - Generates templates in `cdk.out/`
-2. **`npm run deploy:package`** - Uses templates from `cdk.out/`, creates packages in `artifacts/`
-3. **`npm run deploy:validate`** - Validates packages in `artifacts/`
+1. **`npm run deploy:templates`** - Generates templates and Lambda package in `cdk.out/`
+2. **`npm run deploy:package`** - **Requires** templates from step 1, creates packages in `artifacts/`
+3. **`npm run deploy:validate`** - **Requires** packages from step 2, validates `artifacts/`
 
 For a complete build: `npm run release -- v1.0.0` (runs tests + package + validate)
+
+**Error Handling:**
+- Scripts validate inputs and provide clear error messages if dependencies are missing
+- No duplicate build logic - each script has a single responsibility  
+- Meaningful guidance on how to resolve missing prerequisites
 
 ### Use Cases
 

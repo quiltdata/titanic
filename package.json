@@ -5,7 +5,7 @@
     "titanic": "bin/titanic.js"
   },
   "scripts": {
-    "clean": "rm -rf cdk.out **/{*.js,*.d.ts} node_modules package-lock.json",
+    "clean": "rm -rf cdk.out artifcats **/{*.js,*.d.ts} node_modules package-lock.json",
     "lint": "eslint . --ext .ts --fix",
     "test": "jest --no-coverage",
     "test:coverage": "jest --coverage --verbose",

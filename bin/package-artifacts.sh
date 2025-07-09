@@ -96,54 +96,41 @@ check_prerequisites() {
     log_success "Prerequisites check passed"
 }
 
-# Build Lambda function
-build_lambda() {
-    log_info "Building Lambda function..."
-
-    # Use CDK to build the Lambda function (this handles TypeScript compilation)
-    log_info "Using CDK to compile TypeScript Lambda function..."
-    cd "$PROJECT_ROOT"
+# Check that required inputs exist
+check_required_inputs() {
+    log_info "Checking required inputs..."
     
-    # Generate CDK output which includes compiled Lambda
-    npx cdk synth --quiet
+    local missing_inputs=()
     
-    # Find the compiled Lambda assets in cdk.out
-    local lambda_asset_dir=$(find cdk.out -name "*.zip" -path "*/asset.*" | head -1 | xargs dirname)
-    
-    if [[ -n "$lambda_asset_dir" && -f "$lambda_asset_dir/index.js" ]]; then
-        log_info "Copying compiled Lambda code from CDK assets..."
-        
-        # Ensure lambda directory exists in cdk.out
-        mkdir -p "$BUILD_DIR/lambda"
-        cd "$lambda_asset_dir"
-        zip -r "$BUILD_DIR/lambda/package.zip" . -x "*.zip"
-        cd "$PROJECT_ROOT"
-        
-        log_success "Lambda package created: $BUILD_DIR/lambda/package.zip"
-    else
-        log_error "Could not find compiled Lambda assets from CDK"
-        log_info "Falling back to source-only package for development..."
-        
-        # Create a source-only package (TypeScript files)
-        mkdir -p "$BUILD_DIR/lambda"
-        cd "$BUILD_DIR/lambda"
-        
-        cp -r "$PROJECT_ROOT/lib" ./ 2>/dev/null || true
-        cp "$PROJECT_ROOT/package.json" ./
-        cp "$PROJECT_ROOT/tsconfig.json" ./ 2>/dev/null || true
-        
-        # Install all dependencies (including dev dependencies for TypeScript compilation)
-        npm install --silent
-        
-        # Create ZIP package with source code
-        zip -r package.zip lib/ node_modules/ package.json tsconfig.json -x "node_modules/.cache/*"
-        
-        # Clean up temporary files
-        rm -rf lib/ node_modules/ package.json tsconfig.json
-        cd "$PROJECT_ROOT"
-        
-        log_warn "Created source-only Lambda package - deployment environment must handle TypeScript compilation"
+    # Check for Lambda package
+    if [[ ! -f "$BUILD_DIR/lambda/package.zip" ]]; then
+        missing_inputs+=("Lambda package: $BUILD_DIR/lambda/package.zip")
     fi
+    
+    # Check for templates based on what we're building
+    if [[ "$INCLUDE_CLOUDFORMATION" == "true" && ! -f "$BUILD_DIR/cloudformation/template.yaml" ]]; then
+        missing_inputs+=("CloudFormation template: $BUILD_DIR/cloudformation/template.yaml")
+    fi
+    
+    if [[ "$INCLUDE_TERRAFORM" == "true" && ! -f "$BUILD_DIR/terraform/main.tf" ]]; then
+        missing_inputs+=("Terraform templates: $BUILD_DIR/terraform/main.tf")
+    fi
+    
+    if [[ ${#missing_inputs[@]} -gt 0 ]]; then
+        log_error "Missing required inputs:"
+        for input in "${missing_inputs[@]}"; do
+            log_error "  - $input"
+        done
+        log_error ""
+        log_error "Please run 'npm run deploy:templates' first to generate required inputs."
+        log_error "This will:"
+        log_error "  1. Compile TypeScript Lambda code using CDK"
+        log_error "  2. Generate CloudFormation and Terraform templates"
+        log_error "  3. Create optimized Lambda deployment package"
+        exit 1
+    fi
+    
+    log_success "All required inputs found"
 }
 
 # Create CloudFormation artifacts
@@ -153,17 +140,9 @@ create_cloudformation_artifacts() {
     local cf_dir="$ARTIFACTS_DIR/cloudformation-$VERSION"
     mkdir -p "$cf_dir"
 
-    # Generate CloudFormation template using the template generator
-    log_info "Generating CloudFormation template..."
-    "$SCRIPT_DIR/generate-templates.sh" --type cloudformation --output-dir "$cf_dir"
-
-    # Copy the generated template.yaml to the expected location
-    if [[ -f "$cf_dir/template.yaml" ]]; then
-        log_success "CloudFormation template generated successfully"
-    else
-        log_error "Failed to generate CloudFormation template"
-        exit 1
-    fi
+    # Copy the CloudFormation template from cdk.out
+    cp "$BUILD_DIR/cloudformation/template.yaml" "$cf_dir/template.yaml"
+    log_success "CloudFormation template copied to: $cf_dir/template.yaml"
 
     # Copy Lambda package
     cp "$BUILD_DIR/lambda/package.zip" "$cf_dir/lambda-package.zip"
@@ -228,17 +207,11 @@ create_terraform_artifacts() {
     local tf_dir="$ARTIFACTS_DIR/terraform-$VERSION"
     mkdir -p "$tf_dir"
 
-    # Generate Terraform templates using the template generator
-    log_info "Generating Terraform templates..."
-    "$SCRIPT_DIR/generate-templates.sh" --type terraform --output-dir "$tf_dir"
-
-    # Verify templates were generated
-    if [[ -f "$tf_dir/main.tf" ]]; then
-        log_success "Terraform templates generated successfully"
-    else
-        log_error "Failed to generate Terraform templates"
-        exit 1
-    fi
+    # Copy Terraform templates from cdk.out
+    cp "$BUILD_DIR/terraform/main.tf" "$tf_dir/main.tf"
+    cp "$BUILD_DIR/terraform/variables.tf" "$tf_dir/variables.tf" 
+    cp "$BUILD_DIR/terraform/outputs.tf" "$tf_dir/outputs.tf"
+    log_success "Terraform templates copied to: $tf_dir/"
 
     # Copy Lambda package
     cp "$BUILD_DIR/lambda/package.zip" "$tf_dir/lambda-package.zip"
@@ -370,13 +343,11 @@ main() {
     log_info "Include Terraform: $INCLUDE_TERRAFORM"
     
     check_prerequisites
+    check_required_inputs
     
     # Clean and create artifacts directory
     rm -rf "$ARTIFACTS_DIR"
     mkdir -p "$ARTIFACTS_DIR"
-    
-    # Build Lambda package (needed by template generator)
-    build_lambda
     
     if [[ "$INCLUDE_CLOUDFORMATION" == "true" ]]; then
         create_cloudformation_artifacts
