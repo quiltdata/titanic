@@ -96,7 +96,7 @@ a. run the tests
 b. create the CloudFormation template
 c. push it to your AWS account
 d. send an event to merge tables from every bucket in your stack
-e. dump the logs
+e. wait 20 seconds and then show recent logs
 
 ```bash
 npm run cdk
@@ -132,7 +132,59 @@ The system includes robust error handling, and will try to recover from invalid 
 - **First Run**: Automatically drops existing tables on first deployment
 
 
+### Logs and Monitoring
+
+Lambda logs are available in CloudWatch Logs. We provide convenience methods to monitor them:
+
+```bash
+npm run logs                    # Monitor logs in real-time
+npm run logs:delayed           # Wait 20 seconds then show recent logs
+```
+
+The `npm run logs` command accepts additional options:
+
+```bash
+# Show recent logs (default: 15 minutes)
+npm run logs recent [minutes]
+npm run logs r [minutes]
+
+# Show only errors (default: 15 minutes)
+npm run logs errors [minutes]
+npm run logs e [minutes]
+
+# Tail logs in real-time (press Ctrl+C to stop)
+npm run logs tail
+npm run logs t
+
+# Show Athena-related logs (default: 15 minutes)
+npm run logs athena [minutes]
+npm run logs a [minutes]
+
+# Show S3 bucket-related logs (default: 15 minutes)
+npm run logs s3 [minutes]
+npm run logs s [minutes]
+
+# Show all log types
+npm run logs all
+
+# Show help
+npm run logs help
+```
+
+**Examples:**
+```bash
+npm run logs recent 30      # Show logs from last 30 minutes
+npm run logs errors         # Show errors from last 15 minutes
+npm run logs tail           # Tail logs in real-time
+npm run logs athena 60      # Show Athena logs from last 60 minutes
+```
+
 ### Common Issues
+
+Look for:
+- Table creation/merge statistics
+- Error details with bucket/table context
+- Performance metrics per operation
 
 **Tables not found**: Check that source views exist and are accessible
 ```bash
@@ -144,6 +196,11 @@ aws glue get-tables --database-name $QUILT_DATABASE_NAME
 - Environment variables are missing or incorrect  
 - Lambda lacks S3 permissions
 
+You can check your stack deployment status with:
+```bash
+npm run outputs
+```
+
 **Permission errors**: Verify IAM roles have required permissions:
 - Glue: `GetTables`, `GetTable`
 - Athena: `StartQueryExecution`, `GetQueryExecution`  
@@ -152,23 +209,43 @@ aws glue get-tables --database-name $QUILT_DATABASE_NAME
 
 **Wrong table format**: Check `USE_S3_TABLE` environment variable matches desired format
 
-### Logs and Monitoring
-
-Lambda logs are available in CloudWatch Logs. We provide convenience methods to monitor them:
-
-```bash
-npm run logs
-```
-
-
-Look for:
-- Table creation/merge statistics
-- Error details with bucket/table context
-- Performance metrics per operation
 
 ## Development
 
 For detailed development information, see [doc/DEVELOP.md](doc/DEVELOP.md).
+
+### Available Scripts
+
+The project includes several npm scripts for development and testing:
+
+#### Building and Cleaning
+```bash
+npm run build      # Compile TypeScript to JavaScript
+npm run clean      # Remove compiled files and CDK output
+npm run watch      # Watch for changes and compile automatically
+```
+
+#### Testing
+```bash
+npm run test              # Run tests without coverage
+npm run test:coverage     # Run tests with coverage report
+npm run test:fails        # Run only failed tests
+npm run test:watch        # Run tests in watch mode
+npm run test:debug        # Run tests in debug mode
+```
+
+#### Linting
+```bash
+npm run lint       # Run ESLint and fix issues automatically
+```
+
+#### AWS Operations
+```bash
+npm run cdk        # Deploy stack (runs tests, deploys, sends event, shows logs)
+npm run event      # Send manual merge event
+npm run logs       # Monitor Lambda logs
+npm run outputs    # Show CloudFormation stack outputs
+```
 
 ## Appendix: S3 Table Buckets
 
