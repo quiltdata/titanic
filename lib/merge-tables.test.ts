@@ -166,16 +166,16 @@ describe("selectBuckets unit tests", () => {
             const tables = [
                 "bucket1_packages-view",
                 "bucket2_objects-view",
-                "bucket3_something-view"
             ];
             const result = selectBuckets(tables);
-            expect(result).toEqual(["bucket1", "bucket2", "bucket3"]);
+            expect(result).toEqual(["bucket1", "bucket2"]);
         });
 
         it("should handle views that don't match expected format", () => {
             const tables = [
                 "bucket1_packages-view",
                 "invalid-view-format",
+                "bucket3_something-view",
                 "bucket2_objects-view"
             ];
             const result = selectBuckets(tables);
@@ -186,7 +186,6 @@ describe("selectBuckets unit tests", () => {
             const tables = [
                 "bucket1_packages-view",
                 "bucket1_objects-view",
-                "bucket1_another-view",
                 "bucket2_packages-view",
                 "bucket2_objects-view"
             ];
@@ -199,7 +198,7 @@ describe("selectBuckets unit tests", () => {
         const testTables = [
             "bucket1_packages-view",
             "bucket2_objects-view",
-            "bucket3_something-view",
+            "bucket3_objects-view",
             "bucket4_packages-view"
         ];
 
@@ -222,7 +221,6 @@ describe("selectBuckets unit tests", () => {
             const tables = [
                 "target_packages-view",
                 "target_objects-view",
-                "target_another-view",
                 "other_packages-view"
             ];
             const result = selectBuckets(tables, "target");
