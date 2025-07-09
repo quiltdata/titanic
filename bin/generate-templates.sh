@@ -181,7 +181,7 @@ build_lambda() {
     npx cdk synth --quiet
 
     # Find the compiled Lambda assets in cdk.out
-    local lambda_asset_dir=$(find cdk.out -name "*.zip" -path "*/asset.*" | head -1 | xargs dirname 2>/dev/null)
+    local lambda_asset_dir=$(find cdk.out -name "index.js" -path "*/asset.*" | head -1 | xargs dirname 2>/dev/null)
     
     if [[ -n "$lambda_asset_dir" && -f "$lambda_asset_dir/index.js" ]]; then
         log_info "Using compiled Lambda code from CDK assets..."

@@ -89,7 +89,7 @@ e. show recent logs
 
 ## Development Scripts
 
-The project includes several npm scripts organized by function. All scripts work with the `cdk.out/` directory for build artifacts and the `artifacts/` directory for distribution packages.
+The project includes several npm scripts organized by function. All scripts work with the `cdk.out/` directory for intermediate build outputs and the `artifacts/` directory for distribution artifacts.
 
 ### Prerequisites
 
@@ -116,13 +116,14 @@ npm run deploy:templates
 - `terraform/main.tf` - Terraform main configuration
 - `terraform/variables.tf` - Terraform input variables
 - `terraform/outputs.tf` - Terraform outputs
-- `lambda/package.zip` - Compiled Lambda function code
+- `lambda/package.zip` - Optimized Lambda function code (compiled via esbuild)
 
 **Script Details:**
 - Uses `./bin/generate-templates.sh`
 - Runs `npx cdk synth` to compile TypeScript and generate CDK assets
-- Extracts compiled Lambda code from CDK asset bundles
+- Extracts compiled Lambda code from CDK asset bundles (compiled via esbuild)
 - Generates infrastructure templates from CDK stack definitions
+- Creates optimized Lambda package containing only the compiled `index.js` file
 
 ### Artifact Packaging Scripts
 
@@ -791,3 +792,20 @@ This packaging approach enables:
 - **Version control** of deployment artifacts
 - **Consistent deployments** across different environments
 - **Reduced support burden** through automated scripts and clear documentation
+
+### Troubleshooting Template Generation
+
+**Docker Issues:**
+If you see Docker-related warnings during `npm run deploy:templates`, this is normal. CDK uses Docker for esbuild bundling when local compilation isn't available. The warnings about platform mismatches (arm64 vs amd64) don't affect functionality.
+
+**Missing Lambda Assets:**
+If the script falls back to source packaging, ensure:
+- CDK CLI is installed globally: `npm install -g aws-cdk`
+- Dependencies are installed: `npm install`
+- CDK can run: `npx cdk synth` should complete successfully
+
+**Permission Issues:**
+If you encounter permission errors with Docker:
+- Ensure Docker Desktop is running
+- Check that your user has Docker permissions
+- Try running with `--force-rebuild` flag to clear cached assets
