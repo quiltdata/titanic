@@ -95,7 +95,7 @@ This will:
 a. run the tests
 b. create the CloudFormation template
 c. push it to your AWS account
-d. send an event to merge tables from every bucket in your stack
+d. send an event  (if you agree) to merge tables from every bucket in your stack
 e. wait 20 seconds and then show recent logs
 
 ```bash
