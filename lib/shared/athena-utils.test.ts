@@ -304,4 +304,107 @@ describe("AthenaUtils", () => {
             expect(result.error).toBe('String error');
         });
     });
+
+    describe("getAllTables", () => {
+        it("should return all tables from a single page", async () => {
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({
+                TableList: [
+                    { Name: "table1" },
+                    { Name: "table2" },
+                    { Name: "table3" }
+                ]
+            });
+
+            const result = await athenaUtils.getAllTables("test-db");
+            
+            expect(result).toEqual(["table1", "table2", "table3"]);
+            expect(athenaUtils.glueMock.commandCalls(GetTablesCommand)).toHaveLength(1);
+            expect(athenaUtils.glueMock.commandCalls(GetTablesCommand)[0].args[0].input).toMatchObject({
+                DatabaseName: "test-db"
+            });
+        });
+
+        it("should return all tables from multiple pages", async () => {
+            athenaUtils.glueMock.on(GetTablesCommand)
+                .resolvesOnce({
+                    TableList: [
+                        { Name: "table1" },
+                        { Name: "table2" }
+                    ],
+                    NextToken: "token1"
+                })
+                .resolvesOnce({
+                    TableList: [
+                        { Name: "table3" },
+                        { Name: "table4" }
+                    ]
+                });
+
+            const result = await athenaUtils.getAllTables("test-db");
+            
+            expect(result).toEqual(["table1", "table2", "table3", "table4"]);
+            expect(athenaUtils.glueMock.commandCalls(GetTablesCommand)).toHaveLength(2);
+            
+            // Check first call
+            expect(athenaUtils.glueMock.commandCalls(GetTablesCommand)[0].args[0].input).toMatchObject({
+                DatabaseName: "test-db",
+                NextToken: undefined
+            });
+            
+            // Check second call
+            expect(athenaUtils.glueMock.commandCalls(GetTablesCommand)[1].args[0].input).toMatchObject({
+                DatabaseName: "test-db",
+                NextToken: "token1"
+            });
+        });
+
+        it("should handle empty TableList response", async () => {
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({
+                TableList: undefined
+            });
+
+            const result = await athenaUtils.getAllTables("test-db");
+            
+            expect(result).toEqual([]);
+        });
+
+        it("should handle null TableList response", async () => {
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({
+                TableList: null
+            });
+
+            const result = await athenaUtils.getAllTables("test-db");
+            
+            expect(result).toEqual([]);
+        });
+
+        it("should filter out tables with undefined names", async () => {
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({
+                TableList: [
+                    { Name: "table1" },
+                    { Name: undefined },
+                    { Name: "table2" },
+                    {},
+                    { Name: "table3" }
+                ]
+            });
+
+            const result = await athenaUtils.getAllTables("test-db");
+            
+            expect(result).toEqual(["table1", "table2", "table3"]);
+        });
+
+        it("should use default database name from config when not provided", async () => {
+            athenaUtils.glueMock.on(GetTablesCommand).resolves({
+                TableList: [{ Name: "table1" }]
+            });
+
+            const result = await athenaUtils.getAllTables();
+            
+            expect(result).toEqual(["table1"]);
+            expect(athenaUtils.glueMock.commandCalls(GetTablesCommand)[0].args[0].input).toMatchObject({
+                DatabaseName: TEST_CONFIG_PARAMS.glueDatabaseName
+            });
+        });
+    });
 });
