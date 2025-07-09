@@ -17,9 +17,7 @@ DIST_DIR="$PROJECT_ROOT/dist"
 
 # Default values
 TEMPLATE_TYPE=""
-STACK_NAME="titanic-ml-pipeline"
-AWS_REGION="${AWS_DEFAULT_REGION:-us-east-2}"
-DEPLOY_MODE="false"
+OUTPUT_DIR="$TEMPLATES_DIR"
 FORCE_REBUILD="false"
 
 # Usage information
@@ -27,26 +25,24 @@ usage() {
     cat << EOF
 Usage: $0 --type <cloudformation|terraform> [OPTIONS]
 
-Generate and optionally deploy Titanic ML Pipeline infrastructure templates.
+Generate Titanic ML Pipeline infrastructure templates.
 
 Required Arguments:
     --type TYPE             Template type: 'cloudformation' or 'terraform'
 
 Optional Arguments:
-    --deploy               Deploy after generating template (default: false)
-    --stack-name NAME      Stack name for deployment (default: $STACK_NAME)
-    --region REGION        AWS region (default: $AWS_REGION)
-    --force-rebuild        Force rebuild of Lambda package (default: false)
-    --help                 Show this help message
+    --output-dir DIR        Output directory for templates (default: $OUTPUT_DIR)
+    --force-rebuild         Force rebuild of Lambda package (default: false)
+    --help                  Show this help message
 
 Examples:
-    # Generate CloudFormation template only
+    # Generate CloudFormation template
     $0 --type cloudformation
 
-    # Generate and deploy CloudFormation
-    $0 --type cloudformation --deploy --stack-name my-titanic-stack
+    # Generate Terraform template with custom output directory
+    $0 --type terraform --output-dir ./my-templates
 
-    # Generate Terraform template
+    # Force rebuild Lambda package
     $0 --type terraform --force-rebuild
 
     # Deploy with custom region
@@ -74,16 +70,8 @@ parse_args() {
                 TEMPLATE_TYPE="$2"
                 shift 2
                 ;;
-            --deploy)
-                DEPLOY_MODE="true"
-                shift
-                ;;
-            --stack-name)
-                STACK_NAME="$2"
-                shift 2
-                ;;
-            --region)
-                AWS_REGION="$2"
+            --output-dir)
+                OUTPUT_DIR="$2"
                 shift 2
                 ;;
             --force-rebuild)
@@ -113,25 +101,26 @@ parse_args() {
         log_error "Invalid template type: $TEMPLATE_TYPE. Must be 'cloudformation' or 'terraform'"
         exit 1
     fi
+    
+    # Create output directory
+    mkdir -p "$OUTPUT_DIR"
 }
 
 # Check prerequisites
 check_prerequisites() {
     log_info "Checking prerequisites..."
 
-    # Check AWS CLI
-    if ! command -v aws &> /dev/null; then
-        log_error "AWS CLI is required but not installed"
-        exit 1
-    fi
-
-    # Check AWS credentials
-    if ! aws sts get-caller-identity &> /dev/null; then
-        log_error "AWS credentials not configured. Run 'aws configure' first"
-        exit 1
-    fi
-
     # Check Node.js and npm
+    if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
+        log_error "Node.js and npm are required but not installed"
+        exit 1
+    fi
+
+    log_success "Prerequisites check passed"
+}
+
+# Build Lambda function
+build_lambda() {
     if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
         log_error "Node.js and npm are required but not installed"
         exit 1
@@ -804,11 +793,9 @@ EOF
 main() {
     parse_args "$@"
     
-    log_info "Titanic ML Pipeline Deployment Script"
+    log_info "Titanic ML Pipeline Template Generator"
     log_info "Template Type: $TEMPLATE_TYPE"
-    log_info "Deploy Mode: $DEPLOY_MODE"
-    log_info "Stack Name: $STACK_NAME"
-    log_info "AWS Region: $AWS_REGION"
+    log_info "Output Directory: $OUTPUT_DIR"
     
     check_prerequisites
     build_lambda
@@ -816,24 +803,14 @@ main() {
     case "$TEMPLATE_TYPE" in
         "cloudformation")
             generate_cloudformation
-            if [[ "$DEPLOY_MODE" == "true" ]]; then
-                deploy_cloudformation
-            fi
             ;;
         "terraform")
             generate_terraform
-            if [[ "$DEPLOY_MODE" == "true" ]]; then
-                deploy_terraform
-            fi
             ;;
     esac
     
-    log_success "Deployment script completed successfully!"
-    
-    if [[ "$DEPLOY_MODE" == "false" ]]; then
-        log_info "Templates generated in: $TEMPLATES_DIR"
-        log_info "To deploy, run with --deploy flag"
-    fi
+    log_success "Template generation completed successfully!"
+    log_info "Templates generated in: $OUTPUT_DIR"
 }
 
 # Run main function with all arguments

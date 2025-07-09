@@ -9,6 +9,240 @@ This guide covers the internal architecture, development patterns, and extension
 - **doc/schema.sql** - Complete SQL schema reference for both table formats
 - **doc/SCHEMA.md** - Schema design decisions and motivation
 
+
+## Usage
+
+### Prerequisites
+
+- Node.js 18.x or later
+- AWS CLI configured
+- AWS CDK CLI (`npm install -g aws-cdk`)
+
+
+### Environment Configuration
+
+Before deploying or running the project, configure the required environment variables. Copy the provided `example.env` file as a template:
+
+```bash
+cp example.env .env
+```
+
+Edit the `.env` file to include your specific configuration:
+
+```env
+# AWS Configuration
+AWS_DEFAULT_REGION=us-east-2
+AWS_ACCESS_KEY_ID=your-access-key-id
+AWS_SECRET_ACCESS_KEY=your-secret-access-key
+CDK_DEFAULT_ACCOUNT=your-account-id
+CDK_DEFAULT_REGION=$AWS_DEFAULT_REGION
+
+# Project Configuration
+QUILT_CATALOG_DOMAIN=your-stacks-catalog-dns
+QUILT_DATABASE_NAME=your-stacks-glue-database-name
+QUILT_READ_POLICY_ARN=arn:aws:iam::$CDK_DEFAULT_ACCOUNT:policy/STACK-BucketReadPolicy-XXXX
+```
+
+### Quick Start
+
+1.  Load the environment variables:
+
+```bash
+source .env
+```
+
+2. If you haven't already, you must bootstrap CDK for each region you use it in:
+
+```bash
+cdk bootstrap aws://$CDK_DEFAULT_ACCOUNT/$CDK_DEFAULT_REGION
+```
+
+3. Install dependencies:
+
+```bash
+npm install
+```
+
+
+4. Deploy:
+
+This will run tests and deploy the stack to your AWS account:
+
+```bash
+npm run deploy:local
+```
+
+For a complete deployment with event triggering and log monitoring:
+
+```bash
+npm run deploy:full
+```
+
+This will:
+a. run the tests
+b. create the CloudFormation template
+c. push it to your AWS account
+d. send an event to merge tables from every bucket in your stack
+e. show recent logs
+
+> **Note**: For standalone deployment packages or infrastructure templates, see the [Development Scripts](#development-scripts) section below.
+
+## Development Scripts
+
+The project includes several npm scripts organized by function:
+
+### Template Generation Scripts
+
+Generate standalone infrastructure templates for CloudFormation and Terraform deployments:
+
+```bash
+# Generate CloudFormation template only
+npm run template:cloudformation
+
+# Generate Terraform templates only  
+npm run template:terraform
+
+# Generate both CloudFormation and Terraform templates
+npm run template:all
+```
+
+These scripts use `./bin/generate-templates.sh` and create:
+- `templates/titanic-cloudformation.yaml` - Complete CloudFormation template
+- `templates/terraform/` - Complete Terraform module (main.tf, variables.tf, outputs.tf)
+
+### Artifact Packaging Scripts
+
+Create standalone deployment packages for distribution:
+
+```bash
+# Package all artifacts (CloudFormation + Terraform + Lambda ZIP)
+npm run package:artifacts
+
+# Package only CloudFormation artifacts
+npm run package:cf
+
+# Package only Terraform artifacts  
+npm run package:tf
+
+# Package with custom version
+npm run package:version -- v1.2.3
+```
+
+### Artifact Validation Scripts
+
+Validate generated deployment packages:
+
+```bash
+# Validate latest artifacts (auto-detect version)
+npm run validate:artifacts
+
+# Validate specific version
+./bin/validate-artifacts.sh --version v1.2.3
+
+# Validate only CloudFormation artifacts
+./bin/validate-artifacts.sh --version v1.2.3 --no-terraform --no-zip
+
+# Combined build and validate
+npm run build:release -- v1.2.3
+```
+
+These scripts use `./bin/package-artifacts.sh` and create:
+- `artifacts/cloudformation-{version}/` - CloudFormation deployment package
+- `artifacts/terraform-{version}/` - Terraform deployment package
+- `artifacts/titanic-{type}-{version}.zip` - ZIP archives for distribution
+- `artifacts/deployment-summary-{version}.md` - Deployment guide
+
+Each package includes:
+- Infrastructure templates
+- Lambda function code (`lambda-package.zip`)
+- Deployment script (`deploy.sh`) with CLI arguments
+- README with usage instructions
+
+### Script Options and Examples
+
+The underlying shell scripts support various options:
+
+**Template Generation:**
+```bash
+# Custom output directory
+./bin/generate-templates.sh --type terraform --output-dir ./my-templates
+
+# Force rebuild Lambda package
+./bin/generate-templates.sh --type cloudformation --force-rebuild
+```
+
+**Artifact Packaging:**
+```bash
+# Skip ZIP creation (folders only)
+./bin/package-artifacts.sh --no-zip
+
+# Custom version identifier
+./bin/package-artifacts.sh --version "release-2024-01"
+
+# Build only specific type
+./bin/package-artifacts.sh --no-terraform  # CloudFormation only
+./bin/package-artifacts.sh --no-cloudformation  # Terraform only
+```
+
+**Artifact Validation:**
+```bash
+# Validate specific version
+./bin/validate-artifacts.sh --version v1.0.0
+
+# Validate only CloudFormation artifacts
+./bin/validate-artifacts.sh --version v1.0.0 --no-terraform --no-zip
+
+# Auto-detect and validate latest artifacts
+./bin/validate-artifacts.sh --auto-detect
+```
+
+### Use Cases
+
+**For Development:**
+- Use `npm run templates:all` to generate templates for testing
+- Use `npm run package:artifacts` to create deployment packages for QA
+
+**For Distribution:**
+- Use versioned packaging: `npm run package:version -- v1.0.0`
+- Share the generated ZIP files with end users who need standalone deployment
+
+**For CI/CD:**
+- Integrate `npm run package:version -- v1.0.0` into build pipelines
+- Use `./bin/validate-artifacts.sh --version v1.0.0` for validation
+- Archive the `artifacts/` directory as build artifacts
+
+### Simplified CI/CD Workflow
+
+The GitHub Actions workflow has been streamlined using these npm scripts:
+
+```yaml
+# Before (complex shell commands)
+- name: Build artifacts
+  run: |
+    chmod +x bin/package-artifacts.sh
+    ./bin/package-artifacts.sh --version "${{ steps.version.outputs.version }}"
+
+- name: Validate CloudFormation artifacts  
+  run: |
+    VERSION="${{ steps.version.outputs.version }}"
+    CF_DIR="artifacts/cloudformation-${VERSION}"
+    test -f "${CF_DIR}/template.yaml" || { echo "Missing template.yaml"; exit 1; }
+    # ... many more validation steps
+
+# After (simple npm scripts)
+- name: Build deployment artifacts
+  run: npm run package:version -- "${{ steps.version.outputs.version }}"
+
+- name: Validate deployment artifacts
+  run: ./bin/validate-artifacts.sh --version "${{ steps.version.outputs.version }}"
+```
+
+This approach provides:
+- **Consistent execution** across different environments
+- **Simplified maintenance** with logic in dedicated scripts
+- **Better error handling** and user feedback
+- **Reusable commands** for local development
+
 ## Architecture
 
 ### Core Components
@@ -308,3 +542,126 @@ The system executes Athena queries differently based on table format:
 - S3 Tables buckets use ARN format: `arn:aws:s3tables:region:account:bucket/bucket-name`
 - The system extracts the bucket name from the ARN for catalog specification
 - Query results are stored in a separate regular S3 bucket (`ATHENA_RESULTS_BUCKET`)
+
+## Standalone Deployment Packaging
+
+### Overview
+
+The project includes automated packaging scripts that create standalone deployment artifacts for distribution to end users who don't need the full development environment.
+
+### Generated Artifacts
+
+#### CloudFormation Package (`artifacts/cloudformation-{version}/`)
+- `titanic-cloudformation.yaml` - Complete CloudFormation template
+- `lambda-package.zip` - Lambda function deployment package  
+- `deploy.sh` - Interactive deployment script with parameter validation
+- `README.md` - User-friendly deployment instructions
+
+#### Terraform Package (`artifacts/terraform-{version}/`)
+- `main.tf` - Main infrastructure configuration
+- `variables.tf` - Input variables with defaults and validation
+- `outputs.tf` - Stack outputs (ARNs, bucket names, etc.)
+- `lambda-package.zip` - Lambda function deployment package
+- `deploy.sh` - Interactive deployment script with plan/apply/destroy
+- `README.md` - User-friendly deployment instructions
+
+#### Distribution Archives
+- `titanic-cloudformation-{version}.zip` - CloudFormation package archive
+- `titanic-terraform-{version}.zip` - Terraform package archive
+- `deployment-summary-{version}.md` - Overview document for users
+
+### Packaging Process
+
+The packaging system works in stages:
+
+1. **Build Phase**: Compiles TypeScript and creates Lambda deployment package
+2. **Template Generation**: Uses `generate-templates.sh` to create infrastructure templates
+3. **Artifact Assembly**: Copies templates, Lambda package, and creates deployment scripts
+4. **Documentation**: Generates user-friendly README files and deployment guides
+5. **Archive Creation**: Creates ZIP files for easy distribution
+
+### Deployment Scripts Features
+
+The generated deployment scripts provide:
+- **Parameter validation** with helpful error messages
+- **AWS CLI availability checks** and credential validation
+- **Interactive parameter input** with sensible defaults
+- **Colored output** for better user experience
+- **Stack output display** after successful deployment
+- **Cleanup instructions** and troubleshooting tips
+
+#### CloudFormation Deploy Script Options
+```bash
+./deploy.sh --stack-name my-titanic \
+           --region us-west-2 \
+           --use-s3-tables \
+           --glue-db my-glue-db \
+           --s3table-db my-s3table-db
+```
+
+#### Terraform Deploy Script Options
+```bash
+./deploy.sh --stack-name my-titanic \
+           --region us-west-2 \
+           --use-s3-tables \
+           --auto-approve
+
+# Destroy infrastructure
+./deploy.sh destroy --auto-approve
+```
+
+### Distribution Workflow
+
+For creating release packages:
+
+1. **Version the release**:
+   ```bash
+   npm run package:version -- v2.1.0
+   ```
+
+2. **Verify artifacts**:
+   ```bash
+   ls -la artifacts/
+   # Should show both ZIP files and deployment summary
+   ```
+
+3. **Test deployment** (recommended):
+   ```bash
+   cd artifacts/cloudformation-v2.1.0/
+   ./deploy.sh --stack-name test-deploy
+   ```
+
+4. **Distribute ZIP files** to end users via:
+   - GitHub releases
+   - S3 bucket downloads
+   - Internal artifact repositories
+   - Documentation websites
+
+### End User Experience
+
+Users receive:
+- **Single ZIP file** containing everything needed
+- **No development dependencies** required (no Node.js, TypeScript, etc.)
+- **Clear documentation** with examples and troubleshooting
+- **Interactive deployment** with guided parameter input
+- **AWS CLI only requirement** (CloudFormation) or **Terraform CLI** (Terraform)
+
+Example user workflow:
+```bash
+# Download and extract
+wget https://releases.example.com/titanic-cloudformation-v2.1.0.zip
+unzip titanic-cloudformation-v2.1.0.zip
+cd cloudformation-v2.1.0/
+
+# Deploy with defaults
+./deploy.sh
+
+# Or deploy with custom parameters
+./deploy.sh --stack-name production-titanic --use-s3-tables
+```
+
+This packaging approach enables:
+- **Wide distribution** without requiring development setup
+- **Version control** of deployment artifacts
+- **Consistent deployments** across different environments
+- **Reduced support burden** through automated scripts and clear documentation
