@@ -132,13 +132,11 @@ The system provides npm scripts for common event patterns:
 
 ```bash
 # Process all buckets
-npm run event:all
+npm run event
 
-# Process specific bucket (quilt-bake)
-npm run event:bake
+# Process specific bucket (e.g., test-bucket)
+npm run event test-bucket
 
-# Process test/staff bucket (will error)
-npm run event:staff
 ```
 
 ## Error Handling
