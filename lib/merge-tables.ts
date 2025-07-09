@@ -126,7 +126,7 @@ function selectBuckets(allTables: string[], targetBucket?: string): string[] {
         }
 
         // Extract bucket name from table name (assuming format: bucket_something-view)
-        const bucketMatch = tableName.match(/^(.+?)_/);
+        const bucketMatch = tableName.match(/^(.*?)(?:_packages-view|_objects-view)$/);
         if (bucketMatch) {
             const bucketName = bucketMatch[1];
             

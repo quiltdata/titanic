@@ -23,7 +23,7 @@ The new Iceberg schema addresses several limitations of the legacy views:
 
 1. **Separation of Concerns**: Package revisions, tags, and entries are normalized into separate tables
 3. **Flexible Tagging**: Tags (like `latest`) can be updated to point to different revisions
-4. **Multihash Format**: Standardized content hashing based on the multihash spec (no need to parse a complex struct to for each object hash)
+4. **Multihash Format**: Standardized content hashing based on the multihash spec (no need to parse a complex struct for each object hash)
 5. **Efficient Partitioning**: Tables are partitioned for optimal query performance
 
 ### Write Policies
