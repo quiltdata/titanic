@@ -74,7 +74,7 @@ jobs:
         run: npm ci
       
       - name: Build, test, and package deployment artifacts
-        run: npm run package:version -- "${{ steps.version.outputs.version }}"
+        run: npm run package:version -- --version "${{ steps.version.outputs.version }}"
       
       - name: Setup Python for YAML validation
         uses: actions/setup-python@v4
