@@ -5,7 +5,7 @@
     "titanic": "bin/titanic.js"
   },
   "scripts": {
-    "clean": "rm -rf cdk.out **/{*.js,*.d.ts}",
+    "clean": "rm -rf cdk.out **/{*.js,*.d.ts} node_modules package-lock.json",
     "lint": "eslint . --ext .ts --fix",
     "test": "jest --no-coverage",
     "test:coverage": "jest --coverage --verbose",
@@ -16,10 +16,10 @@
     "deploy:package": "./bin/package-artifacts.sh",
     "deploy:validate": "./bin/validate-artifacts.sh --auto-detect",
     "deploy:local": "npm run test && npx cdk deploy --require-approval never",
-    "deploy:full": "npm run deploy:local && npm run ops:event && npm run ops:logs",
+    "deploy:full": "npm run deploy:local && npm run ops:event && npm run ops:logs:delayed",
     "ops:event": "./bin/send-event.sh",
     "ops:logs": "./bin/monitor-logs.sh",
-    "ops:logs:recent": "npm run ops:logs recent 1",
+    "ops:logs:delayed": "sleep 30 && npm run ops:logs recent 1",
     "ops:status": "aws cloudformation describe-stacks --stack-name TitanicStack --query 'Stacks[0].Outputs'",
     "release": "npm test && npm run deploy:package && npm run deploy:validate"
   },
