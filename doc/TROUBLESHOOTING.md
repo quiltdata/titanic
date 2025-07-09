@@ -89,6 +89,7 @@ AccessDenied: User is not authorized
 ```
 
 **Solution:**
+0. Ensure you have properly set the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
 1. Verify the `QUILT_READ_POLICY_ARN` environment variable is set correctly
 2. Ensure the Lambda execution role has the proper Glue permissions
 3. Check that the source database exists and is accessible
