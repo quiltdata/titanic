@@ -103,7 +103,7 @@ npm run template:cloudformation
 npm run template:terraform
 
 # Generate both CloudFormation and Terraform templates
-npm run template:all
+npm run deploy:templates
 ```
 
 These scripts use `./bin/generate-templates.sh` and create:
@@ -125,7 +125,7 @@ npm run package:cf
 npm run package:tf
 
 # Package with custom version
-npm run package:version -- v1.2.3
+npm run deploy:package -- v1.2.3
 ```
 
 ### Artifact Validation Scripts
@@ -203,11 +203,11 @@ The underlying shell scripts support various options:
 - Use `npm run package:artifacts` to create deployment packages for QA
 
 **For Distribution:**
-- Use versioned packaging: `npm run package:version -- v1.0.0`
+- Use versioned packaging: `npm run deploy:package -- v1.0.0`
 - Share the generated ZIP files with end users who need standalone deployment
 
 **For CI/CD:**
-- Integrate `npm run package:version -- v1.0.0` into build pipelines
+- Integrate `npm run deploy:package -- v1.0.0` into build pipelines
 - Use `./bin/validate-artifacts.sh --version v1.0.0` for validation
 - Archive the `artifacts/` directory as build artifacts
 
@@ -231,7 +231,7 @@ The GitHub Actions workflow has been streamlined using these npm scripts:
 
 # After (simple npm scripts)
 - name: Build deployment artifacts
-  run: npm run package:version -- "${{ steps.version.outputs.version }}"
+  run: npm run deploy:package -- "${{ steps.version.outputs.version }}"
 
 - name: Validate deployment artifacts
   run: ./bin/validate-artifacts.sh --version "${{ steps.version.outputs.version }}"
@@ -616,7 +616,7 @@ For creating release packages:
 
 1. **Version the release**:
    ```bash
-   npm run package:version -- v2.1.0
+   npm run deploy:package -- v2.1.0
    ```
 
 2. **Verify artifacts**:

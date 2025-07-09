@@ -262,7 +262,7 @@ main() {
     # Check artifacts directory exists
     if [[ ! -d "$ARTIFACTS_DIR" ]]; then
         log_error "Artifacts directory not found: $ARTIFACTS_DIR"
-        log_error "Run 'npm run package:version -- $VERSION' first"
+        log_error "Run 'npm run deploy:package -- $VERSION' first"
         exit 1
     fi
     
