@@ -12,15 +12,13 @@ NC='\033[0m' # No Color
 # Script configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-TEMPLATES_DIR="$PROJECT_ROOT/templates"
-DIST_DIR="$PROJECT_ROOT/dist"
+BUILD_DIR="$PROJECT_ROOT/cdk.out"
 ARTIFACTS_DIR="$PROJECT_ROOT/artifacts"
 
 # Default values
 VERSION="${VERSION:-$(date +%Y%m%d-%H%M%S)}"
 INCLUDE_TERRAFORM="true"
 INCLUDE_CLOUDFORMATION="true"
-CREATE_ZIP="true"
 
 # Logging functions
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -39,7 +37,6 @@ Optional Arguments:
     --version VERSION           Artifact version (default: timestamp)
     --no-terraform             Skip Terraform artifacts
     --no-cloudformation        Skip CloudFormation artifacts
-    --no-zip                   Don't create ZIP archives
     --help                     Show this help message
 
 Examples:
@@ -49,8 +46,11 @@ Examples:
     # Build with custom version
     $0 --version v1.0.0
 
-    # Skip ZIP creation
-    $0 --no-zip
+    # Build CloudFormation artifacts only
+    $0 --no-terraform
+
+    # Build Terraform artifacts only
+    $0 --no-cloudformation
 EOF
 }
 
@@ -68,10 +68,6 @@ parse_args() {
                 ;;
             --no-cloudformation)
                 INCLUDE_CLOUDFORMATION="false"
-                shift
-                ;;
-            --no-zip)
-                CREATE_ZIP="false"
                 shift
                 ;;
             --help)
@@ -104,30 +100,50 @@ check_prerequisites() {
 build_lambda() {
     log_info "Building Lambda function..."
 
-    # Clean and create dist directory
-    rm -rf "$DIST_DIR"
-    mkdir -p "$DIST_DIR"
-
-    # Build TypeScript
-    log_info "Compiling TypeScript..."
-    npm run build
-
-    # Create Lambda package
-    log_info "Creating Lambda package..."
-    cd "$DIST_DIR"
-    
-    # Copy built files
-    cp -r lib/* .
-    
-    # Install production dependencies
-    cp "$PROJECT_ROOT/package.json" .
-    npm install --production --silent
-    
-    # Create ZIP package
-    zip -r lambda-package.zip . -x "*.zip"
-    
+    # Use CDK to build the Lambda function (this handles TypeScript compilation)
+    log_info "Using CDK to compile TypeScript Lambda function..."
     cd "$PROJECT_ROOT"
-    log_success "Lambda package created: $DIST_DIR/lambda-package.zip"
+    
+    # Generate CDK output which includes compiled Lambda
+    npx cdk synth --quiet
+    
+    # Find the compiled Lambda assets in cdk.out
+    local lambda_asset_dir=$(find cdk.out -name "*.zip" -path "*/asset.*" | head -1 | xargs dirname)
+    
+    if [[ -n "$lambda_asset_dir" && -f "$lambda_asset_dir/index.js" ]]; then
+        log_info "Copying compiled Lambda code from CDK assets..."
+        
+        # Ensure lambda directory exists in cdk.out
+        mkdir -p "$BUILD_DIR/lambda"
+        cd "$lambda_asset_dir"
+        zip -r "$BUILD_DIR/lambda/package.zip" . -x "*.zip"
+        cd "$PROJECT_ROOT"
+        
+        log_success "Lambda package created: $BUILD_DIR/lambda/package.zip"
+    else
+        log_error "Could not find compiled Lambda assets from CDK"
+        log_info "Falling back to source-only package for development..."
+        
+        # Create a source-only package (TypeScript files)
+        mkdir -p "$BUILD_DIR/lambda"
+        cd "$BUILD_DIR/lambda"
+        
+        cp -r "$PROJECT_ROOT/lib" ./ 2>/dev/null || true
+        cp "$PROJECT_ROOT/package.json" ./
+        cp "$PROJECT_ROOT/tsconfig.json" ./ 2>/dev/null || true
+        
+        # Install all dependencies (including dev dependencies for TypeScript compilation)
+        npm install --silent
+        
+        # Create ZIP package with source code
+        zip -r package.zip lib/ node_modules/ package.json tsconfig.json -x "node_modules/.cache/*"
+        
+        # Clean up temporary files
+        rm -rf lib/ node_modules/ package.json tsconfig.json
+        cd "$PROJECT_ROOT"
+        
+        log_warn "Created source-only Lambda package - deployment environment must handle TypeScript compilation"
+    fi
 }
 
 # Create CloudFormation artifacts
@@ -150,7 +166,7 @@ create_cloudformation_artifacts() {
     fi
 
     # Copy Lambda package
-    cp "$DIST_DIR/lambda-package.zip" "$cf_dir/"
+    cp "$BUILD_DIR/lambda/package.zip" "$cf_dir/lambda-package.zip"
 
     # Create deployment script
     cat > "$cf_dir/deploy.sh" << 'EOF'
@@ -355,7 +371,7 @@ create_terraform_artifacts() {
     fi
 
     # Copy Lambda package
-    cp "$DIST_DIR/lambda-package.zip" "$tf_dir/"
+    cp "$BUILD_DIR/lambda/package.zip" "$tf_dir/lambda-package.zip"
 
     # Create deployment script
     cat > "$tf_dir/deploy.sh" << 'EOF'
@@ -593,31 +609,6 @@ EOF
     log_success "Terraform artifacts created in: $tf_dir"
 }
 
-# Create ZIP archives
-create_zip_archives() {
-    if [[ "$CREATE_ZIP" == "false" ]]; then
-        return
-    fi
-
-    log_info "Creating ZIP archives..."
-
-    cd "$ARTIFACTS_DIR"
-
-    if [[ "$INCLUDE_CLOUDFORMATION" == "true" ]]; then
-        log_info "Creating CloudFormation ZIP archive..."
-        zip -r "titanic-cloudformation-$VERSION.zip" "cloudformation-$VERSION/"
-        log_success "Created: titanic-cloudformation-$VERSION.zip"
-    fi
-
-    if [[ "$INCLUDE_TERRAFORM" == "true" ]]; then
-        log_info "Creating Terraform ZIP archive..."
-        zip -r "titanic-terraform-$VERSION.zip" "terraform-$VERSION/"
-        log_success "Created: titanic-terraform-$VERSION.zip"
-    fi
-
-    cd "$PROJECT_ROOT"
-}
-
 # Create summary report
 create_summary() {
     log_info "Creating deployment summary..."
@@ -635,7 +626,6 @@ $(if [[ "$INCLUDE_CLOUDFORMATION" == "true" ]]; then
     echo "### CloudFormation"
     echo "- **Directory:** \`cloudformation-$VERSION/\`"
     echo "- **Quick Deploy:** \`./cloudformation-$VERSION/deploy.sh\`"
-    echo "- **ZIP Archive:** \`titanic-cloudformation-$VERSION.zip\`"
     echo ""
 fi)
 
@@ -643,19 +633,18 @@ $(if [[ "$INCLUDE_TERRAFORM" == "true" ]]; then
     echo "### Terraform"
     echo "- **Directory:** \`terraform-$VERSION/\`"
     echo "- **Quick Deploy:** \`./terraform-$VERSION/deploy.sh\`"
-    echo "- **ZIP Archive:** \`titanic-terraform-$VERSION.zip\`"
     echo ""
 fi)
 
 ## For End Users
 
 ### CloudFormation Users
-1. Download and extract \`titanic-cloudformation-$VERSION.zip\`
+1. Navigate to the \`cloudformation-$VERSION/\` directory
 2. Run \`./deploy.sh\` for guided deployment
 3. Or use AWS CLI: \`aws cloudformation deploy --template-file template.yaml --stack-name my-stack --capabilities CAPABILITY_NAMED_IAM\`
 
 ### Terraform Users  
-1. Download and extract \`titanic-terraform-$VERSION.zip\`
+1. Navigate to the \`terraform-$VERSION/\` directory
 2. Run \`./deploy.sh\` for guided deployment
 3. Or use Terraform CLI: \`terraform init && terraform apply\`
 
@@ -681,7 +670,6 @@ main() {
     log_info "Version: $VERSION"
     log_info "Include CloudFormation: $INCLUDE_CLOUDFORMATION"
     log_info "Include Terraform: $INCLUDE_TERRAFORM"
-    log_info "Create ZIP archives: $CREATE_ZIP"
     
     check_prerequisites
     
@@ -700,7 +688,6 @@ main() {
         create_terraform_artifacts
     fi
     
-    create_zip_archives
     create_summary
     
     log_success "Standalone artifacts created successfully!"

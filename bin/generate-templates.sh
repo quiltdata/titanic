@@ -12,41 +12,42 @@ NC='\033[0m' # No Color
 # Script configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-TEMPLATES_DIR="$PROJECT_ROOT/templates"
-DIST_DIR="$PROJECT_ROOT/dist"
+BUILD_DIR="$PROJECT_ROOT/cdk.out"
 
 # Default values
-TEMPLATE_TYPE=""
-OUTPUT_DIR="$TEMPLATES_DIR"
+TEMPLATE_TYPE="all"
+GENERATE_CLOUDFORMATION="true"
+GENERATE_TERRAFORM="true"
 FORCE_REBUILD="false"
 
 # Usage information
 usage() {
     cat << EOF
-Usage: $0 --type <cloudformation|terraform> [OPTIONS]
+Usage: $0 [OPTIONS]
 
 Generate Titanic ML Pipeline infrastructure templates.
 
-Required Arguments:
-    --type TYPE             Template type: 'cloudformation' or 'terraform'
-
 Optional Arguments:
-    --output-dir DIR        Output directory for templates (default: $OUTPUT_DIR)
+    --no-cloudformation     Skip CloudFormation template generation
+    --no-terraform          Skip Terraform template generation
     --force-rebuild         Force rebuild of Lambda package (default: false)
     --help                  Show this help message
 
 Examples:
-    # Generate CloudFormation template
-    $0 --type cloudformation
+    # Generate all templates (default behavior)
+    $0
 
-    # Generate Terraform template with custom output directory
-    $0 --type terraform --output-dir ./my-templates
+    # Generate CloudFormation template only
+    $0 --no-terraform
+
+    # Generate Terraform template only
+    $0 --no-cloudformation
 
     # Force rebuild Lambda package
-    $0 --type terraform --force-rebuild
+    $0 --force-rebuild
 
-    # Deploy with custom region
-    $0 --type cloudformation --deploy --region us-west-2
+Note:
+    All output is generated in the cdk.out/ directory alongside CDK artifacts.
 
 Environment Variables:
     USE_S3_TABLES          Enable S3 Tables (default: false)
@@ -67,12 +68,35 @@ parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
             --type)
-                TEMPLATE_TYPE="$2"
+                # Backward compatibility - convert old --type format to new flags
+                case "$2" in
+                    cloudformation)
+                        GENERATE_CLOUDFORMATION="true"
+                        GENERATE_TERRAFORM="false"
+                        ;;
+                    terraform)
+                        GENERATE_CLOUDFORMATION="false"
+                        GENERATE_TERRAFORM="true"
+                        ;;
+                    all)
+                        GENERATE_CLOUDFORMATION="true"
+                        GENERATE_TERRAFORM="true"
+                        ;;
+                    *)
+                        log_error "Invalid template type: $2. Must be 'cloudformation', 'terraform', or 'all'"
+                        usage
+                        exit 1
+                        ;;
+                esac
                 shift 2
                 ;;
-            --output-dir)
-                OUTPUT_DIR="$2"
-                shift 2
+            --no-cloudformation)
+                GENERATE_CLOUDFORMATION="false"
+                shift
+                ;;
+            --no-terraform)
+                GENERATE_TERRAFORM="false"
+                shift
                 ;;
             --force-rebuild)
                 FORCE_REBUILD="true"
@@ -90,20 +114,21 @@ parse_args() {
         esac
     done
 
-    # Validate required arguments
-    if [[ -z "$TEMPLATE_TYPE" ]]; then
-        log_error "Template type is required. Use --type cloudformation or --type terraform"
+    # Determine template type for logging
+    if [[ "$GENERATE_CLOUDFORMATION" == "true" && "$GENERATE_TERRAFORM" == "true" ]]; then
+        TEMPLATE_TYPE="all"
+    elif [[ "$GENERATE_CLOUDFORMATION" == "true" ]]; then
+        TEMPLATE_TYPE="cloudformation"
+    elif [[ "$GENERATE_TERRAFORM" == "true" ]]; then
+        TEMPLATE_TYPE="terraform"
+    else
+        log_error "At least one template type must be enabled"
         usage
         exit 1
     fi
-
-    if [[ "$TEMPLATE_TYPE" != "cloudformation" && "$TEMPLATE_TYPE" != "terraform" ]]; then
-        log_error "Invalid template type: $TEMPLATE_TYPE. Must be 'cloudformation' or 'terraform'"
-        exit 1
-    fi
     
-    # Create output directory
-    mkdir -p "$OUTPUT_DIR"
+    # Ensure cdk.out directory exists
+    mkdir -p "$BUILD_DIR"
 }
 
 # Check prerequisites
@@ -141,7 +166,7 @@ build_lambda() {
 
 # Build Lambda function
 build_lambda() {
-    log_info "Building Lambda function..."
+    log_info "Building Lambda function using CDK..."
 
     cd "$PROJECT_ROOT"
 
@@ -151,38 +176,56 @@ build_lambda() {
         npm install
     fi
 
-    # Build TypeScript
-    log_info "Compiling TypeScript..."
-    npm run build
+    # Use CDK to build everything (this handles TypeScript compilation)
+    log_info "Running CDK synth to compile Lambda and generate artifacts..."
+    npx cdk synth --quiet
 
-    # Create distribution directory
-    mkdir -p "$DIST_DIR"
-
-    # Package Lambda function
-    log_info "Packaging Lambda function..."
-    cd "$DIST_DIR"
-    rm -f lambda-package.zip
-
-    # Copy compiled JavaScript and dependencies
-    cp -r "$PROJECT_ROOT/lib" ./ 2>/dev/null || true
-    cp "$PROJECT_ROOT/package.json" ./
+    # Find the compiled Lambda assets in cdk.out
+    local lambda_asset_dir=$(find cdk.out -name "*.zip" -path "*/asset.*" | head -1 | xargs dirname 2>/dev/null)
     
-    # Install production dependencies only
-    npm install --production --silent
-
-    # Create deployment package
-    zip -r lambda-package.zip lib/ node_modules/ package.json -q
-
-    log_success "Lambda package created: $DIST_DIR/lambda-package.zip"
+    if [[ -n "$lambda_asset_dir" && -f "$lambda_asset_dir/index.js" ]]; then
+        log_info "Using compiled Lambda code from CDK assets..."
+        
+        # Create a lambda directory in cdk.out and copy the compiled package
+        mkdir -p "$BUILD_DIR/lambda"
+        cd "$lambda_asset_dir"
+        zip -r "$BUILD_DIR/lambda/package.zip" . -q
+        cd "$PROJECT_ROOT"
+        
+        log_success "Lambda package created: $BUILD_DIR/lambda/package.zip"
+    else
+        log_warn "Could not find compiled Lambda assets from CDK, creating source package..."
+        
+        # Create a source-only package as fallback
+        mkdir -p "$BUILD_DIR/lambda"
+        cd "$BUILD_DIR/lambda"
+        
+        # Copy TypeScript source and configuration
+        cp -r "$PROJECT_ROOT/lib" ./ 2>/dev/null || true
+        cp "$PROJECT_ROOT/package.json" ./
+        cp "$PROJECT_ROOT/tsconfig.json" ./ 2>/dev/null || true
+        
+        # Install all dependencies (including dev dependencies for TypeScript compilation)
+        npm install --silent
+        
+        # Create deployment package with source code
+        zip -r package.zip lib/ node_modules/ package.json tsconfig.json -q
+        
+        # Clean up
+        rm -rf lib/ node_modules/ package.json tsconfig.json
+        cd "$PROJECT_ROOT"
+        
+        log_warn "Created source-only Lambda package - deployment environment must handle TypeScript compilation"
+    fi
 }
 
 # Generate CloudFormation template
 generate_cloudformation() {
     log_info "Generating CloudFormation template..."
 
-    mkdir -p "$TEMPLATES_DIR"
+    mkdir -p "$BUILD_DIR/cloudformation"
 
-    cat > "$TEMPLATES_DIR/titanic-cloudformation.yaml" << 'EOF'
+    cat > "$BUILD_DIR/cloudformation/template.yaml" << 'EOF'
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Titanic ML Pipeline Infrastructure - One-Click Deploy'
 
@@ -387,17 +430,17 @@ Outputs:
       Name: !Sub '${AWS::StackName}-WorkGroup'
 EOF
 
-    log_success "CloudFormation template generated: $TEMPLATES_DIR/titanic-cloudformation.yaml"
+    log_success "CloudFormation template generated: $BUILD_DIR/cloudformation/template.yaml"
 }
 
 # Generate Terraform template
 generate_terraform() {
     log_info "Generating Terraform templates..."
 
-    mkdir -p "$TEMPLATES_DIR/terraform"
+    mkdir -p "$BUILD_DIR/terraform"
 
     # Main configuration
-    cat > "$TEMPLATES_DIR/terraform/main.tf" << 'EOF'
+    cat > "$BUILD_DIR/terraform/main.tf" << 'EOF'
 terraform {
   required_version = ">= 1.0"
   required_providers {
@@ -614,7 +657,7 @@ resource "aws_athena_workgroup" "titanic" {
 EOF
 
     # Variables
-    cat > "$TEMPLATES_DIR/terraform/variables.tf" << 'EOF'
+    cat > "$BUILD_DIR/terraform/variables.tf" << 'EOF'
 variable "stack_name" {
   description = "Name for the stack resources"
   type        = string
@@ -668,7 +711,7 @@ variable "lambda_code_key" {
 EOF
 
     # Outputs
-    cat > "$TEMPLATES_DIR/terraform/outputs.tf" << 'EOF'
+    cat > "$BUILD_DIR/terraform/outputs.tf" << 'EOF'
 output "lambda_function_arn" {
   description = "Titanic Merge Lambda Function ARN"
   value       = aws_lambda_function.titanic_merge.arn
@@ -695,7 +738,7 @@ output "lambda_function_name" {
 }
 EOF
 
-    log_success "Terraform templates generated in: $TEMPLATES_DIR/terraform/"
+    log_success "Terraform templates generated in: $BUILD_DIR/terraform/"
 }
 
 # Upload Lambda package to S3
@@ -711,7 +754,7 @@ upload_lambda_package() {
     fi
     
     # Upload package
-    aws s3 cp "$DIST_DIR/lambda-package.zip" "s3://$bucket_name/lambda-package.zip"
+    aws s3 cp "$BUILD_DIR/lambda/package.zip" "s3://$bucket_name/lambda-package.zip"
     
     log_success "Lambda package uploaded to s3://$bucket_name/lambda-package.zip"
 }
@@ -728,7 +771,7 @@ deploy_cloudformation() {
     
     # Deploy stack
     aws cloudformation deploy \
-        --template-file "$TEMPLATES_DIR/titanic-cloudformation.yaml" \
+        --template-file "$BUILD_DIR/cloudformation/template.yaml" \
         --stack-name "$STACK_NAME" \
         --capabilities CAPABILITY_NAMED_IAM \
         --region "$AWS_REGION" \
@@ -755,7 +798,7 @@ deploy_cloudformation() {
 deploy_terraform() {
     log_info "Deploying Terraform stack: $STACK_NAME"
     
-    cd "$TEMPLATES_DIR/terraform"
+    cd "$BUILD_DIR/terraform"
     
     # Generate unique bucket name for deployment artifacts
     local deployment_bucket="${STACK_NAME}-deploy-$(date +%s)-${RANDOM}"
@@ -795,22 +838,24 @@ main() {
     
     log_info "Titanic ML Pipeline Template Generator"
     log_info "Template Type: $TEMPLATE_TYPE"
-    log_info "Output Directory: $OUTPUT_DIR"
+    log_info "Build Directory: $BUILD_DIR"
     
     check_prerequisites
     build_lambda
     
-    case "$TEMPLATE_TYPE" in
-        "cloudformation")
-            generate_cloudformation
-            ;;
-        "terraform")
-            generate_terraform
-            ;;
-    esac
+    # Generate templates based on flags
+    if [[ "$GENERATE_CLOUDFORMATION" == "true" ]]; then
+        log_info "Generating CloudFormation template..."
+        generate_cloudformation
+    fi
+    
+    if [[ "$GENERATE_TERRAFORM" == "true" ]]; then
+        log_info "Generating Terraform template..."
+        generate_terraform
+    fi
     
     log_success "Template generation completed successfully!"
-    log_info "Templates generated in: $OUTPUT_DIR"
+    log_info "Templates generated in: $BUILD_DIR"
 }
 
 # Run main function with all arguments

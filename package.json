@@ -5,10 +5,8 @@
     "titanic": "bin/titanic.js"
   },
   "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf cdk.out */**/{*.js,*.d.ts}",
+    "clean": "rm -rf cdk.out **/{*.js,*.d.ts}",
     "lint": "eslint . --ext .ts --fix",
-    "watch": "tsc -w",
     "test": "jest --no-coverage",
     "test:coverage": "jest --coverage --verbose",
     "test:fails": "jest --onlyFailures --verbose",
@@ -16,7 +14,7 @@
     "test:debug": "jest --verbose --no-coverage --runInBand --detectOpenHandles",
     "template:cloudformation": "./bin/generate-templates.sh --type cloudformation",
     "template:terraform": "./bin/generate-templates.sh --type terraform", 
-    "template:all": "npm run template:cloudformation && npm run template:terraform",
+    "template:all": "./bin/generate-templates.sh",
     "package:all": "./bin/package-artifacts.sh",
     "package:cloudformation": "./bin/package-artifacts.sh --no-terraform",
     "package:terraform": "./bin/package-artifacts.sh --no-cloudformation",

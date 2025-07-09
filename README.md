@@ -151,9 +151,7 @@ The project includes several npm scripts for development and testing:
 
 #### Building and Cleaning
 ```bash
-npm run build      # Compile TypeScript to JavaScript
 npm run clean      # Remove compiled files and CDK output
-npm run watch      # Watch for changes and compile automatically
 ```
 
 #### Testing
