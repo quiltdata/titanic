@@ -23,7 +23,7 @@
   "devDependencies": {
     "@types/aws-lambda": "^8.10.149",
     "@types/jest": "^30.0.0",
-    "@types/node": "22.16.2",
+    "@types/node": "22.16.3",
     "aws-cdk": "2.1020.2",
     "aws-sdk-client-mock": "^4.1.0",
     "jest": "^30.0.0",
