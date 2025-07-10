@@ -49,21 +49,22 @@ Before deploying or running the project, configure the required environment vari
 cp example.env .env
 ```
 
-Edit the `.env` file to include your specific configuration:
+Edit the `.env` file to include your specific configuration. The following variables are **required for deployment**:
 
 ```env
-# AWS Configuration
-AWS_DEFAULT_REGION=us-east-2
-AWS_ACCESS_KEY_ID=your-access-key-id
-AWS_SECRET_ACCESS_KEY=your-secret-access-key
+# Required: AWS Configuration
 CDK_DEFAULT_ACCOUNT=your-account-id
-CDK_DEFAULT_REGION=$AWS_DEFAULT_REGION
+CDK_DEFAULT_REGION=us-east-2
 
-# Project Configuration
-QUILT_CATALOG_DOMAIN=your-stacks-catalog-dns
+# Required: Quilt Integration
 QUILT_DATABASE_NAME=your-stacks-glue-database-name
 QUILT_READ_POLICY_ARN=arn:aws:iam::$CDK_DEFAULT_ACCOUNT:policy/STACK-BucketReadPolicy-XXXX
+
+# Optional: Table Format (defaults to false)
+USE_S3_TABLE=false
 ```
+
+**Note**: Additional environment variables like `GLUE_TABLES_BUCKET_ARN` and `S3_TABLES_BUCKET_ARN` are automatically configured by the CDK stack and do not need to be set manually.
 
 
 
