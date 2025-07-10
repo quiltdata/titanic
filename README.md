@@ -211,6 +211,50 @@ npm run outputs
 **Wrong table format**: Check `USE_S3_TABLE` environment variable matches desired format
 
 
+## Stack Destruction and Cleanup
+
+### Bucket Cleanup
+
+When destroying the Titanic stack, you may need to manually clean up the buckets before running `cdk destroy`. This is because CloudFormation cannot delete non-empty S3 buckets.
+
+The project provides cleanup scripts to handle this:
+
+#### Full Cleanup (Delete Buckets and Contents)
+```bash
+npm run cleanup-buckets
+```
+
+#### Contents-Only Cleanup (Preserve Empty Buckets)
+```bash
+npm run cleanup-buckets:contents
+```
+
+#### When Cleanup is Required
+
+**You must run bucket cleanup before `cdk destroy` if:**
+- The Lambda function has processed any data (created Iceberg tables/files)
+- You enabled S3 Tables mode (`USE_S3_TABLE=true`) and created any tables
+- The stack deployment completed successfully and created bucket contents
+
+**Cleanup handles:**
+- **S3 Bucket**: Removes all Iceberg table files, metadata, and versioned objects
+- **S3 Tables Bucket**: Deletes all tables, namespaces, and the bucket itself
+
+#### Typical Destruction Workflow
+
+```bash
+# 1. Clean up bucket contents
+npm run cleanup-buckets
+
+# 2. Destroy the CloudFormation stack
+cdk destroy
+
+# 3. (Optional) Clean up any remaining AWS resources manually
+```
+
+**Note**: The cleanup script requires the same environment variables (`CDK_DEFAULT_ACCOUNT`, `CDK_DEFAULT_REGION`) used for deployment.
+
+
 ## Development
 
 For detailed development information, see [doc/DEVELOP.md](doc/DEVELOP.md).
@@ -242,10 +286,12 @@ npm run lint       # Run ESLint and fix issues automatically
 
 #### AWS Operations
 ```bash
-npm run cdk        # Deploy stack (runs tests, deploys, sends event, shows logs)
-npm run event      # Send manual merge event
-npm run logs       # Monitor Lambda logs
-npm run outputs    # Show CloudFormation stack outputs
+npm run cdk                      # Deploy stack (runs tests, deploys, sends event, shows logs)
+npm run event                    # Send manual merge event
+npm run logs                     # Monitor Lambda logs
+npm run outputs                  # Show CloudFormation stack outputs
+npm run cleanup-buckets          # Delete both buckets and all contents
+npm run cleanup-buckets:contents # Delete only bucket contents (preserve buckets)
 ```
 
 ## Appendix: S3 Table Buckets
