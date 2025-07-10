@@ -9,14 +9,6 @@ on:
       - 'package.json'
       - 'tsconfig.json'
       - '.github/workflows/**'
-  pull_request:
-    branches: [main, deploy]
-    paths:
-      - 'lib/**'
-      - 'bin/**'
-      - 'package.json'
-      - 'tsconfig.json'
-      - '.github/workflows/**'
   release:
     types: [published]
   workflow_dispatch:
@@ -65,7 +57,7 @@ jobs:
           else
             COMMIT_SHA=$(git rev-parse --short HEAD)
             TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-            VERSION="pr-${{ github.event.number }}-${TIMESTAMP}-${COMMIT_SHA}"
+            VERSION="manual-${TIMESTAMP}-${COMMIT_SHA}"
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Generated version: ${VERSION}"

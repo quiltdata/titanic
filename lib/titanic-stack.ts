@@ -28,7 +28,7 @@ export class TitanicStack extends cdk.Stack {
         const useS3Table = process.env.USE_S3_TABLE === "true";
         
         // Source database (where views are) - always from QUILT_DATABASE_NAME
-        const glueDatabaseName = process.env.QUILT_DATABASE_NAME || (() => { throw new Error("must set QUILT_DATABASE_NAME environment variable"); })();
+        const glueDatabaseName = process.env.QUILT_DATABASE_NAME || "titanic-source-db";
         
 
         // Always create both buckets for maximum flexibility

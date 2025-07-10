@@ -2,13 +2,14 @@
 
 set -euo pipefail
 
-# Default values
-STACK_NAME="titanic-ml-pipeline"
-AWS_REGION="${AWS_DEFAULT_REGION:-us-east-2}"
-USE_S3_TABLES="${USE_S3_TABLES:-false}"
-GLUE_DB="${GLUE_DATABASE_NAME:-titanic-glue-db}"
-S3TABLE_DB="${S3TABLE_DATABASE_NAME:-titanic-s3table-db}"
-QUILT_DOMAIN="${QUILT_CATALOG_DOMAIN:-stable.quilttest.com}"
+# Required values that MUST be provided for production deployment
+STACK_NAME=""
+AWS_REGION="${AWS_DEFAULT_REGION:-}"
+USE_S3_TABLES="${USE_S3_TABLES:-}"
+GLUE_DB="${GLUE_DATABASE_NAME:-}"
+S3TABLE_DB="${S3TABLE_DATABASE_NAME:-}"
+QUILT_DOMAIN="${QUILT_CATALOG_DOMAIN:-}"
+LAMBDA_BUCKET=""
 AUTO_APPROVE="false"
 
 # Colors
@@ -27,24 +28,31 @@ Usage: $0 [OPTIONS]
 
 Deploy Titanic ML Pipeline using Terraform.
 
+IMPORTANT: This script requires production values and will NOT use template defaults.
+Set environment variables or use command-line arguments to specify all required values.
+
+Required Arguments:
+    --stack-name NAME          Resource name prefix
+    --lambda-bucket BUCKET     S3 bucket containing Lambda deployment package
+
 Optional Arguments:
-    --stack-name NAME          Resource name prefix (default: $STACK_NAME)
-    --region REGION            AWS region (default: $AWS_REGION)
-    --use-s3-tables            Enable S3 Tables instead of Glue Tables
-    --glue-db NAME             Glue database name (default: $GLUE_DB)
-    --s3table-db NAME          S3 Tables database name (default: $S3TABLE_DB)
-    --quilt-domain DOMAIN      Quilt catalog domain (default: $QUILT_DOMAIN)
+    --region REGION            AWS region (default: from AWS_DEFAULT_REGION)
+    --use-s3-tables            Enable S3 Tables instead of Glue Tables (default: false)
+    --glue-db NAME             Glue database name (default: from GLUE_DATABASE_NAME)
+    --s3table-db NAME          S3 Tables database name (default: from S3TABLE_DATABASE_NAME)
+    --quilt-domain DOMAIN      Quilt catalog domain (default: from QUILT_CATALOG_DOMAIN)
     --auto-approve             Skip interactive approval
     --help                     Show this help message
 
 Examples:
-    # Deploy with defaults
-    $0
+    # Deploy with command line arguments
+    $0 --stack-name prod-titanic --lambda-bucket my-lambda-bucket \\
+       --glue-db prod-source-db --quilt-domain prod.company.com
 
-    # Deploy with custom settings
-    $0 --stack-name my-titanic --use-s3-tables --auto-approve
+    # Deploy with auto-approve
+    $0 --stack-name prod-titanic --lambda-bucket my-lambda-bucket --auto-approve
 
-    # Destroy infrastructure
+    # Destroy infrastructure  
     $0 destroy --auto-approve
 EOF
 }

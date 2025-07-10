@@ -134,6 +134,11 @@ setup_isolated_environment() {
                   --exclude='test-results' \
                   "$PROJECT_ROOT/" "$TEST_WORKSPACE/"
         
+        # Preserve essential environment variables for CDK (handle unset variables safely)
+        PRESERVED_QUILT_DATABASE_NAME="${QUILT_DATABASE_NAME:-}"
+        PRESERVED_QUILT_CATALOG_DOMAIN="${QUILT_CATALOG_DOMAIN:-}"
+        PRESERVED_USE_S3_TABLE="${USE_S3_TABLE:-}"
+        
         # Clear problematic environment variables that might affect build
         unset AWS_PROFILE
         unset AWS_ACCESS_KEY_ID
@@ -146,6 +151,11 @@ setup_isolated_environment() {
         export CI=true
         export NODE_ENV=production
         export HOME="$TEST_WORKSPACE"
+        
+        # Restore essential environment variables (use defaults if not set)
+        export QUILT_DATABASE_NAME="${PRESERVED_QUILT_DATABASE_NAME:-titanic-source-db}"
+        export QUILT_CATALOG_DOMAIN="${PRESERVED_QUILT_CATALOG_DOMAIN:-stable.quilttest.com}"
+        export USE_S3_TABLE="${PRESERVED_USE_S3_TABLE:-false}"
         
         # Update PROJECT_ROOT to point to isolated environment
         PROJECT_ROOT="$TEST_WORKSPACE"
@@ -282,6 +292,167 @@ validate_artifacts() {
     log_success "Artifact validation passed"
 }
 
+# Validate template defaults and deploy script requirements
+validate_template_and_deploy() {
+    log_step "Validating template defaults and deploy script requirements..."
+    cd "$PROJECT_ROOT/artifacts"
+    
+    local version_dir=""
+    if [[ -d "cloudformation-${VERSION}" ]]; then
+        version_dir="cloudformation-${VERSION}"
+    else
+        log_error "CloudFormation artifacts not found"
+        return 1
+    fi
+    
+    cd "$version_dir"
+    
+    # Test 1: Validate template has proper defaults
+    log_info "Testing CloudFormation template defaults..."
+    local template_defaults_test=$(mktemp)
+    
+    # Extract parameter defaults from template
+    python3 -c "
+import yaml
+import sys
+
+with open('template.yaml', 'r') as f:
+    template = yaml.safe_load(f)
+
+parameters = template.get('Parameters', {})
+defaults = {}
+for param, config in parameters.items():
+    if 'Default' in config:
+        defaults[param] = config['Default']
+
+# Check that all expected defaults exist
+expected_defaults = {
+    'UseS3Tables': 'false',
+    'GlueDatabaseName': 'titanic-glue-db', 
+    'S3TableDatabaseName': 'titanic-s3table-db',
+    'QuiltCatalogDomain': 'stable.quilttest.com',
+    'LambdaCodeBucket': 'titanic-lambda-deployments',
+    'LambdaCodeKey': 'lambda-package.zip'
+}
+
+missing_defaults = []
+for param, expected_value in expected_defaults.items():
+    if param not in defaults:
+        missing_defaults.append(f'{param} (no default)')
+    elif defaults[param] != expected_value:
+        missing_defaults.append(f'{param} (expected {expected_value}, got {defaults[param]})')
+
+if missing_defaults:
+    print('FAIL: Missing or incorrect template defaults:')
+    for missing in missing_defaults:
+        print(f'  - {missing}')
+    sys.exit(1)
+else:
+    print('PASS: All template defaults are correct')
+" 2>&1 | tee "$template_defaults_test"
+    
+    if grep -q "FAIL" "$template_defaults_test"; then
+        log_error "Template defaults validation failed"
+        cat "$template_defaults_test"
+        rm -f "$template_defaults_test"
+        return 1
+    fi
+    
+    # Test 2: Validate deploy script rejects dummy defaults
+    log_info "Testing deploy script rejects template defaults..."
+    local deploy_test_output=$(mktemp)
+    
+    # Should fail when using dummy defaults
+    if ./deploy.sh --stack-name test-stack --lambda-bucket titanic-lambda-deployments 2>&1 | tee "$deploy_test_output"; then
+        log_error "Deploy script should have rejected dummy default 'titanic-lambda-deployments'"
+        cat "$deploy_test_output"
+        rm -f "$deploy_test_output"
+        return 1
+    fi
+    
+    if ! grep -q "cannot use template default value" "$deploy_test_output"; then
+        log_error "Deploy script failed but didn't show expected error message"
+        cat "$deploy_test_output"
+        rm -f "$deploy_test_output"
+        return 1
+    fi
+    
+    # Test 3: Validate deploy script requires all parameters
+    log_info "Testing deploy script requires all parameters..."
+    local missing_params_output=$(mktemp)
+    
+    if ./deploy.sh 2>&1 | tee "$missing_params_output"; then
+        log_error "Deploy script should have failed due to missing required parameters"
+        cat "$missing_params_output"
+        rm -f "$missing_params_output"
+        return 1
+    fi
+    
+    if ! grep -q "stack-name is required" "$missing_params_output"; then
+        log_error "Deploy script should require --stack-name parameter"
+        cat "$missing_params_output"
+        rm -f "$missing_params_output"
+        return 1
+    fi
+    
+    if ! grep -q "lambda-bucket is required" "$missing_params_output"; then
+        log_error "Deploy script should require --lambda-bucket parameter"
+        cat "$missing_params_output"
+        rm -f "$missing_params_output"
+        return 1
+    fi
+    
+    # Test 4: Validate deploy script accepts production values
+    log_info "Testing deploy script accepts production values..."
+    local prod_test_output=$(mktemp)
+    
+    # Mock the AWS CLI for testing (dry run)
+    export AWS_CLI_MOCK=true
+    cat > aws << 'EOF'
+#!/bin/bash
+case "$1" in
+    "sts")
+        if [[ "$2" == "get-caller-identity" ]]; then
+            echo '{"Account":"123456789012","Arn":"arn:aws:iam::123456789012:user/test","UserId":"test"}'
+        fi
+        ;;
+    "cloudformation")
+        if [[ "$2" == "deploy" ]]; then
+            echo "Mock: CloudFormation deployment successful"
+        elif [[ "$2" == "describe-stacks" ]]; then
+            echo "Mock: Stack outputs"
+        fi
+        ;;
+esac
+EOF
+    chmod +x aws
+    export PATH="$PWD:$PATH"
+    
+    # This should succeed with production values
+    if ! ./deploy.sh --stack-name prod-titanic \
+                    --lambda-bucket prod-lambda-deployments \
+                    --glue-db prod-source-db \
+                    --quilt-domain prod.company.com 2>&1 | tee "$prod_test_output"; then
+        log_error "Deploy script should accept valid production values"
+        cat "$prod_test_output"
+        rm -f aws "$prod_test_output"
+        return 1
+    fi
+    
+    if ! grep -q "Mock: CloudFormation deployment successful" "$prod_test_output"; then
+        log_error "Deploy script didn't reach CloudFormation deployment"
+        cat "$prod_test_output"
+        rm -f aws "$prod_test_output"
+        return 1
+    fi
+    
+    # Cleanup
+    rm -f aws "$template_defaults_test" "$deploy_test_output" "$missing_params_output" "$prod_test_output"
+    unset AWS_CLI_MOCK
+    
+    log_success "Template defaults and deploy script validation passed!"
+}
+
 # Create distribution packages
 create_distribution_packages() {
     log_step "Creating distribution packages..."
@@ -393,6 +564,7 @@ main() {
     generate_templates
     package_artifacts
     validate_artifacts
+    validate_template_and_deploy
     create_distribution_packages
     show_results
 }
