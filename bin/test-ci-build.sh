@@ -14,6 +14,10 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# Create isolated test environment
+ISOLATED_ENV="${ISOLATED_ENV:-true}"
+TEST_WORKSPACE=""
+
 # Default values
 VERSION="${VERSION:-test-$(date +%Y%m%d-%H%M%S)-$(git rev-parse --short HEAD 2>/dev/null || echo 'local')}"
 CLEAN_START="true"
@@ -39,20 +43,29 @@ Optional Arguments:
     --no-clean                  Don't clean existing outputs before starting
     --skip-tests                Skip running tests
     --skip-validation           Skip artifact validation
+    --isolated                  Use isolated environment (default: true)
+    --no-isolated               Use current directory (faster, less realistic)
+    --workspace DIR             Use specific workspace directory
     --help                      Show this help message
 
 Examples:
-    # Full CI/CD pipeline simulation
+    # Full CI/CD pipeline simulation (isolated environment)
     $0
 
-    # Test with custom version
+    # Test with custom version in isolated environment
     $0 --version v1.0.0-rc1
 
-    # Quick test without cleaning
+    # Quick test without cleaning (still isolated)
     $0 --no-clean --skip-validation
 
-    # Fast iteration (skip tests and validation)
-    $0 --skip-tests --skip-validation
+    # Fast iteration in current directory (not isolated)
+    $0 --no-isolated --skip-tests --skip-validation
+    
+    # Use specific workspace directory
+    $0 --workspace /tmp/my-test-workspace
+    
+    # Debug mode - run in current directory with all steps
+    $0 --no-isolated --no-clean
 EOF
 }
 
@@ -76,6 +89,19 @@ parse_args() {
                 SKIP_VALIDATION="true"
                 shift
                 ;;
+            --isolated)
+                ISOLATED_ENV="true"
+                shift
+                ;;
+            --no-isolated)
+                ISOLATED_ENV="false"
+                shift
+                ;;
+            --workspace)
+                TEST_WORKSPACE="$2"
+                ISOLATED_ENV="false"
+                shift 2
+                ;;
             --help)
                 usage
                 exit 0
@@ -87,6 +113,59 @@ parse_args() {
                 ;;
         esac
     done
+}
+
+# Create isolated test environment
+setup_isolated_environment() {
+    if [[ "$ISOLATED_ENV" == "true" ]]; then
+        log_step "Setting up isolated test environment..."
+        
+        # Create temporary workspace
+        TEST_WORKSPACE=$(mktemp -d -t titanic-ci-test-XXXXXX)
+        log_info "Created isolated workspace: $TEST_WORKSPACE"
+        
+        # Copy source files (excluding outputs and dependencies)
+        rsync -av --exclude='node_modules' \
+                  --exclude='cdk.out' \
+                  --exclude='artifacts' \
+                  --exclude='dist' \
+                  --exclude='coverage' \
+                  --exclude='.git' \
+                  --exclude='test-results' \
+                  "$PROJECT_ROOT/" "$TEST_WORKSPACE/"
+        
+        # Clear problematic environment variables that might affect build
+        unset AWS_PROFILE
+        unset AWS_ACCESS_KEY_ID
+        unset AWS_SECRET_ACCESS_KEY
+        unset AWS_SESSION_TOKEN
+        unset CDK_DEFAULT_ACCOUNT
+        unset CDK_DEFAULT_REGION
+        
+        # Set minimal CI-like environment
+        export CI=true
+        export NODE_ENV=production
+        export HOME="$TEST_WORKSPACE"
+        
+        # Update PROJECT_ROOT to point to isolated environment
+        PROJECT_ROOT="$TEST_WORKSPACE"
+        
+        log_success "Isolated environment ready"
+    elif [[ -n "$TEST_WORKSPACE" ]]; then
+        log_step "Using specified workspace: $TEST_WORKSPACE"
+        PROJECT_ROOT="$TEST_WORKSPACE"
+    else
+        log_info "Using current directory (--no-isolated specified)"
+    fi
+}
+
+# Clean up isolated environment
+cleanup_isolated_environment() {
+    if [[ "$ISOLATED_ENV" == "true" && -n "$TEST_WORKSPACE" && -d "$TEST_WORKSPACE" ]]; then
+        log_step "Cleaning up isolated environment..."
+        rm -rf "$TEST_WORKSPACE"
+        log_success "Isolated environment cleaned up"
+    fi
 }
 
 # Clean previous outputs
@@ -142,7 +221,16 @@ check_prerequisites() {
 install_dependencies() {
     log_step "Installing dependencies..."
     cd "$PROJECT_ROOT"
-    npm ci
+    
+    # Use npm ci for clean, reproducible installs (like CI environments)
+    if [[ "$ISOLATED_ENV" == "true" ]]; then
+        # Remove package-lock.json to ensure fresh resolution
+        rm -f package-lock.json
+        npm install --production=false
+    else
+        npm ci
+    fi
+    
     log_success "Dependencies installed"
 }
 
@@ -155,6 +243,8 @@ run_tests() {
     
     log_step "Running tests..."
     cd "$PROJECT_ROOT"
+    
+    # Use direct npm test instead of npm script to avoid inheritance issues
     npm test
     log_success "Tests passed"
 }
@@ -163,7 +253,9 @@ run_tests() {
 generate_templates() {
     log_step "Generating infrastructure templates and Lambda package..."
     cd "$PROJECT_ROOT"
-    npm run deploy:templates
+    
+    # Call script directly instead of through npm
+    "$PROJECT_ROOT/bin/generate-templates.sh"
     log_success "Templates generated in cdk.out/"
 }
 
@@ -171,7 +263,9 @@ generate_templates() {
 package_artifacts() {
     log_step "Packaging deployment artifacts..."
     cd "$PROJECT_ROOT"
-    npm run deploy:package -- --version "$VERSION"
+    
+    # Call script directly instead of through npm
+    "$PROJECT_ROOT/bin/package-artifacts.sh" --version "$VERSION"
     log_success "Artifacts packaged in artifacts/"
 }
 
@@ -256,14 +350,20 @@ show_results() {
 
 # Handle script interruption
 cleanup_on_exit() {
-    if [[ $? -ne 0 ]]; then
+    local exit_code=$?
+    
+    # Clean up isolated environment if it exists
+    cleanup_isolated_environment
+    
+    if [[ $exit_code -ne 0 ]]; then
         log_error "CI/CD pipeline simulation failed!"
         echo
         echo -e "${YELLOW}💡 Tips for debugging:${NC}"
         echo "  - Check the error messages above"
         echo "  - Try with --skip-tests or --skip-validation for faster iteration"
         echo "  - Use --no-clean to preserve intermediate outputs"
-        echo "  - Run individual npm scripts (deploy:templates, deploy:package, etc.)"
+        echo "  - Use --no-isolated to run in current directory for debugging"
+        echo "  - Run individual scripts directly: bin/generate-templates.sh, bin/package-artifacts.sh, etc."
     fi
 }
 
@@ -278,6 +378,14 @@ main() {
     echo -e "${CYAN}==========================================${NC}"
     echo
     
+    if [[ "$ISOLATED_ENV" == "true" ]]; then
+        echo -e "${CYAN}🔒 Running in isolated environment${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Running in current directory${NC}"
+    fi
+    echo
+    
+    setup_isolated_environment
     cleanup_previous
     check_prerequisites
     install_dependencies

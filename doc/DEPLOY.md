@@ -112,6 +112,121 @@ export S3TABLE_DATABASE_NAME=my-target-db    # Target database name
 export QUILT_CATALOG_DOMAIN=my.quilt.domain  # Quilt catalog domain
 ```
 
+## 🔧 CloudFormation Parameter Overrides
+
+### Available Parameters
+
+The CloudFormation template accepts the following parameters with sensible defaults:
+
+| Parameter | Default Value | Description |
+|-----------|---------------|-------------|
+| `UseS3Tables` | `false` | Enable S3 Tables instead of Glue Tables |
+| `GlueDatabaseName` | `titanic-glue-db` | Source Glue database name for reading data |
+| `S3TableDatabaseName` | `titanic-s3table-db` | Target S3 Tables database name for writing |
+| `QuiltCatalogDomain` | `stable.quilttest.com` | Quilt catalog domain |
+| `LambdaCodeBucket` | `titanic-lambda-deployments` | S3 bucket containing the Lambda deployment package |
+| `LambdaCodeKey` | `lambda-package.zip` | S3 key for the Lambda deployment package |
+
+### Override Examples
+
+**Using AWS CLI:**
+```bash
+aws cloudformation create-stack \
+  --stack-name my-titanic-pipeline \
+  --template-body file://template.yaml \
+  --parameters \
+    ParameterKey=UseS3Tables,ParameterValue=true \
+    ParameterKey=GlueDatabaseName,ParameterValue=my-source-db \
+    ParameterKey=LambdaCodeBucket,ParameterValue=my-deployment-bucket \
+  --capabilities CAPABILITY_IAM
+```
+
+**Using Parameter Files:**
+Create a `parameters.json` file:
+```json
+[
+  {
+    "ParameterKey": "UseS3Tables",
+    "ParameterValue": "true"
+  },
+  {
+    "ParameterKey": "GlueDatabaseName", 
+    "ParameterValue": "production-glue-db"
+  },
+  {
+    "ParameterKey": "QuiltCatalogDomain",
+    "ParameterValue": "prod.mycompany.com"
+  },
+  {
+    "ParameterKey": "LambdaCodeBucket",
+    "ParameterValue": "my-lambda-deployments"
+  }
+]
+```
+
+Then deploy:
+```bash
+aws cloudformation create-stack \
+  --stack-name my-titanic-pipeline \
+  --template-body file://template.yaml \
+  --parameters file://parameters.json \
+  --capabilities CAPABILITY_IAM
+```
+
+**Using Environment Variables (via deploy.sh):**
+```bash
+export USE_S3_TABLES=true
+export GLUE_DATABASE_NAME=production-db
+export QUILT_CATALOG_DOMAIN=prod.mycompany.com
+export LAMBDA_CODE_BUCKET=my-deployment-bucket
+
+./deploy.sh --stack-name my-production-pipeline
+```
+
+### Quick Start with Defaults
+
+For testing or demo purposes, you can deploy with all defaults:
+
+```bash
+# 1. Upload the Lambda package to the default bucket
+aws s3 cp lambda-package.zip s3://titanic-lambda-deployments/
+
+# 2. Deploy with defaults
+aws cloudformation create-stack \
+  --stack-name test-titanic-pipeline \
+  --template-body file://template.yaml \
+  --capabilities CAPABILITY_IAM
+```
+
+**Important:** You must upload the Lambda package (`lambda-package.zip`) to your S3 bucket before deployment. The template cannot create Lambda functions without the deployment package.
+
+### Environment-Specific Configurations
+
+**Development Environment:**
+```bash
+aws cloudformation create-stack \
+  --stack-name titanic-dev \
+  --template-body file://template.yaml \
+  --parameters \
+    ParameterKey=GlueDatabaseName,ParameterValue=dev-glue-db \
+    ParameterKey=QuiltCatalogDomain,ParameterValue=dev.quilt.company.com \
+  --capabilities CAPABILITY_IAM
+```
+
+**Production Environment:**
+```bash
+aws cloudformation create-stack \
+  --stack-name titanic-prod \
+  --template-body file://template.yaml \
+  --parameters \
+    ParameterKey=UseS3Tables,ParameterValue=true \
+    ParameterKey=GlueDatabaseName,ParameterValue=prod-glue-db \
+    ParameterKey=S3TableDatabaseName,ParameterValue=prod-s3table-db \
+    ParameterKey=QuiltCatalogDomain,ParameterValue=prod.quilt.company.com \
+    ParameterKey=LambdaCodeBucket,ParameterValue=prod-lambda-deployments \
+  --capabilities CAPABILITY_IAM
+```
+
 ## Developer Workflows
 
 ### Testing the Pipeline
