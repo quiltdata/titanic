@@ -41,8 +41,8 @@ export async function handler(
         targetBucket
     );
 
-    const results = await tableManager.ensureExists();
-    console.log("TableManager ensureExists results:", results);
+    const results = await tableManager.createTables();
+    console.log("TableManager createTables results:", results);
 
     const allTables = await athenaUtils.getAllTables(sourceDatabaseName);
     const buckets = selectBuckets(allTables, sourceBucket);

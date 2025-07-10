@@ -219,15 +219,17 @@ When destroying the Titanic stack, you may need to manually clean up the buckets
 
 The project provides cleanup scripts to handle this:
 
-#### Full Cleanup (Delete Buckets and Contents)
+#### Full Cleanup (Delete Buckets then destroy stack)
 ```bash
-npm run cleanup-buckets
+npm run destroy
 ```
 
 #### Contents-Only Cleanup (Preserve Empty Buckets)
 ```bash
-npm run cleanup-buckets:contents
+npm run destroy:buckets:contents
 ```
+
+**Note**: The cleanup script requires the same environment variables (`CDK_DEFAULT_ACCOUNT`, `CDK_DEFAULT_REGION`) used for deployment.
 
 #### When Cleanup is Required
 
@@ -240,19 +242,6 @@ npm run cleanup-buckets:contents
 - **S3 Bucket**: Removes all Iceberg table files, metadata, and versioned objects
 - **S3 Tables Bucket**: Deletes all tables, namespaces, and the bucket itself
 
-#### Typical Destruction Workflow
-
-```bash
-# 1. Clean up bucket contents
-npm run cleanup-buckets
-
-# 2. Destroy the CloudFormation stack
-cdk destroy
-
-# 3. (Optional) Clean up any remaining AWS resources manually
-```
-
-**Note**: The cleanup script requires the same environment variables (`CDK_DEFAULT_ACCOUNT`, `CDK_DEFAULT_REGION`) used for deployment.
 
 
 ## Development

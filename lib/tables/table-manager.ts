@@ -63,6 +63,7 @@ export class TableManager {
 
     /**
      * Execute a query type on all target tables
+     * Handles all errors gracefully, including "table already exists" for create operations
      */
     async execute(type: 'create' | 'insert' | 'drop', packagesView?: string, objectsView?: string): Promise<{ successfulTables: number; failedTables: number; totalQueries: number }> {
         let totalQueries = 0;
@@ -76,23 +77,36 @@ export class TableManager {
                 const query = table.query(type, packagesView, objectsView);
                 const result = await this.athenaUtils.executeQuery(query);
                 totalQueries++;
+                
                 if (result.success) {
+                    console.log(`✅ ${type} successful: ${table.tableName}`);
+                    successfulTables++;
+                    successfulTableNames.push(table.tableName);
+                } else if (type === 'create' && this.isTableAlreadyExistsError(result.error)) {
+                    console.log(`✅ Table already exists: ${table.tableName}`);
                     successfulTables++;
                     successfulTableNames.push(table.tableName);
                 } else {
+                    console.error(`❌ ${type} failed for ${table.tableName}:`, result.error);
                     failedTables++;
                     failedTableNames.push(table.tableName);
-                    console.error(`Query execution failed for ${type} on ${table.tableName}:`, result.error);
                 }
             } catch (error) {
                 const err = error as Error;
                 totalQueries++;
-                failedTables++;
-                failedTableNames.push(table.tableName);
-                console.error(`Failed to execute ${type} on ${table.tableName}:`, {
-                    error: err.message,
-                    isS3AccessError: this.isS3AccessError(err),
-                });
+                
+                if (type === 'create' && this.isTableAlreadyExistsError(err.message)) {
+                    console.log(`✅ Table already exists: ${table.tableName}`);
+                    successfulTables++;
+                    successfulTableNames.push(table.tableName);
+                } else {
+                    console.error(`❌ Failed to execute ${type} on ${table.tableName}:`, {
+                        error: err.message,
+                        isS3AccessError: this.isS3AccessError(err),
+                    });
+                    failedTables++;
+                    failedTableNames.push(table.tableName);
+                }
             }
         }
 
@@ -107,40 +121,18 @@ export class TableManager {
         return { successfulTables, failedTables, totalQueries };
     }
 
+
+
     /**
-     * Ensure all managed tables exist: check existence, log, and create if necessary
-     * Returns { successfulTables, failedTables, totalQueries }
+     * Check if an error indicates the table already exists
      */
-    public async ensureExists(): Promise<{ successfulTables: number; failedTables: number; totalQueries: number }> {
-        let successfulTables = 0;
-        let failedTables = 0;
-        let totalQueries = 0;
-        for (const table of this.targetTables) {
-            try {
-                const exists = await table.tableExists(this.athenaUtils);
-                totalQueries++;
-                if (exists) {
-                    console.log(`✅ Table exists: ${table.tableName}`);
-                    successfulTables++;
-                } else {
-                    console.log(`⚠️  Table does not exist, creating: ${table.tableName}`);
-                    const createResult = await this.athenaUtils.executeQuery(table.query('create'));
-                    totalQueries++;
-                    if (createResult.success) {
-                        console.log(`✅ Table created: ${table.tableName}`);
-                        successfulTables++;
-                    } else {
-                        console.error(`❌ Failed to create table: ${table.tableName}`, createResult.error);
-                        failedTables++;
-                    }
-                }
-            } catch (err) {
-                console.error(`❌ Error ensuring table ${table.tableName}:`, err);
-                failedTables++;
-                totalQueries++;
-            }
-        }
-        return { successfulTables, failedTables, totalQueries };
+    private isTableAlreadyExistsError(errorMessage?: string): boolean {
+        if (!errorMessage) return false;
+        const lowerMessage = errorMessage.toLowerCase();
+        return lowerMessage.includes('table already exists') ||
+               lowerMessage.includes('already exists') ||
+               lowerMessage.includes('duplicate table') ||
+               lowerMessage.includes('table_already_exists');
     }
 
     /**
