@@ -7,8 +7,6 @@ STACK_NAME=""
 AWS_REGION="${AWS_DEFAULT_REGION:-}"
 USE_S3_TABLES="${USE_S3_TABLES:-}"
 GLUE_DB="${GLUE_DATABASE_NAME:-}"
-S3TABLE_DB="${S3TABLE_DATABASE_NAME:-}"
-QUILT_DOMAIN="${QUILT_CATALOG_DOMAIN:-}"
 LAMBDA_BUCKET=""
 AUTO_APPROVE="false"
 
@@ -39,15 +37,13 @@ Optional Arguments:
     --region REGION            AWS region (default: from AWS_DEFAULT_REGION)
     --use-s3-tables            Enable S3 Tables instead of Glue Tables (default: false)
     --glue-db NAME             Glue database name (default: from GLUE_DATABASE_NAME)
-    --s3table-db NAME          S3 Tables database name (default: from S3TABLE_DATABASE_NAME)
-    --quilt-domain DOMAIN      Quilt catalog domain (default: from QUILT_CATALOG_DOMAIN)
     --auto-approve             Skip interactive approval
     --help                     Show this help message
 
 Examples:
     # Deploy with command line arguments
     $0 --stack-name prod-titanic --lambda-bucket my-lambda-bucket \\
-       --glue-db prod-source-db --quilt-domain prod.company.com
+       --glue-db prod-source-db
 
     # Deploy with auto-approve
     $0 --stack-name prod-titanic --lambda-bucket my-lambda-bucket --auto-approve
@@ -79,14 +75,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --glue-db)
             GLUE_DB="$2"
-            shift 2
-            ;;
-        --s3table-db)
-            S3TABLE_DB="$2"
-            shift 2
-            ;;
-        --quilt-domain)
-            QUILT_DOMAIN="$2"
             shift 2
             ;;
         --auto-approve)
@@ -138,8 +126,6 @@ stack_name = "$STACK_NAME"
 aws_region = "$AWS_REGION"
 use_s3_tables = $USE_S3_TABLES
 glue_database_name = "$GLUE_DB"
-s3table_database_name = "$S3TABLE_DB"
-quilt_catalog_domain = "$QUILT_DOMAIN"
 TFVARS
 
 if [[ "$ACTION" == "apply" ]]; then

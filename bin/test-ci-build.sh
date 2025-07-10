@@ -136,7 +136,6 @@ setup_isolated_environment() {
         
         # Preserve essential environment variables for CDK (handle unset variables safely)
         PRESERVED_QUILT_DATABASE_NAME="${QUILT_DATABASE_NAME:-}"
-        PRESERVED_QUILT_CATALOG_DOMAIN="${QUILT_CATALOG_DOMAIN:-}"
         PRESERVED_USE_S3_TABLE="${USE_S3_TABLE:-}"
         
         # Clear problematic environment variables that might affect build
@@ -154,7 +153,6 @@ setup_isolated_environment() {
         
         # Restore essential environment variables (use defaults if not set)
         export QUILT_DATABASE_NAME="${PRESERVED_QUILT_DATABASE_NAME:-titanic-source-db}"
-        export QUILT_CATALOG_DOMAIN="${PRESERVED_QUILT_CATALOG_DOMAIN:-stable.quilttest.com}"
         export USE_S3_TABLE="${PRESERVED_USE_S3_TABLE:-false}"
         
         # Update PROJECT_ROOT to point to isolated environment
@@ -316,6 +314,18 @@ validate_template_and_deploy() {
 import yaml
 import sys
 
+# Add CloudFormation tag constructors to handle intrinsic functions
+def cloudformation_constructor(loader, tag_suffix, node):
+    if isinstance(node, yaml.ScalarNode):
+        return loader.construct_scalar(node)
+    elif isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node)
+    elif isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node)
+
+# Register constructors for CloudFormation intrinsic functions
+yaml.SafeLoader.add_multi_constructor('!', cloudformation_constructor)
+
 with open('template.yaml', 'r') as f:
     template = yaml.safe_load(f)
 
@@ -329,9 +339,6 @@ for param, config in parameters.items():
 expected_defaults = {
     'UseS3Tables': 'false',
     'GlueDatabaseName': 'titanic-glue-db', 
-    'S3TableDatabaseName': 'titanic-s3table-db',
-    'QuiltCatalogDomain': 'stable.quilttest.com',
-    'LambdaCodeBucket': 'titanic-lambda-deployments',
     'LambdaCodeKey': 'lambda-package.zip'
 }
 
@@ -431,8 +438,7 @@ EOF
     # This should succeed with production values
     if ! ./deploy.sh --stack-name prod-titanic \
                     --lambda-bucket prod-lambda-deployments \
-                    --glue-db prod-source-db \
-                    --quilt-domain prod.company.com 2>&1 | tee "$prod_test_output"; then
+                    --glue-db prod-source-db 2>&1 | tee "$prod_test_output"; then
         log_error "Deploy script should accept valid production values"
         cat "$prod_test_output"
         rm -f aws "$prod_test_output"

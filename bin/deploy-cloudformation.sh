@@ -3,13 +3,10 @@
 set -euo pipefail
 
 # Required values that MUST be provided for production deployment
-STACK_NAME=""
+STACK_NAME="${STACK_NAME:-titanic-ml-pipeline}"
 AWS_REGION="${AWS_DEFAULT_REGION:-}"
-USE_S3_TABLES="${USE_S3_TABLES:-}"
+USE_S3_TABLES="${USE_S3_TABLES:-false}"
 GLUE_DB="${GLUE_DATABASE_NAME:-}"
-S3TABLE_DB="${S3TABLE_DATABASE_NAME:-}"
-QUILT_DOMAIN="${QUILT_CATALOG_DOMAIN:-}"
-LAMBDA_BUCKET=""
 
 # Colors
 RED='\033[0;31m'
@@ -31,33 +28,32 @@ IMPORTANT: This script requires production values and will NOT use template defa
 Set environment variables or use command-line arguments to specify all required values.
 
 Required Arguments:
-    --stack-name NAME          CloudFormation stack name
-    --lambda-bucket BUCKET     S3 bucket containing Lambda deployment package
+    --region REGION            AWS region (or set AWS_DEFAULT_REGION)
+
+Required Environment Variables or Arguments:
+    --glue-db NAME             Source Glue database name (or set GLUE_DATABASE_NAME)
 
 Optional Arguments:
+    --stack-name NAME          CloudFormation stack name (default: titanic-ml-pipeline)
     --region REGION            AWS region (default: from AWS_DEFAULT_REGION)
     --use-s3-tables            Enable S3 Tables instead of Glue Tables (default: false)
     --glue-db NAME             Glue database name (default: from GLUE_DATABASE_NAME)
-    --s3table-db NAME          S3 Tables database name (default: from S3TABLE_DATABASE_NAME)
-    --quilt-domain DOMAIN      Quilt catalog domain (default: from QUILT_CATALOG_DOMAIN)
     --help                     Show this help message
 
 Environment Variables (alternative to command line):
     AWS_DEFAULT_REGION         AWS region
     GLUE_DATABASE_NAME         Source Glue database name
-    S3TABLE_DATABASE_NAME      Target S3 Tables database name
-    QUILT_CATALOG_DOMAIN       Quilt catalog domain
     USE_S3_TABLES              true/false for S3 Tables mode
 
 Examples:
     # Deploy with command line arguments
-    $0 --stack-name prod-titanic --lambda-bucket my-lambda-bucket \\
-       --glue-db prod-source-db --quilt-domain prod.company.com
+    $0 --stack-name prod-titanic --region us-west-2 \\
+       --glue-db prod-source-db
 
     # Deploy with environment variables
+    export AWS_DEFAULT_REGION=us-west-2
     export GLUE_DATABASE_NAME=prod-source-db
-    export QUILT_CATALOG_DOMAIN=prod.company.com
-    $0 --stack-name prod-titanic --lambda-bucket my-lambda-bucket
+    $0 --stack-name prod-titanic
 EOF
 }
 
@@ -84,14 +80,6 @@ while [[ $# -gt 0 ]]; do
             GLUE_DB="$2"
             shift 2
             ;;
-        --s3table-db)
-            S3TABLE_DB="$2"
-            shift 2
-            ;;
-        --quilt-domain)
-            QUILT_DOMAIN="$2"
-            shift 2
-            ;;
         --help)
             usage
             exit 0
@@ -113,27 +101,22 @@ validate_required_params() {
         errors+=("--stack-name is required")
     fi
     
-    if [[ -z "$LAMBDA_BUCKET" ]]; then
-        errors+=("--lambda-bucket is required")
+    if [[ -z "$AWS_REGION" ]]; then
+        errors+=("--region is required (or set AWS_DEFAULT_REGION)")
     fi
     
     # Set defaults for optional parameters if not provided
-    AWS_REGION="${AWS_REGION:-us-east-2}"
     USE_S3_TABLES="${USE_S3_TABLES:-false}"
     GLUE_DB="${GLUE_DB:-titanic-source-db}"
-    S3TABLE_DB="${S3TABLE_DB:-titanic-s3table-db}"
-    QUILT_DOMAIN="${QUILT_DOMAIN:-stable.quilttest.com}"
     
     # Validate against dummy/template defaults - MUST NOT be used in production
     local dummy_defaults=(
         "titanic-source-db"
-        "titanic-s3table-db" 
-        "stable.quilttest.com"
         "titanic-lambda-deployments"
     )
     
     for dummy in "${dummy_defaults[@]}"; do
-        if [[ "$GLUE_DB" == "$dummy" || "$S3TABLE_DB" == "$dummy" || "$QUILT_DOMAIN" == "$dummy" || "$LAMBDA_BUCKET" == "$dummy" ]]; then
+        if [[ "$GLUE_DB" == "$dummy" || "$LAMBDA_BUCKET" == "$dummy" ]]; then
             errors+=("Production deployment cannot use template default value: '$dummy'. Please specify a real production value.")
         fi
     done
@@ -178,8 +161,6 @@ aws cloudformation deploy \
     --parameter-overrides \
         UseS3Tables="$USE_S3_TABLES" \
         GlueDatabaseName="$GLUE_DB" \
-        S3TableDatabaseName="$S3TABLE_DB" \
-        QuiltCatalogDomain="$QUILT_DOMAIN" \
         LambdaCodeBucket="$LAMBDA_BUCKET"
 
 log_success "CloudFormation deployment completed!"

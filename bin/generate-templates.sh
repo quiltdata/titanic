@@ -52,8 +52,6 @@ Note:
 Environment Variables:
     USE_S3_TABLES          Enable S3 Tables (default: false)
     GLUE_DATABASE_NAME     Source Glue database name
-    S3TABLE_DATABASE_NAME  Target S3 Tables database name
-    QUILT_CATALOG_DOMAIN   Quilt catalog domain
 EOF
 }
 
@@ -221,216 +219,19 @@ build_lambda() {
 
 # Generate CloudFormation template
 generate_cloudformation() {
-    log_info "Generating CloudFormation template..."
+    log_info "Copying CDK-generated CloudFormation template..."
 
     mkdir -p "$BUILD_DIR/cloudformation"
-
-    cat > "$BUILD_DIR/cloudformation/template.yaml" << 'EOF'
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Titanic ML Pipeline Infrastructure - One-Click Deploy'
-
-Parameters:
-  UseS3Tables:
-    Type: String
-    Default: 'false'
-    AllowedValues: ['true', 'false']
-    Description: 'Enable S3 Tables instead of Glue Tables'
-  
-  GlueDatabaseName:
-    Type: String
-    Default: 'titanic-glue-db'
-    Description: 'Source Glue database name for reading data'
-  
-  S3TableDatabaseName:
-    Type: String
-    Default: 'titanic-s3table-db'
-    Description: 'Target S3 Tables database name for writing'
-  
-  QuiltCatalogDomain:
-    Type: String
-    Default: 'stable.quilttest.com'
-    Description: 'Quilt catalog domain'
-  
-  LambdaCodeBucket:
-    Type: String
-    Description: 'S3 bucket containing the Lambda deployment package'
-  
-  LambdaCodeKey:
-    Type: String
-    Default: 'lambda-package.zip'
-    Description: 'S3 key for the Lambda deployment package'
-
-Resources:
-  # S3 Buckets
-  DataBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${AWS::StackName}-data-${AWS::AccountId}'
-      VersioningConfiguration:
-        Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
-  ResultsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${AWS::StackName}-results-${AWS::AccountId}'
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldQueryResults
-            Status: Enabled
-            ExpirationInDays: 30
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
-  # IAM Role for Lambda
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${AWS::StackName}-lambda-role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: TitanicLambdaPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                  - s3:DeleteObject
-                  - s3:ListBucket
-                Resource:
-                  - !GetAtt DataBucket.Arn
-                  - !Sub '${DataBucket.Arn}/*'
-                  - !GetAtt ResultsBucket.Arn
-                  - !Sub '${ResultsBucket.Arn}/*'
-              - Effect: Allow
-                Action:
-                  - athena:StartQueryExecution
-                  - athena:GetQueryExecution
-                  - athena:GetQueryResults
-                  - athena:StopQueryExecution
-                  - athena:GetWorkGroup
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - glue:GetTable
-                  - glue:GetTables
-                  - glue:GetDatabase
-                  - glue:GetDatabases
-                  - glue:CreateTable
-                  - glue:UpdateTable
-                  - glue:DeleteTable
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - s3tables:GetTable
-                  - s3tables:CreateTable
-                  - s3tables:UpdateTable
-                  - s3tables:DeleteTable
-                  - s3tables:ListTables
-                Resource: '*'
-
-  # Lambda Function
-  TitanicMergeFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub '${AWS::StackName}-merge-function'
-      Runtime: nodejs18.x
-      Handler: lib/merge-tables.handler
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Code:
-        S3Bucket: !Ref LambdaCodeBucket
-        S3Key: !Ref LambdaCodeKey
-      Environment:
-        Variables:
-          USE_S3_TABLE: !Ref UseS3Tables
-          GLUE_DATABASE_NAME: !Ref GlueDatabaseName
-          S3TABLE_DATABASE_NAME: !Ref S3TableDatabaseName
-          QUILT_CATALOG_DOMAIN: !Ref QuiltCatalogDomain
-          GLUE_TABLES_BUCKET_ARN: !GetAtt DataBucket.Arn
-          S3_TABLES_BUCKET_ARN: !GetAtt DataBucket.Arn
-          RESULTS_BUCKET: !Ref ResultsBucket
-      Timeout: 900
-      MemorySize: 1024
-
-  # EventBridge Rule
-  PackageUpdateRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub '${AWS::StackName}-package-updates'
-      Description: 'Trigger Titanic merge on package updates'
-      EventPattern:
-        source: ['quilt']
-        detail-type: ['Package Updated']
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt TitanicMergeFunction.Arn
-          Id: TitanicMergeTarget
-
-  # Permission for EventBridge to invoke Lambda
-  LambdaInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref TitanicMergeFunction
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt PackageUpdateRule.Arn
-
-  # Athena WorkGroup
-  AthenaWorkGroup:
-    Type: AWS::Athena::WorkGroup
-    Properties:
-      Name: !Sub '${AWS::StackName}-workgroup'
-      Description: 'WorkGroup for Titanic ML Pipeline queries'
-      WorkGroupConfiguration:
-        ResultConfiguration:
-          OutputLocation: !Sub 's3://${ResultsBucket}/athena-results/'
-        EnforceWorkGroupConfiguration: true
-        PublishCloudWatchMetrics: true
-
-Outputs:
-  LambdaFunctionArn:
-    Description: 'Titanic Merge Lambda Function ARN'
-    Value: !GetAtt TitanicMergeFunction.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-LambdaArn'
-  
-  DataBucketName:
-    Description: 'Data bucket name'
-    Value: !Ref DataBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-DataBucket'
-  
-  ResultsBucketName:
-    Description: 'Results bucket name'
-    Value: !Ref ResultsBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-ResultsBucket'
-  
-  AthenaWorkGroupName:
-    Description: 'Athena WorkGroup name'
-    Value: !Ref AthenaWorkGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-WorkGroup'
-EOF
-
-    log_success "CloudFormation template generated: $BUILD_DIR/cloudformation/template.yaml"
+    
+    # Copy the CDK-generated template
+    if [[ -f "$BUILD_DIR/TitanicStack.template.json" ]]; then
+        cp "$BUILD_DIR/TitanicStack.template.json" "$BUILD_DIR/cloudformation/template.json"
+        log_success "CloudFormation template copied: $BUILD_DIR/cloudformation/template.json"
+    else
+        log_error "CDK-generated template not found at $BUILD_DIR/TitanicStack.template.json"
+        log_error "Make sure CDK synth completed successfully"
+        exit 1
+    fi
 }
 
 # Generate Terraform template
@@ -606,8 +407,7 @@ resource "aws_lambda_function" "titanic_merge" {
     variables = {
       USE_S3_TABLE          = var.use_s3_tables
       GLUE_DATABASE_NAME    = var.glue_database_name
-      S3TABLE_DATABASE_NAME = var.s3table_database_name
-      QUILT_CATALOG_DOMAIN  = var.quilt_catalog_domain
+      S3TABLE_DATABASE_NAME = "titanic-s3table-db"
       GLUE_TABLES_BUCKET_ARN = aws_s3_bucket.data.arn
       S3_TABLES_BUCKET_ARN  = aws_s3_bucket.data.arn
       RESULTS_BUCKET        = aws_s3_bucket.results.bucket
@@ -684,18 +484,6 @@ variable "glue_database_name" {
   description = "Source Glue database name for reading data"
   type        = string
   default     = "titanic-glue-db"
-}
-
-variable "s3table_database_name" {
-  description = "Target S3 Tables database name for writing"
-  type        = string
-  default     = "titanic-s3table-db"
-}
-
-variable "quilt_catalog_domain" {
-  description = "Quilt catalog domain"
-  type        = string
-  default     = "stable.quilttest.com"
 }
 
 variable "lambda_code_bucket" {
@@ -778,8 +566,6 @@ deploy_cloudformation() {
         --parameter-overrides \
             UseS3Tables="${USE_S3_TABLES:-false}" \
             GlueDatabaseName="${GLUE_DATABASE_NAME:-titanic-glue-db}" \
-            S3TableDatabaseName="${S3TABLE_DATABASE_NAME:-titanic-s3table-db}" \
-            QuiltCatalogDomain="${QUILT_CATALOG_DOMAIN:-stable.quilttest.com}" \
             LambdaCodeBucket="$deployment_bucket" \
             LambdaCodeKey="lambda-package.zip"
     
@@ -815,8 +601,6 @@ stack_name              = "$STACK_NAME"
 aws_region             = "$AWS_REGION"
 use_s3_tables          = "${USE_S3_TABLES:-false}"
 glue_database_name     = "${GLUE_DATABASE_NAME:-titanic-glue-db}"
-s3table_database_name  = "${S3TABLE_DATABASE_NAME:-titanic-s3table-db}"
-quilt_catalog_domain   = "${QUILT_CATALOG_DOMAIN:-stable.quilttest.com}"
 lambda_code_bucket     = "$deployment_bucket"
 lambda_code_key        = "lambda-package.zip"
 EOF

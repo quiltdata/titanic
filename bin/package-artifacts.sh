@@ -188,8 +188,6 @@ aws cloudformation deploy \\
 
 - \`UseS3Tables\` - Enable S3 Tables instead of Glue Tables (default: false)
 - \`GlueDatabaseName\` - Source Glue database name (default: titanic-glue-db)
-- \`S3TableDatabaseName\` - Target S3 Tables database name (default: titanic-s3table-db)
-- \`QuiltCatalogDomain\` - Quilt catalog domain (default: stable.quilttest.com)
 
 ## Version
 
@@ -268,8 +266,6 @@ terraform destroy
 - \`aws_region\` - AWS region (default: us-east-2)
 - \`use_s3_tables\` - Enable S3 Tables instead of Glue Tables (default: false)
 - \`glue_database_name\` - Source Glue database name (default: titanic-glue-db)
-- \`s3table_database_name\` - Target S3 Tables database name (default: titanic-s3table-db)
-- \`quilt_catalog_domain\` - Quilt catalog domain (default: stable.quilttest.com)
 
 ## Version
 
