@@ -4,12 +4,18 @@ import { TitanicStack } from "../lib/titanic-stack";
 
 const app = new cdk.App();
 
-// Always pass the default database name - the stack will override if needed
-const databaseName = "quilt_titanic";
+// Ensure required environment variables are set
+if (!process.env.QUILT_DATABASE_NAME) {
+    throw new Error("Environment variable QUILT_DATABASE_NAME is not set");
+}
+if (!process.env.QUILT_READ_POLICY_ARN) {
+    throw new Error("Environment variable QUILT_READ_POLICY_ARN is not set");
+}
 
 new TitanicStack(app, "TitanicStack", {
-    quiltDatabaseName: databaseName,
-    quiltReadPolicyArn: process.env.QUILT_READ_POLICY_ARN || "",
+    glueDatabaseName: process.env.QUILT_DATABASE_NAME,
+    quiltReadPolicyArn: process.env.QUILT_READ_POLICY_ARN,
+    useS3Table: process.env.USE_S3_TABLE === "true",
     env: {
         account: process.env.CDK_DEFAULT_ACCOUNT,
         region: process.env.CDK_DEFAULT_REGION,

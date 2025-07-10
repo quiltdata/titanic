@@ -6,7 +6,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf cdk.out */**/{*.js,*.d.ts}",
+    "clean": "rm -rf cdk.out **/{*.js,*.d.ts} test-results node_modules coverage",
     "cdk": "npm run test && npx cdk deploy --require-approval never && npm run event && npm run logs:delayed",
     "lint": "eslint . --ext .ts --fix",
     "event": "./bin/send-event.sh",

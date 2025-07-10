@@ -1,6 +1,5 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
-import * as dotenv from 'dotenv';
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3tables from "@aws-cdk/aws-s3tables-alpha";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -10,25 +9,24 @@ import * as targets from "aws-cdk-lib/aws-events-targets";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import * as path from "path";
 
-dotenv.config();
-
 const s3DatabaseName = "quilt_titanic";
 
 export interface TitanicStackProps extends cdk.StackProps {
-    quiltDatabaseName: string;
-    lambdaTimeout?: number;
+    glueDatabaseName: string;
     quiltReadPolicyArn: string;
+    useS3Table: boolean;
+    lambdaTimeout?: number;
 }
 
 export class TitanicStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props: TitanicStackProps) {
         super(scope, id, props);
 
-        // Check if we should use S3 Tables
-        const useS3Table = process.env.USE_S3_TABLE === "true";
+        // Use props instead of environment variables
+        const useS3Table = props.useS3Table;
         
-        // Source database (where views are) - always from QUILT_DATABASE_NAME
-        const glueDatabaseName = process.env.QUILT_DATABASE_NAME || (() => { throw new Error("must set QUILT_DATABASE_NAME environment variable"); })();
+        // Source database (where views are) - from props
+        const glueDatabaseName = props.glueDatabaseName;
         
 
         // Always create both buckets for maximum flexibility
