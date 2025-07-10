@@ -17,6 +17,7 @@
     "deploy:validate": "./bin/validate-artifacts.sh --auto-detect",
     "deploy:local": "npm run test && npx cdk deploy --require-approval never",
     "deploy:full": "npm run deploy:local && npm run ops:event && npm run ops:logs:delayed",
+    "deployt:test-ci": "./bin/deploy-test-ci.sh",
     "ops:event": "./bin/send-event.sh",
     "ops:logs": "./bin/monitor-logs.sh",
     "ops:logs:delayed": "sleep 30 && npm run ops:logs recent 1",

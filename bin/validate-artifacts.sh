@@ -108,8 +108,8 @@ validate_cloudformation() {
     local cf_dir="$ARTIFACTS_DIR/cloudformation-$VERSION"
     
     # Check required files exist
-    if [[ ! -f "$cf_dir/titanic-cloudformation.yaml" ]]; then
-        log_error "Missing titanic-cloudformation.yaml in $cf_dir"
+    if [[ ! -f "$cf_dir/template.yaml" ]]; then
+        log_error "Missing template.yaml in $cf_dir"
         exit 1
     fi
     
@@ -136,7 +136,32 @@ validate_cloudformation() {
     
     # Validate CloudFormation template YAML syntax
     if command -v python3 &> /dev/null; then
-        python3 -c "import yaml; yaml.safe_load(open('$cf_dir/titanic-cloudformation.yaml')); print('CloudFormation YAML syntax valid')"
+        # Use a simple check that handles CloudFormation YAML tags
+        python3 -c "
+import yaml
+import sys
+
+class CloudFormationLoader(yaml.SafeLoader):
+    pass
+
+# Add constructors for CloudFormation intrinsic functions
+cf_constructors = [
+    '!Ref', '!GetAtt', '!Join', '!Split', '!Select', '!Sub', '!Base64',
+    '!GetAZs', '!ImportValue', '!FindInMap', '!Condition', '!If',
+    '!Not', '!Equals', '!And', '!Or'
+]
+
+for constructor in cf_constructors:
+    CloudFormationLoader.add_constructor(constructor, lambda loader, node: None)
+
+try:
+    with open('$cf_dir/template.yaml', 'r') as f:
+        yaml.load(f, Loader=CloudFormationLoader)
+    print('CloudFormation YAML syntax valid')
+except Exception as e:
+    print(f'CloudFormation YAML syntax error: {e}')
+    sys.exit(1)
+"
     else
         log_warn "Python3 not available, skipping YAML syntax validation"
     fi

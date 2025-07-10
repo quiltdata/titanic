@@ -73,7 +73,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
-      - name: Build, test, and package deployment artifacts
+      - name: Run tests
+        run: npm test
+      
+      - name: Generate infrastructure templates and Lambda package
+        run: npm run deploy:templates
+      
+      - name: Package deployment artifacts
         run: npm run deploy:package -- --version "${{ steps.version.outputs.version }}"
       
       - name: Setup Python for YAML validation
@@ -92,6 +98,26 @@ jobs:
       - name: Validate deployment artifacts
         run: ./bin/validate-artifacts.sh --version "${{ steps.version.outputs.version }}"
       
+      - name: Create distribution packages
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          cd artifacts/
+          
+          # Create CloudFormation package
+          if [[ -d "cloudformation-${VERSION}" ]]; then
+            zip -r "titanic-cloudformation-${VERSION}.zip" "cloudformation-${VERSION}/"
+            echo "Created: titanic-cloudformation-${VERSION}.zip"
+          fi
+          
+          # Create Terraform package  
+          if [[ -d "terraform-${VERSION}" ]]; then
+            zip -r "titanic-terraform-${VERSION}.zip" "terraform-${VERSION}/"
+            echo "Created: titanic-terraform-${VERSION}.zip"
+          fi
+          
+          # List created packages
+          ls -la *.zip 2>/dev/null || echo "No ZIP packages created"
+      
       - name: Upload artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
@@ -104,15 +130,21 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           
-          # Upload CloudFormation package
-          gh release upload "${{ github.event.release.tag_name }}" \
-            "artifacts/titanic-cloudformation-${VERSION}.zip" \
-            --clobber
+          # Upload CloudFormation package if it exists
+          if [[ -f "artifacts/titanic-cloudformation-${VERSION}.zip" ]]; then
+            gh release upload "${{ github.event.release.tag_name }}" \
+              "artifacts/titanic-cloudformation-${VERSION}.zip" \
+              --clobber
+            echo "Uploaded CloudFormation package"
+          fi
           
-          # Upload Terraform package
-          gh release upload "${{ github.event.release.tag_name }}" \
-            "artifacts/titanic-terraform-${VERSION}.zip" \
-            --clobber
+          # Upload Terraform package if it exists
+          if [[ -f "artifacts/titanic-terraform-${VERSION}.zip" ]]; then
+            gh release upload "${{ github.event.release.tag_name }}" \
+              "artifacts/titanic-terraform-${VERSION}.zip" \
+              --clobber
+            echo "Uploaded Terraform package"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
@@ -159,7 +191,7 @@ jobs:
             echo "1. Download artifacts from above" >> $GITHUB_STEP_SUMMARY
             echo "2. Extract your preferred deployment package" >> $GITHUB_STEP_SUMMARY
             echo "3. Run \`./deploy.sh\` with your AWS credentials" >> $GITHUB_STEP_SUMMARY
-            echo "4. See [doc/DEPLOY.md](../doc/DEPLOY.md) for detailed instructions" >> $GITHUB_STEP_SUMMARY
+            echo "4. See [doc/DEVELOP.md](../blob/main/doc/DEVELOP.md) for detailed instructions" >> $GITHUB_STEP_SUMMARY
           else
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### ⚠️ Build Failed" >> $GITHUB_STEP_SUMMARY
