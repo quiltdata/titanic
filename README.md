@@ -278,9 +278,11 @@ npm run lint       # Run ESLint and fix issues automatically
 npm run cdk                      # Deploy stack (runs tests, deploys, sends event, shows logs)
 npm run event                    # Send manual merge event
 npm run logs                     # Monitor Lambda logs
+npm run logs:delayed             # Wait 20 seconds then show recent logs
 npm run outputs                  # Show CloudFormation stack outputs
-npm run cleanup-buckets          # Delete both buckets and all contents
-npm run cleanup-buckets:contents # Delete only bucket contents (preserve buckets)
+npm run destroy                  # Delete buckets then destroy stack
+npm run destroy:buckets          # Delete both buckets and all contents
+npm run destroy:buckets:contents # Delete only bucket contents (preserve buckets)
 ```
 
 ## Appendix: S3 Table Buckets
