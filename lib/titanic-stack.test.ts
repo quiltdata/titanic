@@ -4,19 +4,10 @@ import { Match } from "aws-cdk-lib/assertions";
 import { TitanicStack } from "./titanic-stack";
 
 // Test utilities
-const setupEnvironment = (overrides: Record<string, string> = {}) => {
-    process.env = {
-        NODE_ENV: "test",
-        ...overrides
-    };
-};
-
 const createStackTemplate = (
     stackId: string,
-    props: any,
-    envOverrides: Record<string, string> = {}
+    props: any
 ) => {
-    setupEnvironment(envOverrides);
     const app = new cdk.App();
     const stack = new TitanicStack(app, stackId, props);
     return Template.fromStack(stack);
@@ -123,8 +114,9 @@ const expectAthenaPermissions = (template: Template) => {
 
 describe("TitanicStack", () => {
     const defaultStackProps = {
-        quiltDatabaseName: "test-database",
+        glueDatabaseName: "test-database-env",
         quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
+        useS3Table: false,
     };
 
     describe("Shared functionality (mode-independent)", () => {
@@ -135,11 +127,13 @@ describe("TitanicStack", () => {
             let template: Template;
 
             beforeAll(() => {
-                const envOverrides: Record<string, string> = useS3Table 
-                    ? { USE_S3_TABLE: "true", QUILT_DATABASE_NAME: "test-database-env" }
-                    : { QUILT_DATABASE_NAME: "test-database-env" };
+                const stackProps = {
+                    ...defaultStackProps,
+                    useS3Table,
+                    glueDatabaseName: dbName
+                };
                     
-                template = createStackTemplate(stackId, defaultStackProps, envOverrides);
+                template = createStackTemplate(stackId, stackProps);
             });
 
             it("should create regular S3 bucket with correct properties", () => {
@@ -178,8 +172,7 @@ describe("TitanicStack", () => {
         it("should support custom Lambda timeout configuration", () => {
             const customTemplate = createStackTemplate(
                 "CustomTimeoutStack", 
-                { ...defaultStackProps, lambdaTimeout: 10000 },
-                { QUILT_DATABASE_NAME: "test-database-env" }
+                { ...defaultStackProps, lambdaTimeout: 10000 }
             );
 
             customTemplate.hasResourceProperties("AWS::Lambda::Function", {
@@ -201,7 +194,7 @@ describe("TitanicStack", () => {
         let template: Template;
 
         beforeAll(() => {
-            template = createStackTemplate("GlueStack", defaultStackProps, { QUILT_DATABASE_NAME: "test-database" });
+            template = createStackTemplate("GlueStack", { ...defaultStackProps, glueDatabaseName: "test-database" });
         });
 
         it("should create both regular S3 bucket and S3 Tables bucket", () => {
@@ -229,11 +222,10 @@ describe("TitanicStack", () => {
         });
 
         describe("Database name usage", () => {
-            it("should use the database name provided in QUILT_DATABASE_NAME environment variable", () => {
+            it("should use the database name provided in glueDatabaseName prop", () => {
                 const envTemplate = createStackTemplate(
                     "GlueEnvDbStack", 
-                    { ...defaultStackProps, quiltDatabaseName: "env_var_db_name" },
-                    { QUILT_DATABASE_NAME: "env_var_db_name" }
+                    { ...defaultStackProps, glueDatabaseName: "env_var_db_name" }
                 );
 
                 envTemplate.hasResourceProperties("AWS::Lambda::Function", {
@@ -248,12 +240,6 @@ describe("TitanicStack", () => {
                     },
                 });
             });
-
-            it("should throw error if QUILT_DATABASE_NAME not set", () => {
-                expect(() => {
-                    createStackTemplate("GlueNoDbStack", defaultStackProps);
-                }).toThrow("must set QUILT_DATABASE_NAME environment variable");
-            });
         });
     });
 
@@ -261,7 +247,7 @@ describe("TitanicStack", () => {
         let template: Template;
 
         beforeAll(() => {
-            template = createStackTemplate("S3TablesStack", defaultStackProps, { USE_S3_TABLE: "true", QUILT_DATABASE_NAME: "test-database-env" });
+            template = createStackTemplate("S3TablesStack", { ...defaultStackProps, useS3Table: true });
         });
 
         it("should create S3 TableBucket in addition to regular S3 bucket", () => {

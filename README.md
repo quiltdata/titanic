@@ -49,21 +49,22 @@ Before deploying or running the project, configure the required environment vari
 cp example.env .env
 ```
 
-Edit the `.env` file to include your specific configuration:
+Edit the `.env` file to include your specific configuration. The following variables are **required for deployment**:
 
 ```env
-# AWS Configuration
-AWS_DEFAULT_REGION=us-east-2
-AWS_ACCESS_KEY_ID=your-access-key-id
-AWS_SECRET_ACCESS_KEY=your-secret-access-key
+# Required: AWS Configuration
 CDK_DEFAULT_ACCOUNT=your-account-id
-CDK_DEFAULT_REGION=$AWS_DEFAULT_REGION
+CDK_DEFAULT_REGION=us-east-2
 
-# Project Configuration
-QUILT_CATALOG_DOMAIN=your-stacks-catalog-dns
+# Required: Quilt Integration
 QUILT_DATABASE_NAME=your-stacks-glue-database-name
 QUILT_READ_POLICY_ARN=arn:aws:iam::$CDK_DEFAULT_ACCOUNT:policy/STACK-BucketReadPolicy-XXXX
+
+# Optional: Table Format (defaults to false)
+USE_S3_TABLE=false
 ```
+
+**Note**: Additional environment variables like `GLUE_TABLES_BUCKET_ARN` and `S3_TABLES_BUCKET_ARN` are automatically configured by the CDK stack and do not need to be set manually.
 
 
 
@@ -210,6 +211,39 @@ npm run outputs
 **Wrong table format**: Check `USE_S3_TABLE` environment variable matches desired format
 
 
+## Stack Destruction and Cleanup
+
+### Bucket Cleanup
+
+When destroying the Titanic stack, you may need to manually clean up the buckets before running `cdk destroy`. This is because CloudFormation cannot delete non-empty S3 buckets.
+
+The project provides cleanup scripts to handle this:
+
+#### Full Cleanup (Delete Buckets then destroy stack)
+```bash
+npm run destroy
+```
+
+#### Contents-Only Cleanup (Preserve Empty Buckets)
+```bash
+npm run destroy:buckets:contents
+```
+
+**Note**: The cleanup script requires the same environment variables (`CDK_DEFAULT_ACCOUNT`, `CDK_DEFAULT_REGION`) used for deployment.
+
+#### When Cleanup is Required
+
+**You must run bucket cleanup before `cdk destroy` if:**
+- The Lambda function has processed any data (created Iceberg tables/files)
+- You enabled S3 Tables mode (`USE_S3_TABLE=true`) and created any tables
+- The stack deployment completed successfully and created bucket contents
+
+**Cleanup handles:**
+- **S3 Bucket**: Removes all Iceberg table files, metadata, and versioned objects
+- **S3 Tables Bucket**: Deletes all tables, namespaces, and the bucket itself
+
+
+
 ## Development
 
 For detailed development information, see [doc/DEVELOP.md](doc/DEVELOP.md).
@@ -241,10 +275,14 @@ npm run lint       # Run ESLint and fix issues automatically
 
 #### AWS Operations
 ```bash
-npm run cdk        # Deploy stack (runs tests, deploys, sends event, shows logs)
-npm run event      # Send manual merge event
-npm run logs       # Monitor Lambda logs
-npm run outputs    # Show CloudFormation stack outputs
+npm run cdk                      # Deploy stack (runs tests, deploys, sends event, shows logs)
+npm run event                    # Send manual merge event
+npm run logs                     # Monitor Lambda logs
+npm run logs:delayed             # Wait 20 seconds then show recent logs
+npm run outputs                  # Show CloudFormation stack outputs
+npm run destroy                  # Delete buckets then destroy stack
+npm run destroy:buckets          # Delete both buckets and all contents
+npm run destroy:buckets:contents # Delete only bucket contents (preserve buckets)
 ```
 
 ## Appendix: S3 Table Buckets

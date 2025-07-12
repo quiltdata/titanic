@@ -197,21 +197,26 @@ To customize error handling behavior:
 Key configuration for developers:
 
 ```bash
-# Table format selection
-USE_S3_TABLE=false  # Core functionality toggle
-
-# AWS configuration
+# Required: Deployment Configuration
 CDK_DEFAULT_ACCOUNT=123456789012
 CDK_DEFAULT_REGION=us-east-2
-QUILT_DATABASE_NAME=your_database
+QUILT_DATABASE_NAME=your_database_name
+QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/PolicyName
 
-# S3 Tables specific (when USE_S3_TABLE=true)
-ATHENA_RESULTS_BUCKET=athena-results-bucket  # Separate bucket for query results
+# Optional: Table Format Selection
+USE_S3_TABLE=false  # Core functionality toggle (default: false)
 
-# Development/testing
+# Development/Testing
 NODE_ENV=development
 AWS_PROFILE=your-profile
 ```
+
+**Runtime Environment Variables**: The following are automatically set by the CDK stack:
+- `GLUE_TABLES_BUCKET_ARN` - S3 bucket for Glue tables and Athena results
+- `S3_TABLES_BUCKET_ARN` - S3 Tables bucket
+- `GLUE_DATABASE_NAME` - Target database name for merged tables
+- `S3_TABLE_DATABASE_NAME` - S3 Tables database name
+- `CONFIG_TYPE` - Configuration type indicator
 
 ### CDK Infrastructure
 The infrastructure is defined in TypeScript with:

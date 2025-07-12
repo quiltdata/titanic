@@ -161,13 +161,27 @@ aws logs tail /aws/lambda/TitanicStack-TitanicMergeTables --follow
 
 ## Environment Variable Reference
 
+### Deployment-Time Environment Variables
+These variables must be set when deploying the CDK stack:
+
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
-| `QUILT_DATABASE_NAME` | Yes | Source database name | `userathenadatabase-6fosfzznfasm` |
-| `GLUE_TABLES_BUCKET_ARN` | Yes | S3 bucket for Glue tables and Athena results | `titanic-glue-tables-712023778557-us-east-2` |
-| `S3_TABLES_BUCKET_ARN` | Yes | S3 Tables bucket for S3 table format | `titanic-s3-tables-712023778557-us-east-2` |
+| `QUILT_DATABASE_NAME` | Yes | Source database name where Quilt views exist | `userathenadatabase-6fosfzznfasm` |
+| `QUILT_READ_POLICY_ARN` | Yes | IAM policy for source bucket access | `arn:aws:iam::123456789012:policy/STACK-BucketReadPolicy-XXXX` |
 | `USE_S3_TABLE` | No | Table format selection | `false` (default) or `true` |
-| `QUILT_READ_POLICY_ARN` | Yes | IAM policy for source bucket access | `arn:aws:iam::account:policy/policy-name` |
+| `CDK_DEFAULT_ACCOUNT` | No | AWS account ID for deployment | `123456789012` |
+| `CDK_DEFAULT_REGION` | No | AWS region for deployment | `us-east-2` |
+
+### Lambda Runtime Environment Variables
+These variables are automatically set by the CDK stack and do not need to be configured manually:
+
+| Variable | Description | Set By |
+|----------|-------------|---------|
+| `GLUE_TABLES_BUCKET_ARN` | S3 bucket for Glue tables and Athena results | CDK Stack |
+| `S3_TABLES_BUCKET_ARN` | S3 Tables bucket for S3 table format | CDK Stack |
+| `GLUE_DATABASE_NAME` | Target database name for merged tables | CDK Stack |
+| `S3_TABLE_DATABASE_NAME` | S3 Tables database name | CDK Stack |
+| `CONFIG_TYPE` | Configuration type (Config/S3Config) | CDK Stack |
 
 ## Contact and Support
 

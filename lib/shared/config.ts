@@ -60,7 +60,7 @@ export class Config {
   }
 
   public getExecutionContext(): { Database: string } {
-    return { Database: this.getReadDatabaseName() };
+    return { Database: this.getWriteDatabaseName() };
   }
 
   /**

@@ -6,13 +6,16 @@
   },
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf cdk.out */**/{*.js,*.d.ts}",
+    "clean": "rm -rf cdk.out **/{*.js,*.d.ts} test-results node_modules coverage",
     "cdk": "npm run test && npx cdk deploy --require-approval never && npm run event && npm run logs:delayed",
     "lint": "eslint . --ext .ts --fix",
-    "event": "./bin/send-event.sh",
-    "logs": "./bin/monitor-logs.sh",
+    "event": "dotenv -- ./bin/send-event.sh",
+    "logs": "dotenv -- ./bin/monitor-logs.sh",
     "logs:delayed": "sleep 20 && npm run logs recent 1",
-    "outputs": "aws cloudformation describe-stacks --stack-name TitanicStack --query 'Stacks[0].Outputs'",
+    "outputs": "dotenv -- aws cloudformation describe-stacks --stack-name TitanicStack --query 'Stacks[0].Outputs'",
+    "destroy": "npm run destroy:buckets && npx cdk destroy --force",
+    "destroy:buckets": "dotenv -- ./bin/cleanup-buckets.sh",
+    "destroy:buckets:contents": "dotenv -- ./bin/cleanup-buckets.sh --contents-only",
     "test": "jest --no-coverage",
     "test:coverage": "jest --coverage --verbose",
     "test:fails": "jest --onlyFailures --verbose",
@@ -30,7 +33,8 @@
     "jest-junit": "^16.0.0",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
-    "typescript": "~5.8.0"
+    "typescript": "~5.8.0",
+    "dotenv-cli": "^7.0.0"
   },
   "dependencies": {
     "@aws-cdk/aws-lambda-event-sources": "^1.203.0",
