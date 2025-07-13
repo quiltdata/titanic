@@ -1,6 +1,6 @@
 import { Context, EventBridgeEvent } from "aws-lambda";
 import { AthenaTest } from "./shared/athena-test";
-import { handler, selectBuckets, executeMergeOperations, MergeOperationResult } from "./merge-tables";
+import { handler, selectBuckets, executeMergeOperations } from "./merge-tables";
 import { PackageEventDetail } from "./shared/types";
 import { Config } from "./shared/config";
 import { TableManager } from "./tables/table-manager";

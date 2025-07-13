@@ -22,7 +22,7 @@ const findLambdaPolicy = (template: Template, actionToFind: string) => {
     ) as any;
 };
 
-const findLambdaPolicyByKey = (template: Template, keyPattern: string) => {
+const findLambdaPolicyByKey = (template: Template, _keyPattern: string) => {
     const policies = template.findResources("AWS::IAM::Policy");
     const lambdaPolicyEntry = Object.entries(policies).find(([key]) =>
         key.includes("MergeTables") && key.includes("ServiceRole")
@@ -54,7 +54,7 @@ const expectS3BucketLocationPermissions = (template: Template) => {
     expect(uniqueBuckets.length).toBeGreaterThanOrEqual(2);
 };
 
-const expectGluePermissions = (template: Template, expectedSourceDatabaseName: string) => {
+const expectGluePermissions = (template: Template, _expectedSourceDatabaseName: string) => {
     const policy = findLambdaPolicyByKey(template, "MergeTables");
     expect(policy).toBeDefined();
     const statements = policy.Properties.PolicyDocument.Statement;
@@ -124,7 +124,7 @@ describe("TitanicStack", () => {
         describe.each([
             { mode: "Glue", useS3Table: false, stackId: "SharedGlueStack", dbName: "test-database-env" },
             { mode: "S3 Tables", useS3Table: true, stackId: "SharedS3TablesStack", dbName: "test-database-env" }
-        ])("$mode mode", ({ mode, useS3Table, stackId, dbName }) => {
+        ])("$mode mode", ({ mode: _mode, useS3Table, stackId, dbName }) => {
             let template: Template;
 
             beforeAll(() => {
@@ -517,7 +517,7 @@ describe("TitanicStack", () => {
             });
 
             it("should default to 900 seconds when lambdaTimeout not specified", () => {
-                const { lambdaTimeout, ...propsWithoutTimeout } = propsMode;
+                const { lambdaTimeout: _lambdaTimeout, ...propsWithoutTimeout } = propsMode;
                 const defaultTemplate = createStackTemplate("PropsDefaultTimeoutStack", propsWithoutTimeout);
 
                 defaultTemplate.hasResourceProperties("AWS::Lambda::Function", {

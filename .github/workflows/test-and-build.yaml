@@ -3,7 +3,6 @@ name: Test and Build
 on:
   pull_request:
     branches: [ '**' ]  # Run on any PRs
-    types: [ opened, synchronize, reopened ]
   push:
     branches: [ main ]  # Also run on pushes to main
 
@@ -30,6 +29,9 @@ jobs:
       
     - name: Run tests
       run: npm test
+      
+    - name: Run linter
+      run: npm run lint
       
     - name: Build CloudFormation template
       run: npm run deploy:release -- --build-only

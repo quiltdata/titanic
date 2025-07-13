@@ -42,7 +42,7 @@ export class PackageEntryTable extends BaseTable {
               ${sourceAlias}.meta AS metadata`;
     }
 
-    protected generateWhereClauseForCtas(sourceAlias: string): string {
+    protected generateWhereClauseForCtas(_sourceAlias: string): string {
         // No additional WHERE clause needed for CTAS in package entries
         return '';
     }

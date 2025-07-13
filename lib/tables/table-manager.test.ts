@@ -1,4 +1,3 @@
-import { StartQueryExecutionCommand } from "@aws-sdk/client-athena";
 import { TableManager } from "./table-manager";
 import { Config } from "../shared/config";
 import { AthenaTest } from "../shared/athena-test";

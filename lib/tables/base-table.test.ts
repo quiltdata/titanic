@@ -155,11 +155,11 @@ describe("Package Tables", () => {
                 return "PARTITIONED BY (year)";
             }
 
-            protected generateInsertQuery(packagesView: string, objectsView: string): string {
+            protected generateInsertQuery(packagesView: string, _objectsView: string): string {
                 return `INSERT INTO ${this.tableName} SELECT * FROM ${packagesView}`;
             }
 
-            protected generateSelectClause(registryName: string, sourceAlias: string): string {
+            protected generateSelectClause(_registryName: string, sourceAlias: string): string {
                 return `${sourceAlias}.id, ${sourceAlias}.name`;
             }
 
@@ -182,15 +182,15 @@ describe("Package Tables", () => {
                 return "";
             }
 
-            protected generateInsertQuery(packagesView: string, objectsView: string): string {
+            protected generateInsertQuery(packagesView: string, _objectsView: string): string {
                 return `INSERT INTO ${this.tableName} SELECT * FROM ${packagesView}`;
             }
 
-            protected generateSelectClause(registryName: string, sourceAlias: string): string {
+            protected generateSelectClause(_registryName: string, _sourceAlias: string): string {
                 return "";
             }
 
-            protected generateWhereClauseForCtas(sourceAlias: string): string {
+            protected generateWhereClauseForCtas(_sourceAlias: string): string {
                 return "";
             }
         }
@@ -209,15 +209,15 @@ describe("Package Tables", () => {
                 return "";
             }
 
-            protected generateInsertQuery(packagesView: string, objectsView: string): string {
+            protected generateInsertQuery(packagesView: string, _objectsView: string): string {
                 return `INSERT INTO ${this.tableName} SELECT * FROM ${packagesView}`;
             }
 
-            protected generateSelectClause(registryName: string, sourceAlias: string): string {
+            protected generateSelectClause(_registryName: string, _sourceAlias: string): string {
                 return "";
             }
 
-            protected generateWhereClauseForCtas(sourceAlias: string): string {
+            protected generateWhereClauseForCtas(_sourceAlias: string): string {
                 return "";
             }
         }

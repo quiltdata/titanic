@@ -1,10 +1,7 @@
 import { mockClient } from "aws-sdk-client-mock";
-import { GetTablesCommand, GlueClient } from "@aws-sdk/client-glue";
+import { GlueClient } from "@aws-sdk/client-glue";
 import {
     AthenaClient,
-    GetQueryExecutionCommand,
-    QueryExecutionState,
-    StartQueryExecutionCommand,
 } from "@aws-sdk/client-athena";
 import { Config, S3Config } from "./config";
 import { AthenaTest } from "./athena-test";
