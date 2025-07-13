@@ -285,6 +285,13 @@ npm run destroy:buckets          # Delete both buckets and all contents
 npm run destroy:buckets:contents # Delete only bucket contents (preserve buckets)
 ```
 
+#### Release Management
+```bash
+npm run deploy:release           # Generate standalone deployment package
+npm run deploy:release -- --version v1.0.0  # Generate release with version tag
+npm run deploy:release -- --clean --output-dir my-release  # Custom output with cleanup
+```
+
 ## Appendix: S3 Table Buckets
 
 WARNING: S3 Table Buckets are a relatively new feature in AWS, and not fully supported by some tools and services.

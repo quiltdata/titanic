@@ -49,10 +49,10 @@ EXAMPLES:
 
 WORKFLOW:
     1. Builds the TypeScript project
-    2. Runs CDK synth to generate CloudFormation template
+    2. Runs CDK synth with parameters to generate CloudFormation template
     3. Extracts Lambda assets from cdk.out
     4. Creates standalone deployment package with:
-       - template.json (CloudFormation template)
+       - template.json (CloudFormation template with parameters)
        - assets/ (Lambda function code)
        - deploy.sh (deployment script)
        - README.md (deployment instructions)
@@ -122,12 +122,11 @@ echo ""
 
 # Build the project
 if [[ "$SKIP_SYNTH" != "true" ]]; then
-    echo -e "${YELLOW}Building TypeScript project...${NC}"
-    npm run build
-
-    # Run CDK synth to generate CloudFormation template
-    echo -e "${YELLOW}Synthesizing CloudFormation template...${NC}"
-    npx cdk synth --quiet
+    echo -e "${YELLOW}Running TypeScript validation and CDK synthesis...${NC}"
+    
+    # Run CDK synth to generate CloudFormation template with parameters
+    echo -e "${YELLOW}Synthesizing CloudFormation template with parameters...${NC}"
+    npm run cdk:params
 else
     echo -e "${YELLOW}Skipping CDK synth (using existing cdk.out)...${NC}"
 fi
