@@ -75,12 +75,12 @@ const expectGluePermissions = (template: Template, expectedSourceDatabaseName: s
         expect.objectContaining({
             "Fn::Join": ["", expect.arrayContaining([":catalog"])]
         }),
-        // Source database (where views are read from)
+        // Source database (where views are read from) - uses CloudFormation parameter reference
         expect.objectContaining({
-            "Fn::Join": ["", expect.arrayContaining([`:database/${expectedSourceDatabaseName}`])]
+            "Fn::Join": ["", expect.arrayContaining([":database/", { "Ref": "GlueDatabaseName" }])]
         }),
         expect.objectContaining({
-            "Fn::Join": ["", expect.arrayContaining([`:table/${expectedSourceDatabaseName}/*`])]
+            "Fn::Join": ["", expect.arrayContaining([":table/", { "Ref": "GlueDatabaseName" }, "/*"])]
         }),
         // Target database (where tables are written to) - always "quilt_titanic"
         expect.objectContaining({
@@ -117,6 +117,7 @@ describe("TitanicStack", () => {
         glueDatabaseName: "test-database-env",
         quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
         useS3Table: false,
+        useCloudFormationParameters: true, // Enable CF parameters for tests that expect them
     };
 
     describe("Shared functionality (mode-independent)", () => {
@@ -178,9 +179,10 @@ describe("TitanicStack", () => {
             customTemplate.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        GLUE_DATABASE_NAME: "test-database-env",
-                        LAMBDA_TIMEOUT: "10000",
-                        USE_S3_TABLE: "false",
+                        GLUE_DATABASE_NAME: { Ref: "GlueDatabaseName" },
+                        LAMBDA_TIMEOUT: { Ref: "LambdaTimeout" },
+                        USE_S3_TABLE: { Ref: "UseS3Table" },
+                        QUILT_READ_POLICY_ARN: { Ref: "QuiltReadPolicyArn" },
                         GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
                         S3_TABLES_BUCKET_ARN: Match.anyValue(),
                         ATHENA_RESULTS_BUCKET_ARN: Match.anyValue(),
@@ -210,9 +212,9 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        GLUE_DATABASE_NAME: "test-database",
-                        USE_S3_TABLE: "false",
-                        QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
+                        GLUE_DATABASE_NAME: { Ref: "GlueDatabaseName" },
+                        USE_S3_TABLE: { Ref: "UseS3Table" },
+                        QUILT_READ_POLICY_ARN: { Ref: "QuiltReadPolicyArn" },
                         GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
                         S3_TABLES_BUCKET_ARN: Match.anyValue(),
                         ATHENA_RESULTS_BUCKET_ARN: Match.anyValue(),
@@ -231,8 +233,9 @@ describe("TitanicStack", () => {
                 envTemplate.hasResourceProperties("AWS::Lambda::Function", {
                     Environment: {
                         Variables: {
-                            GLUE_DATABASE_NAME: "env_var_db_name",
-                            USE_S3_TABLE: "false",
+                            GLUE_DATABASE_NAME: { Ref: "GlueDatabaseName" },
+                            USE_S3_TABLE: { Ref: "UseS3Table" },
+                            QUILT_READ_POLICY_ARN: { Ref: "QuiltReadPolicyArn" },
                             GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
                             S3_TABLES_BUCKET_ARN: Match.anyValue(),
                             ATHENA_RESULTS_BUCKET_ARN: Match.anyValue(),
@@ -262,10 +265,10 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        GLUE_DATABASE_NAME: "test-database-env",
+                        GLUE_DATABASE_NAME: { Ref: "GlueDatabaseName" },
                         S3TABLE_DATABASE_NAME: "quilt_titanic", // This is the hardcoded constant
-                        USE_S3_TABLE: "true",
-                        QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
+                        USE_S3_TABLE: { Ref: "UseS3Table" },
+                        QUILT_READ_POLICY_ARN: { Ref: "QuiltReadPolicyArn" },
                         GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
                         S3_TABLES_BUCKET_ARN: Match.anyValue(),
                         ATHENA_RESULTS_BUCKET_ARN: Match.anyValue(),
