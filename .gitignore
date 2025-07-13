@@ -1,7 +1,8 @@
 .env
+*.d.ts
 *.js
 !jest.config.js
-*.d.ts
+!eslint.config.js
 node_modules
 
 # CDK asset staging directory
