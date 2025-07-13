@@ -6,7 +6,7 @@
   },
   "scripts": {
     "clean:js": "rm -rf */**/{*.js,*.js.map,*.d.ts} && rm -rf bin/{*.js,*.js.map}",
-    "clean": "rm -rf cdk.out test-results node_modules coverage",
+    "clean": "rm -rf cdk.out test-results node_modules coverage dist",
     "cdk": "dotenv -- npm run test && dotenv -- npx cdk deploy --app 'npx ts-node bin/titanic.ts' --require-approval never && npm run deploy:event && npm run deploy:logs:delayed",
     "cdk:synth": "dotenv -- npx cdk synth --app 'npx ts-node bin/titanic.ts'",
     "cdk:params": "dotenv -- npx cdk synth --app 'npx ts-node bin/titanic-params.ts'",

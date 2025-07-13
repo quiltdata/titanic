@@ -1,11 +1,11 @@
 name: Test and Build
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+    branches: [ '**' ]  # Run on any PRs
     types: [ opened, synchronize, reopened ]
+  push:
+    branches: [ main ]  # Also run on pushes to main
 
 jobs:
   test-and-build:
@@ -43,40 +43,6 @@ jobs:
         QUILT_DATABASE_NAME: "test-database" # Placeholder for synthesis
         QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/TestPolicy" # Placeholder
         
-    - name: Verify CloudFormation template
-      run: |
-        if [ ! -f "cdk.out/TitanicStack.template.json" ]; then
-          echo "Error: CloudFormation template not found"
-          exit 1
-        fi
-        
-        # Verify template has parameters
-        if ! grep -q '"Parameters"' cdk.out/TitanicStack.template.json; then
-          echo "Error: CloudFormation template missing Parameters section"
-          exit 1
-        fi
-        
-        # Check for required parameters
-        REQUIRED_PARAMS=("GlueDatabaseName" "QuiltReadPolicyArn" "UseS3Table" "LambdaTimeout")
-        for param in "${REQUIRED_PARAMS[@]}"; do
-          if ! grep -q "\"$param\"" cdk.out/TitanicStack.template.json; then
-            echo "Error: Missing required parameter: $param"
-            exit 1
-          fi
-        done
-        
-        echo "✅ CloudFormation template validation passed"
-        
-    - name: Check template size
-      run: |
-        TEMPLATE_SIZE=$(stat -c%s "cdk.out/TitanicStack.template.json")
-        echo "CloudFormation template size: $TEMPLATE_SIZE bytes"
-        
-        # Warn if template is getting large (CloudFormation limit is 460,800 bytes for direct upload)
-        if [ $TEMPLATE_SIZE -gt 400000 ]; then
-          echo "⚠️  Warning: Template size is approaching CloudFormation limits"
-        fi
-        
     - name: Upload CloudFormation template
       uses: actions/upload-artifact@v4
       with:
@@ -93,56 +59,35 @@ jobs:
           cdk.out/manifest.json
         retention-days: 30
 
-    # Generate full release package only on main branch pushes
+    # Generate full release package on main or release branch pushes
     - name: Generate release package
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release') && github.event_name == 'push'
       run: |
         # Extract version from package.json
         VERSION=$(node -p "require('./package.json').version")
         
-        # Generate release with version tag
-        npm run deploy:release -- --version "v$VERSION" --clean
+        # Generate release with version tag and archives
+        npm run deploy:release -- --version "v$VERSION" --clean --archive
       env:
         CDK_DEFAULT_ACCOUNT: "123456789012"
         CDK_DEFAULT_REGION: "us-east-1"
         QUILT_DATABASE_NAME: "release-database"
         QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/ReleasePolicy"
         
-    - name: Create release archive
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      run: |
-        VERSION=$(node -p "require('./package.json').version")
-        RELEASE_DIR="release-v$VERSION"
-        
-        # Create compressed archive
-        tar -czf "$RELEASE_DIR.tar.gz" "$RELEASE_DIR/"
-        
-        # Create zip archive for Windows users
-        zip -r "$RELEASE_DIR.zip" "$RELEASE_DIR/"
-        
-        # Show release package contents
-        echo "📦 Release package contents:"
-        ls -la "$RELEASE_DIR/"
-        
-        echo "📊 Archive sizes:"
-        ls -lh "$RELEASE_DIR".{tar.gz,zip}
-        
-    - name: Upload release package
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    - name: Upload release archives
+      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release') && github.event_name == 'push'
       uses: actions/upload-artifact@v4
       with:
-        name: release-package-v${{ github.run_number }}
-        path: |
-          release-v*.tar.gz
-          release-v*.zip
+        name: release-archives-v${{ github.run_number }}
+        path: dist/artifacts/
         retention-days: 90
         
     - name: Upload release directory
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release') && github.event_name == 'push'
       uses: actions/upload-artifact@v4
       with:
         name: release-directory-v${{ github.run_number }}
-        path: release-v*/
+        path: dist/release-v*/
         retention-days: 90
 
     - name: Build summary
@@ -152,12 +97,14 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "- **Tests**: ✅ Passed" >> $GITHUB_STEP_SUMMARY
         echo "- **Linting**: ✅ Passed" >> $GITHUB_STEP_SUMMARY
-        echo "- **CloudFormation Template**: ✅ Generated and validated" >> $GITHUB_STEP_SUMMARY
+        echo "- **CloudFormation Template**: ✅ Built and validated" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" = "push" ]; then
           echo "- **Release Package**: ✅ Generated (main branch push)" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ github.ref }}" = "refs/heads/release" ] && [ "${{ github.event_name }}" = "push" ]; then
+          echo "- **Release Package**: ✅ Generated (release branch push)" >> $GITHUB_STEP_SUMMARY
         else
-          echo "- **Release Package**: ⏭️ Skipped (not main branch push)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release Package**: ⏭️ Skipped (not main/release branch push)" >> $GITHUB_STEP_SUMMARY
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
@@ -166,5 +113,7 @@ jobs:
         echo "- CDK assets info available as artifact" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" = "push" ]; then
+          echo "- Release package archives available as artifacts" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ github.ref }}" = "refs/heads/release" ] && [ "${{ github.event_name }}" = "push" ]; then
           echo "- Release package archives available as artifacts" >> $GITHUB_STEP_SUMMARY
         fi

@@ -10,3 +10,6 @@ cdk.out
 .aider*
 /coverage
 /test-results
+
+# Release and build artifacts
+/dist

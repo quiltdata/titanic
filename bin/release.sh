@@ -13,10 +13,13 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Default values
-RELEASE_DIR="release"
+BASE_DIST_DIR="dist"
+RELEASE_SUBDIR="release"
+ARTIFACTS_DIR="artifacts"
 VERSION=""
 CLEAN=false
 BUILD_ONLY=false
+CREATE_ARCHIVE=false
 
 # Help function
 show_help() {
@@ -28,21 +31,32 @@ This creates a self-contained package with CloudFormation template, Lambda asset
 
 OPTIONS:
     -h, --help                      Show this help message
-    -o, --output-dir DIR            Output directory for release package (default: release)
+    -o, --output-dir DIR            Base output directory (default: dist)
     -v, --version VERSION           Version tag for the release (e.g., v1.0.0)
     -c, --clean                     Clean output directory before generating
     -b, --build-only                Only build, don't create release package
+    -a, --archive                   Create compressed archives (tar.gz and zip)
     --no-synth                      Skip CDK synth (use existing cdk.out)
+
+DIRECTORY STRUCTURE:
+    dist/
+    ├── release-v1.0.0/            # Release package directory
+    │   ├── template.json
+    │   ├── deploy.sh
+    │   └── assets/
+    └── artifacts/                  # Compressed archives
+        ├── release-v1.0.0.tar.gz
+        └── release-v1.0.0.zip
 
 EXAMPLES:
     # Generate release package
     $0
 
-    # Generate with version tag
-    $0 --version v1.2.0
+    # Generate with version tag and archives
+    $0 --version v1.2.0 --archive
 
-    # Clean build
-    $0 --clean --output-dir release-v1.2.0
+    # Clean build with custom base directory
+    $0 --clean --output-dir build
 
     # Build only (no package creation)
     $0 --build-only
@@ -69,7 +83,7 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         -o|--output-dir)
-            RELEASE_DIR="$2"
+            BASE_DIST_DIR="$2"
             shift 2
             ;;
         -v|--version)
@@ -84,6 +98,10 @@ while [[ $# -gt 0 ]]; do
             BUILD_ONLY=true
             shift
             ;;
+        -a|--archive)
+            CREATE_ARCHIVE=true
+            shift
+            ;;
         --no-synth)
             SKIP_SYNTH=true
             shift
@@ -96,16 +114,23 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Add version to release directory if specified
+# Construct directory paths
 if [[ -n "$VERSION" ]]; then
-    RELEASE_DIR="${RELEASE_DIR}-${VERSION}"
+    RELEASE_DIR="$BASE_DIST_DIR/${RELEASE_SUBDIR}-${VERSION}"
+else
+    RELEASE_DIR="$BASE_DIST_DIR/$RELEASE_SUBDIR"
 fi
+ARCHIVE_DIR="$BASE_DIST_DIR/$ARTIFACTS_DIR"
 
 # Clean output directory if requested
-if [[ "$CLEAN" == "true" && -d "$RELEASE_DIR" ]]; then
-    echo -e "${YELLOW}Cleaning existing release directory: $RELEASE_DIR${NC}"
-    rm -rf "$RELEASE_DIR"
+if [[ "$CLEAN" == "true" && -d "$BASE_DIST_DIR" ]]; then
+    echo -e "${YELLOW}Cleaning existing dist directory: $BASE_DIST_DIR${NC}"
+    rm -rf "$BASE_DIST_DIR"
 fi
+
+# Create dist and artifacts directories
+mkdir -p "$BASE_DIST_DIR"
+mkdir -p "$ARCHIVE_DIR"
 
 # Ensure we're in the project root
 if [[ ! -f "package.json" || ! -f "cdk.json" ]]; then
@@ -114,7 +139,9 @@ if [[ ! -f "package.json" || ! -f "cdk.json" ]]; then
 fi
 
 echo -e "${BLUE}=== Titanic Stack Release Package Generator ===${NC}"
+echo "Base Directory: $BASE_DIST_DIR"
 echo "Release Directory: $RELEASE_DIR"
+echo "Archive Directory: $ARCHIVE_DIR"
 if [[ -n "$VERSION" ]]; then
     echo "Version: $VERSION"
 fi
@@ -142,6 +169,52 @@ if [[ ! -f "$STACK_TEMPLATE" ]]; then
     echo -e "${RED}Error: CloudFormation template not found at $STACK_TEMPLATE${NC}"
     exit 1
 fi
+
+# Comprehensive CloudFormation template validation
+echo -e "${YELLOW}Validating CloudFormation template...${NC}"
+
+# Check if template has parameters section
+if ! grep -q '"Parameters"' "$STACK_TEMPLATE"; then
+    echo -e "${RED}Error: CloudFormation template missing Parameters section${NC}"
+    exit 1
+fi
+
+# Check for required parameters
+REQUIRED_PARAMS=("GlueDatabaseName" "QuiltReadPolicyArn" "UseS3Table" "LambdaTimeout")
+for param in "${REQUIRED_PARAMS[@]}"; do
+    if ! grep -q "\"$param\"" "$STACK_TEMPLATE"; then
+        echo -e "${RED}Error: Missing required parameter: $param${NC}"
+        exit 1
+    fi
+done
+
+# Check template size (CloudFormation limit is 460,800 bytes for direct upload)
+TEMPLATE_SIZE=$(wc -c < "$STACK_TEMPLATE")
+echo "CloudFormation template size: $TEMPLATE_SIZE bytes"
+
+if [[ $TEMPLATE_SIZE -gt 460800 ]]; then
+    echo -e "${RED}Error: Template size ($TEMPLATE_SIZE bytes) exceeds CloudFormation limit (460,800 bytes)${NC}"
+    exit 1
+elif [[ $TEMPLATE_SIZE -gt 400000 ]]; then
+    echo -e "${YELLOW}⚠️  Warning: Template size is approaching CloudFormation limits${NC}"
+fi
+
+# Count resources and validate structure
+RESOURCE_COUNT=$(grep -c '"Type"' "$STACK_TEMPLATE" 2>/dev/null || echo "0")
+PARAMETER_COUNT=$(grep -c '"Parameters"' "$STACK_TEMPLATE" 2>/dev/null || echo "0")
+
+echo "Template validation results:"
+echo "- Resources: $RESOURCE_COUNT"
+echo "- Parameters: $PARAMETER_COUNT"
+echo "- Size: $TEMPLATE_SIZE bytes"
+
+# Validate JSON structure
+if ! python3 -m json.tool "$STACK_TEMPLATE" > /dev/null 2>&1; then
+    echo -e "${RED}Error: CloudFormation template is not valid JSON${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✅ CloudFormation template validation passed${NC}"
 
 # Exit early if build-only
 if [[ "$BUILD_ONLY" == "true" ]]; then
@@ -326,18 +399,51 @@ EOF
 
 echo -e "${GREEN}Release package created successfully!${NC}"
 echo ""
+
+# Create archives if requested
+if [[ "$CREATE_ARCHIVE" == "true" ]]; then
+    echo -e "${YELLOW}Creating release archives...${NC}"
+    
+    # Extract just the release directory name for the archive
+    RELEASE_NAME=$(basename "$RELEASE_DIR")
+    
+    # Create compressed archive in artifacts directory
+    tar -czf "$ARCHIVE_DIR/${RELEASE_NAME}.tar.gz" -C "$BASE_DIST_DIR" "$RELEASE_NAME/"
+    echo "Created: $ARCHIVE_DIR/${RELEASE_NAME}.tar.gz"
+    
+    # Create zip archive for Windows users in artifacts directory
+    (cd "$BASE_DIST_DIR" && zip -r "../$ARCHIVE_DIR/${RELEASE_NAME}.zip" "$RELEASE_NAME/")
+    echo "Created: $ARCHIVE_DIR/${RELEASE_NAME}.zip"
+    
+    echo ""
+    echo -e "${BLUE}Archive Details:${NC}"
+    ls -lh "$ARCHIVE_DIR/${RELEASE_NAME}".{tar.gz,zip}
+    echo ""
+fi
 echo -e "${BLUE}Package Details:${NC}"
-echo "Location: $RELEASE_DIR/"
+echo "Base Directory: $BASE_DIST_DIR/"
+echo "Release Package: $RELEASE_DIR/"
 echo "Template: $RELEASE_DIR/template.json"
 echo "Deploy Script: $RELEASE_DIR/deploy.sh"
 if [[ -d "$ASSETS_DIR" ]]; then
     asset_count=$(find "$ASSETS_DIR" -name "asset.*" -type d | wc -l | tr -d ' ')
     echo "Lambda Assets: $asset_count function(s) in $ASSETS_DIR/"
 fi
+if [[ "$CREATE_ARCHIVE" == "true" ]]; then
+    echo "Archives: $ARCHIVE_DIR/"
+fi
 echo ""
 echo -e "${YELLOW}To deploy:${NC}"
 echo "cd $RELEASE_DIR"
 echo "./deploy.sh --glue-database-name YOUR_DB --quilt-read-policy-arn YOUR_POLICY_ARN"
 echo ""
-echo -e "${YELLOW}To create a distributable archive:${NC}"
-echo "tar -czf ${RELEASE_DIR}.tar.gz $RELEASE_DIR/"
+
+if [[ "$CREATE_ARCHIVE" == "true" ]]; then
+    echo -e "${YELLOW}Archives created and ready for distribution!${NC}"
+    echo "Location: $ARCHIVE_DIR/"
+else
+    echo -e "${YELLOW}To create distributable archives:${NC}"
+    RELEASE_NAME=$(basename "$RELEASE_DIR")
+    echo "tar -czf $ARCHIVE_DIR/${RELEASE_NAME}.tar.gz -C $BASE_DIST_DIR $RELEASE_NAME/"
+    echo "(cd $BASE_DIST_DIR && zip -r ../$ARCHIVE_DIR/${RELEASE_NAME}.zip $RELEASE_NAME/)"
+fi
