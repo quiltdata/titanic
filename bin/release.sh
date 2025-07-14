@@ -3,7 +3,7 @@
 # Titanic Stack Release Package Generator
 # This script generates a standalone deployment package from CDK code
 
-set -e
+set -ex
 
 # Colors for output
 RED='\033[0;31m'
@@ -183,19 +183,24 @@ cp "$STACK_TEMPLATE" "$RELEASE_DIR/template.json"
 
 # Copy Lambda assets if they exist
 ASSETS_DIR="$RELEASE_DIR/assets"
+asset_count=0
+
 if [[ -d "cdk.out" ]]; then
-    # Find and copy Lambda asset directories
-    asset_count=0
-    
     # Check if any asset directories exist first
     if ls cdk.out/asset.* >/dev/null 2>&1; then
+        echo "Found Lambda assets, creating assets directory..."
+        mkdir -p "$ASSETS_DIR"
+        
         for asset_dir in cdk.out/asset.*; do
             if [[ -d "$asset_dir" ]]; then
                 asset_name=$(basename "$asset_dir")
                 echo "Copying Lambda asset: $asset_name"
-                mkdir -p "$ASSETS_DIR"
-                cp -r "$asset_dir" "$ASSETS_DIR/"
-                ((asset_count++))
+                if cp -r "$asset_dir" "$ASSETS_DIR/"; then
+                    ((asset_count++))
+                else
+                    echo -e "${RED}Error: Failed to copy asset $asset_name${NC}"
+                    exit 1
+                fi
             fi
         done
         echo "Copied $asset_count Lambda asset(s)"
