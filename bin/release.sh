@@ -208,6 +208,14 @@ echo "Copying deployment script..."
 cp "bin/deploy.sh" "$RELEASE_DIR/"
 chmod +x "$RELEASE_DIR/deploy.sh"
 
+# Copy example environment file
+echo "Copying example environment file..."
+if [[ -f "deploy.env.example" ]]; then
+    cp "deploy.env.example" "$RELEASE_DIR/"
+elif [[ -f "example.env" ]]; then
+    cp "example.env" "$RELEASE_DIR/deploy.env.example"
+fi
+
 # Create release-specific README
 echo "Creating README..."
 cat > "$RELEASE_DIR/README.md" << EOF
@@ -220,6 +228,7 @@ $(if [[ -n "$VERSION" ]]; then echo "**Version:** $VERSION"; echo ""; fi)This pa
 - \`template.json\` - CloudFormation template
 - \`assets/\` - Lambda function code (if any)
 - \`deploy.sh\` - Deployment script
+- \`deploy.env.example\` - Example environment variables file
 - \`README.md\` - This file
 
 ## Prerequisites
@@ -230,12 +239,18 @@ $(if [[ -n "$VERSION" ]]; then echo "**Version:** $VERSION"; echo ""; fi)This pa
 ## Quick Start
 
 \`\`\`bash
-# Deploy with required parameters
+# Method 1: Use .env file (recommended)
+# Copy and edit the example file
+cp deploy.env.example .env
+# Edit .env with your values, then deploy:
+./deploy.sh
+
+# Method 2: Use command line parameters
 ./deploy.sh \\
   --glue-database-name your-database-name \\
   --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
 
-# Deploy with all options
+# Method 3: Deploy with all options
 ./deploy.sh \\
   --glue-database-name your-database-name \\
   --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy \\
@@ -244,7 +259,7 @@ $(if [[ -n "$VERSION" ]]; then echo "**Version:** $VERSION"; echo ""; fi)This pa
   --stack-name MyTitanicStack \\
   --region us-west-2
 
-# Use environment variables
+# Method 4: Use environment variables manually
 export QUILT_DATABASE_NAME=your-database-name
 export QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/QuiltReadPolicy
 ./deploy.sh
@@ -264,11 +279,20 @@ export QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/QuiltReadPolicy
 
 ## Environment Variables
 
-You can also set parameters using environment variables:
+The deployment script automatically loads variables from:
+1. \`.env\` file (if present)
+2. \`deploy.env\` file (if present)
+
+You can also set parameters using environment variables manually:
 
 - \`QUILT_DATABASE_NAME\` - Glue database name
 - \`QUILT_READ_POLICY_ARN\` - Quilt read policy ARN
+- \`USE_S3_TABLE\` - Use S3 Tables format (true/false)
+- \`LAMBDA_TIMEOUT\` - Lambda timeout in seconds
 - \`AWS_DEFAULT_REGION\` - AWS region
+- \`AWS_PROFILE\` - AWS profile
+
+**Recommended approach:** Copy \`deploy.env.example\` to \`.env\` and edit the values.
 
 ## What the deployment does
 
@@ -328,6 +352,7 @@ $(if [[ -n "$VERSION" ]]; then echo "Version: $VERSION"; fi)CDK Version: $(npx c
 Files:
 - template.json ($(du -h "$RELEASE_DIR/template.json" 2>/dev/null | cut -f1 || echo "N/A"))
 - deploy.sh (deployment script)
+- deploy.env.example (environment variables template)
 - README.md (documentation)
 $(if [[ -d "$ASSETS_DIR" ]]; then echo "- assets/ (Lambda function code)"; fi)
 
@@ -344,7 +369,8 @@ done
 fi)
 
 Quick Deploy Command:
-./deploy.sh --glue-database-name YOUR_DB --quilt-read-policy-arn YOUR_POLICY_ARN
+cp deploy.env.example .env && edit .env, then: ./deploy.sh
+Or: ./deploy.sh --glue-database-name YOUR_DB --quilt-read-policy-arn YOUR_POLICY_ARN
 EOF
 
 echo -e "${GREEN}Release package created successfully!${NC}"
@@ -382,6 +408,10 @@ echo "Archives: $ARCHIVE_DIR/"
 echo ""
 echo -e "${YELLOW}To deploy:${NC}"
 echo "cd $RELEASE_DIR"
+echo "cp deploy.env.example .env && edit .env, then:"
+echo "./deploy.sh"
+echo ""
+echo -e "${YELLOW}Or deploy with command line parameters:${NC}"
 echo "./deploy.sh --glue-database-name YOUR_DB --quilt-read-policy-arn YOUR_POLICY_ARN"
 echo ""
 

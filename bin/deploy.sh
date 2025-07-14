@@ -57,8 +57,26 @@ EXAMPLES:
        --use-s3-table true \\
        --lambda-timeout 300
 
-    # Use environment variables
+    # Use .env file (automatically loaded if present)
+    cp deploy.env.example .env
+    # Edit .env with your values, then:
+    $0
+
+    # Use environment variables manually
     QUILT_DATABASE_NAME=mydb QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/QuiltReadPolicy $0
+
+ENVIRONMENT VARIABLES:
+    The script automatically loads variables from:
+    1. .env file (if present)
+    2. deploy.env file (if present)
+    
+    Variables can also be set manually:
+    - QUILT_DATABASE_NAME - Glue database name
+    - QUILT_READ_POLICY_ARN - Quilt read policy ARN
+    - USE_S3_TABLE - Use S3 Tables format (true/false)
+    - LAMBDA_TIMEOUT - Lambda timeout in seconds
+    - AWS_DEFAULT_REGION - AWS region
+    - AWS_PROFILE - AWS profile
 
 NOTE:
     This script requires a pre-generated CloudFormation template. 
@@ -66,6 +84,21 @@ NOTE:
 
 EOF
 }
+
+# Auto-load .env file if it exists
+if [[ -f ".env" ]]; then
+    echo -e "${YELLOW}Loading environment variables from .env file...${NC}"
+    set -a  # automatically export all variables
+    source .env
+    set +a  # stop automatically exporting
+    echo -e "${GREEN}✅ Environment variables loaded from .env${NC}"
+elif [[ -f "deploy.env" ]]; then
+    echo -e "${YELLOW}Loading environment variables from deploy.env file...${NC}"
+    set -a  # automatically export all variables
+    source deploy.env
+    set +a  # stop automatically exporting
+    echo -e "${GREEN}✅ Environment variables loaded from deploy.env${NC}"
+fi
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
