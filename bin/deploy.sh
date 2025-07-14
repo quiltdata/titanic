@@ -11,17 +11,27 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Auto-load .env file if it exists
+if [[ -f ".env" ]]; then
+    echo -e "${YELLOW}Loading environment variables from .env file...${NC}"
+    set -a  # automatically export all variables
+    source .env
+    set +a  # stop automatically exporting
+    echo -e "${GREEN}✅ Environment variables loaded from .env${NC}"
+fi
+
 # Default values
 STACK_NAME="TitanicStack"
-REGION="${AWS_DEFAULT_REGION:-us-east-1}"
+REGION="${AWS_DEFAULT_REGION:-${CDK_DEFAULT_REGION:-us-east-1}}"
 PROFILE=""
 TEMPLATE_FILE="template.json"
 
-# Default parameter values
-GLUE_DATABASE_NAME=""
-QUILT_READ_POLICY_ARN=""
-USE_S3_TABLE="false"
-LAMBDA_TIMEOUT="900"
+# Initialize parameter values (CLI args will override these later)
+# Use environment variables if set, otherwise use defaults
+GLUE_DATABASE_NAME="${GLUE_DATABASE_NAME:-${QUILT_DATABASE_NAME:-}}"
+QUILT_READ_POLICY_ARN="${QUILT_READ_POLICY_ARN:-}"
+USE_S3_TABLE="${USE_S3_TABLE:-false}"
+LAMBDA_TIMEOUT="${LAMBDA_TIMEOUT:-900}"
 
 # Help function
 show_help() {
@@ -83,15 +93,6 @@ NOTE:
 EOF
 }
 
-# Auto-load .env file if it exists
-if [[ -f ".env" ]]; then
-    echo -e "${YELLOW}Loading environment variables from .env file...${NC}"
-    set -a  # automatically export all variables
-    source .env
-    set +a  # stop automatically exporting
-    echo -e "${GREEN}✅ Environment variables loaded from .env${NC}"
-fi
-
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -139,9 +140,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Use environment variables as fallbacks
-GLUE_DATABASE_NAME="${GLUE_DATABASE_NAME:-${QUILT_DATABASE_NAME}}"
-QUILT_READ_POLICY_ARN="${QUILT_READ_POLICY_ARN:-${QUILT_READ_POLICY_ARN}}"
 
 # Validate required parameters
 if [[ -z "$GLUE_DATABASE_NAME" ]]; then
@@ -191,36 +189,11 @@ echo "Use S3 Table: $USE_S3_TABLE"
 echo "Lambda Timeout: $LAMBDA_TIMEOUT seconds"
 echo ""
 
-# Check if template has Lambda assets that need S3 upload
-if grep -q "S3Bucket.*cdk-hnb659fds-assets\|AWS::Lambda::Function" "$TEMPLATE_FILE"; then
-    echo -e "${YELLOW}Template contains Lambda functions. Setting up S3 bucket for assets...${NC}"
-    
-    # Create S3 bucket for Lambda assets if needed
-    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text $AWS_OPTS)
-    BUCKET_NAME="titanic-deployment-assets-${ACCOUNT_ID}-${REGION}"
-
-    if ! aws s3api head-bucket --bucket "$BUCKET_NAME" $AWS_OPTS 2>/dev/null; then
-        echo "Creating S3 bucket: $BUCKET_NAME"
-        if [[ "$REGION" == "us-east-1" ]]; then
-            aws s3api create-bucket --bucket "$BUCKET_NAME" $AWS_OPTS
-        else
-            aws s3api create-bucket --bucket "$BUCKET_NAME" --create-bucket-configuration LocationConstraint="$REGION" $AWS_OPTS
-        fi
-    else
-        echo "S3 bucket already exists: $BUCKET_NAME"
-    fi
-
-    # Use AWS CloudFormation package to handle asset upload and template updates
-    echo -e "${YELLOW}Packaging template and uploading assets...${NC}"
-    PACKAGED_TEMPLATE="template-packaged.yaml"
-    
-    aws cloudformation package \
-        --template-file "$TEMPLATE_FILE" \
-        --s3-bucket "$BUCKET_NAME" \
-        --output-template-file "$PACKAGED_TEMPLATE" \
-        $AWS_OPTS
-    
-    TEMPLATE_FILE="$PACKAGED_TEMPLATE"
+echo -e "${YELLOW}Please verify the configuration above.${NC}"
+read -p "Proceed with deployment? (y/N): " CONFIRM
+if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+    echo -e "${RED}Deployment cancelled by user.${NC}"
+    exit 0
 fi
 
 # Deploy the stack
@@ -235,6 +208,14 @@ aws cloudformation deploy \
         UseS3Table="$USE_S3_TABLE" \
         LambdaTimeout="$LAMBDA_TIMEOUT" \
     $AWS_OPTS
+
+if [[ $? -ne 0 ]]; then
+    echo -e "${RED}❌ Stack deployment failed. Showing recent stack events...${NC}"
+    aws cloudformation describe-stack-events --stack-name "$STACK_NAME" --max-items 10 $AWS_OPTS \
+        --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED`].[Timestamp, LogicalResourceId, ResourceStatus, ResourceStatusReason]' \
+        --output table
+    exit 1
+fi
 
 echo -e "${GREEN}Deployment completed successfully!${NC}"
 

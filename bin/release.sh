@@ -5,6 +5,15 @@
 
 set -ex
 
+# Auto-load .env file if it exists
+if [[ -f ".env" ]]; then
+    echo -e "${YELLOW}Loading environment variables from .env file...${NC}"
+    set -a  # automatically export all variables
+    source .env
+    set +a  # stop automatically exporting
+    echo -e "${GREEN}✅ Environment variables loaded from .env${NC}"
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
