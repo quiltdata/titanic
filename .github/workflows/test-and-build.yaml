@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [ '**' ]  # Run on any PRs
   push:
-    branches: [ main ]  # Also run on pushes to main
+    branches: [ main, release ]  # Also run on pushes to main and release
 
 jobs:
   test-and-build:
@@ -33,40 +33,15 @@ jobs:
     - name: Run linter
       run: npm run lint
       
-    - name: Build CloudFormation template
-      run: npm run deploy:release -- --build-only
-      env:
-        # Set required environment variables for CDK synthesis
-        CDK_DEFAULT_ACCOUNT: "123456789012"  # Placeholder account
-        CDK_DEFAULT_REGION: "us-east-1"     # Default region
-        QUILT_DATABASE_NAME: "test-database" # Placeholder for synthesis
-        QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/TestPolicy" # Placeholder
-        
-    - name: Upload CloudFormation template
-      uses: actions/upload-artifact@v4
-      with:
-        name: cloudformation-template-${{ github.sha }}
-        path: cdk.out/TitanicStack.template.json
-        retention-days: 30
-        
-    - name: Upload CDK assets info
-      uses: actions/upload-artifact@v4
-      with:
-        name: cdk-assets-${{ github.sha }}
-        path: |
-          cdk.out/TitanicStack.assets.json
-          cdk.out/manifest.json
-        retention-days: 30
-
-    # Generate full release package on main or release branch pushes
+    # Generate release package on main or release branch pushes
     - name: Generate release package
       if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release') && github.event_name == 'push'
       run: |
         # Extract version from package.json
         VERSION=$(node -p "require('./package.json').version")
         
-        # Generate release with version tag and archives
-        npm run deploy:release -- --version "v$VERSION" --clean --archive
+        # Generate release with version tag
+        npm run deploy:release -- --version "v$VERSION"
       env:
         CDK_DEFAULT_ACCOUNT: "123456789012"
         CDK_DEFAULT_REGION: "us-east-1"
@@ -96,7 +71,6 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "- **Tests**: ✅ Passed" >> $GITHUB_STEP_SUMMARY
         echo "- **Linting**: ✅ Passed" >> $GITHUB_STEP_SUMMARY
-        echo "- **CloudFormation Template**: ✅ Built and validated" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" = "push" ]; then
           echo "- **Release Package**: ✅ Generated (main branch push)" >> $GITHUB_STEP_SUMMARY
@@ -108,11 +82,11 @@ jobs:
         
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📋 Artifacts" >> $GITHUB_STEP_SUMMARY
-        echo "- CloudFormation template available as artifact" >> $GITHUB_STEP_SUMMARY
-        echo "- CDK assets info available as artifact" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" = "push" ]; then
           echo "- Release package archives available as artifacts" >> $GITHUB_STEP_SUMMARY
         elif [ "${{ github.ref }}" = "refs/heads/release" ] && [ "${{ github.event_name }}" = "push" ]; then
           echo "- Release package archives available as artifacts" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- No artifacts generated (validation only)" >> $GITHUB_STEP_SUMMARY
         fi

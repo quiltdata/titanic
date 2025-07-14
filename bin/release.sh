@@ -17,9 +17,6 @@ BASE_DIST_DIR="dist"
 RELEASE_SUBDIR="release"
 ARTIFACTS_DIR="artifacts"
 VERSION=""
-CLEAN=false
-BUILD_ONLY=false
-CREATE_ARCHIVE=false
 
 # Help function
 show_help() {
@@ -31,12 +28,7 @@ This creates a self-contained package with CloudFormation template, Lambda asset
 
 OPTIONS:
     -h, --help                      Show this help message
-    -o, --output-dir DIR            Base output directory (default: dist)
     -v, --version VERSION           Version tag for the release (e.g., v1.0.0)
-    -c, --clean                     Clean output directory before generating
-    -b, --build-only                Only build, don't create release package
-    -a, --archive                   Create compressed archives (tar.gz and zip)
-    --no-synth                      Skip CDK synth (use existing cdk.out)
 
 DIRECTORY STRUCTURE:
     dist/
@@ -52,59 +44,28 @@ EXAMPLES:
     # Generate release package
     $0
 
-    # Generate with version tag and archives
-    $0 --version v1.2.0 --archive
-
-    # Clean build with custom base directory
-    $0 --clean --output-dir build
-
-    # Build only (no package creation)
-    $0 --build-only
+    # Generate with version tag
+    $0 --version v1.2.0
 
 WORKFLOW:
-    1. Builds the TypeScript project
-    2. Runs CDK synth with parameters to generate CloudFormation template
-    3. Extracts Lambda assets from cdk.out
-    4. Creates standalone deployment package with:
-       - template.json (CloudFormation template with parameters)
-       - assets/ (Lambda function code)
-       - deploy.sh (deployment script)
-       - README.md (deployment instructions)
+    1. Cleans output directory and builds TypeScript project
+    2. Runs CDK synth and validates CloudFormation template
+    3. Creates standalone deployment package with all assets
+    4. Creates compressed archives (tar.gz and zip)
 
 EOF
 }
 
 # Parse command line arguments
-SKIP_SYNTH=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         -h|--help)
             show_help
             exit 0
             ;;
-        -o|--output-dir)
-            BASE_DIST_DIR="$2"
-            shift 2
-            ;;
         -v|--version)
             VERSION="$2"
             shift 2
-            ;;
-        -c|--clean)
-            CLEAN=true
-            shift
-            ;;
-        -b|--build-only)
-            BUILD_ONLY=true
-            shift
-            ;;
-        -a|--archive)
-            CREATE_ARCHIVE=true
-            shift
-            ;;
-        --no-synth)
-            SKIP_SYNTH=true
-            shift
             ;;
         *)
             echo -e "${RED}Error: Unknown option $1${NC}"
@@ -123,7 +84,7 @@ fi
 ARCHIVE_DIR="$BASE_DIST_DIR/$ARTIFACTS_DIR"
 
 # Clean output directory if requested
-if [[ "$CLEAN" == "true" && -d "$BASE_DIST_DIR" ]]; then
+if [[ -d "$BASE_DIST_DIR" ]]; then
     echo -e "${YELLOW}Cleaning existing dist directory: $BASE_DIST_DIR${NC}"
     rm -rf "$BASE_DIST_DIR"
 fi
@@ -148,19 +109,15 @@ fi
 echo ""
 
 # Build the project
-if [[ "$SKIP_SYNTH" != "true" ]]; then
-    echo -e "${YELLOW}Running TypeScript validation and CDK synthesis...${NC}"
-    
-    # Run CDK synth to generate CloudFormation template with parameters
-    echo -e "${YELLOW}Synthesizing CloudFormation template with parameters...${NC}"
-    npm run cdk:params
-else
-    echo -e "${YELLOW}Skipping CDK synth (using existing cdk.out)...${NC}"
-fi
+echo -e "${YELLOW}Running TypeScript validation and CDK synthesis...${NC}"
+
+# Run CDK synth to generate CloudFormation template with parameters
+echo -e "${YELLOW}Synthesizing CloudFormation template with parameters...${NC}"
+npm run cdk:params
 
 # Verify cdk.out exists and has the expected files
 if [[ ! -d "cdk.out" ]]; then
-    echo -e "${RED}Error: cdk.out directory not found. Run without --no-synth${NC}"
+    echo -e "${RED}Error: cdk.out directory not found${NC}"
     exit 1
 fi
 
@@ -215,13 +172,6 @@ if ! python3 -m json.tool "$STACK_TEMPLATE" > /dev/null 2>&1; then
 fi
 
 echo -e "${GREEN}✅ CloudFormation template validation passed${NC}"
-
-# Exit early if build-only
-if [[ "$BUILD_ONLY" == "true" ]]; then
-    echo -e "${GREEN}Build completed successfully!${NC}"
-    echo "CloudFormation template: $STACK_TEMPLATE"
-    exit 0
-fi
 
 # Create release directory
 echo -e "${YELLOW}Creating release package...${NC}"
@@ -400,26 +350,25 @@ EOF
 echo -e "${GREEN}Release package created successfully!${NC}"
 echo ""
 
-# Create archives if requested
-if [[ "$CREATE_ARCHIVE" == "true" ]]; then
-    echo -e "${YELLOW}Creating release archives...${NC}"
-    
-    # Extract just the release directory name for the archive
-    RELEASE_NAME=$(basename "$RELEASE_DIR")
-    
-    # Create compressed archive in artifacts directory
-    tar -czf "$ARCHIVE_DIR/${RELEASE_NAME}.tar.gz" -C "$BASE_DIST_DIR" "$RELEASE_NAME/"
-    echo "Created: $ARCHIVE_DIR/${RELEASE_NAME}.tar.gz"
-    
-    # Create zip archive for Windows users in artifacts directory
-    (cd "$BASE_DIST_DIR" && zip -r "../$ARCHIVE_DIR/${RELEASE_NAME}.zip" "$RELEASE_NAME/")
-    echo "Created: $ARCHIVE_DIR/${RELEASE_NAME}.zip"
-    
-    echo ""
-    echo -e "${BLUE}Archive Details:${NC}"
-    ls -lh "$ARCHIVE_DIR/${RELEASE_NAME}".{tar.gz,zip}
-    echo ""
-fi
+# Create archives
+echo -e "${YELLOW}Creating release archives...${NC}"
+
+# Extract just the release directory name for the archive
+RELEASE_NAME=$(basename "$RELEASE_DIR")
+
+# Create compressed archive in artifacts directory
+tar -czf "$ARCHIVE_DIR/${RELEASE_NAME}.tar.gz" -C "$BASE_DIST_DIR" "$RELEASE_NAME/"
+echo "Created: $ARCHIVE_DIR/${RELEASE_NAME}.tar.gz"
+
+# Create zip archive for Windows users in artifacts directory
+(cd "$BASE_DIST_DIR" && zip -r "../$ARCHIVE_DIR/${RELEASE_NAME}.zip" "$RELEASE_NAME/")
+echo "Created: $ARCHIVE_DIR/${RELEASE_NAME}.zip"
+
+echo ""
+echo -e "${BLUE}Archive Details:${NC}"
+ls -lh "$ARCHIVE_DIR/${RELEASE_NAME}".{tar.gz,zip}
+echo ""
+
 echo -e "${BLUE}Package Details:${NC}"
 echo "Base Directory: $BASE_DIST_DIR/"
 echo "Release Package: $RELEASE_DIR/"
@@ -429,21 +378,12 @@ if [[ -d "$ASSETS_DIR" ]]; then
     asset_count=$(find "$ASSETS_DIR" -name "asset.*" -type d | wc -l | tr -d ' ')
     echo "Lambda Assets: $asset_count function(s) in $ASSETS_DIR/"
 fi
-if [[ "$CREATE_ARCHIVE" == "true" ]]; then
-    echo "Archives: $ARCHIVE_DIR/"
-fi
+echo "Archives: $ARCHIVE_DIR/"
 echo ""
 echo -e "${YELLOW}To deploy:${NC}"
 echo "cd $RELEASE_DIR"
 echo "./deploy.sh --glue-database-name YOUR_DB --quilt-read-policy-arn YOUR_POLICY_ARN"
 echo ""
 
-if [[ "$CREATE_ARCHIVE" == "true" ]]; then
-    echo -e "${YELLOW}Archives created and ready for distribution!${NC}"
-    echo "Location: $ARCHIVE_DIR/"
-else
-    echo -e "${YELLOW}To create distributable archives:${NC}"
-    RELEASE_NAME=$(basename "$RELEASE_DIR")
-    echo "tar -czf $ARCHIVE_DIR/${RELEASE_NAME}.tar.gz -C $BASE_DIST_DIR $RELEASE_NAME/"
-    echo "(cd $BASE_DIST_DIR && zip -r ../$ARCHIVE_DIR/${RELEASE_NAME}.zip $RELEASE_NAME/)"
-fi
+echo -e "${YELLOW}Archives created and ready for distribution!${NC}"
+echo "Location: $ARCHIVE_DIR/"
