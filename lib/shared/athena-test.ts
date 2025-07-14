@@ -1,6 +1,6 @@
 import { AthenaClient, GetQueryExecutionCommand, QueryExecutionState, StartQueryExecutionCommand } from "@aws-sdk/client-athena";
 import { GlueClient, GetTablesCommand } from "@aws-sdk/client-glue";
-import { mockClient } from "aws-sdk-client-mock";
+import { mockClient, AwsStub } from "aws-sdk-client-mock";
 import { AthenaUtils } from './athena-utils';
 import { Config } from './config';
 
@@ -9,11 +9,11 @@ import { Config } from './config';
  * This separates test concerns from production code to help slim the Lambda bundle
  */
 export class AthenaTest extends AthenaUtils {
-    public readonly athenaMock: any;
-    public readonly glueMock: any;
+    public readonly athenaMock: AwsStub<AthenaClient>;
+    public readonly glueMock: AwsStub<GlueClient>;
 
-    private constructor(config: Config, athenaMock: any, glueMock: any) {
-        super(config, athenaMock as AthenaClient, glueMock as GlueClient);
+    private constructor(config: Config, athenaMock: AwsStub<AthenaClient>, glueMock: AwsStub<GlueClient>) {
+        super(config, athenaMock as unknown as AthenaClient, glueMock as unknown as GlueClient);
         this.athenaMock = athenaMock;
         this.glueMock = glueMock;
     }

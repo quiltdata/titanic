@@ -38,7 +38,7 @@ export class PackageRevisionTable extends BaseTable {
         return `${sourceAlias}.timestamp != 'latest'`;
     }
 
-    public generateInsertQuery(packagesView: string, objectsView: string): string {
+    public generateInsertQuery(packagesView: string, _objectsView: string): string {
         // Extract registry name from the packages view table name
         const registryName = this.extractRegistryName(packagesView);
         const selectClause = this.generateSelectClause(registryName, 's');

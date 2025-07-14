@@ -64,7 +64,7 @@ export class AthenaUtils {
      */
     async validateAthenaAccess(): Promise<{
         success: boolean;
-        executionContext: any;
+        executionContext: { Database: string; Catalog?: string };
         outputLocation: string;
         testQuery: string;
         configType: string;

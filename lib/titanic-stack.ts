@@ -12,21 +12,76 @@ import * as path from "path";
 const s3DatabaseName = "quilt_titanic";
 
 export interface TitanicStackProps extends cdk.StackProps {
-    glueDatabaseName: string;
-    quiltReadPolicyArn: string;
-    useS3Table: boolean;
+    glueDatabaseName?: string;
+    quiltReadPolicyArn?: string;
+    useS3Table?: boolean;
     lambdaTimeout?: number;
+    useCloudFormationParameters?: boolean;  // Flag to enable parameter mode
+}
+
+interface TitanicStackParameters {
+    glueDatabaseName: cdk.CfnParameter;
+    quiltReadPolicyArn: cdk.CfnParameter;
+    useS3Table: cdk.CfnParameter;
+    lambdaTimeout: cdk.CfnParameter;
 }
 
 export class TitanicStack extends cdk.Stack {
-    constructor(scope: Construct, id: string, props: TitanicStackProps) {
+    constructor(scope: Construct, id: string, props: TitanicStackProps = {}) {
         super(scope, id, props);
 
-        // Use props instead of environment variables
-        const useS3Table = props.useS3Table;
+        const useCloudFormationParameters = props.useCloudFormationParameters ?? false;
+
+        // Create CloudFormation parameters if needed
+        let parameters: TitanicStackParameters | undefined;
         
-        // Source database (where views are) - from props
-        const glueDatabaseName = props.glueDatabaseName;
+        if (useCloudFormationParameters) {
+            parameters = {
+                glueDatabaseName: new cdk.CfnParameter(this, "GlueDatabaseName", {
+                    type: "String",
+                    description: "Name of the Glue database containing the source views",
+                    default: process.env.QUILT_DATABASE_NAME || "",
+                }),
+                
+                quiltReadPolicyArn: new cdk.CfnParameter(this, "QuiltReadPolicyArn", {
+                    type: "String",
+                    description: "ARN of the IAM policy for reading from Quilt buckets",
+                    default: process.env.QUILT_READ_POLICY_ARN || "",
+                }),
+                
+                useS3Table: new cdk.CfnParameter(this, "UseS3Table", {
+                    type: "String",
+                    description: "Whether to use S3 Tables format (true/false)",
+                    default: process.env.USE_S3_TABLE || "false",
+                    allowedValues: ["true", "false"],
+                }),
+                
+                lambdaTimeout: new cdk.CfnParameter(this, "LambdaTimeout", {
+                    type: "Number",
+                    description: "Lambda function timeout in seconds",
+                    default: parseInt(process.env.LAMBDA_TIMEOUT || "900"),
+                    minValue: 1,
+                    maxValue: 900,
+                }),
+            };
+        }
+
+        // Get values from either props or parameters
+        const glueDatabaseName = useCloudFormationParameters 
+            ? parameters!.glueDatabaseName.valueAsString 
+            : props.glueDatabaseName!;
+        
+        const quiltReadPolicyArn = useCloudFormationParameters 
+            ? parameters!.quiltReadPolicyArn.valueAsString 
+            : props.quiltReadPolicyArn!;
+        
+        const useS3Table = useCloudFormationParameters 
+            ? parameters!.useS3Table.valueAsString === "true" 
+            : (props.useS3Table ?? false);
+        
+        const lambdaTimeout = useCloudFormationParameters 
+            ? parameters!.lambdaTimeout.valueAsNumber 
+            : (props.lambdaTimeout || 900);
         
 
         // Always create both buckets for maximum flexibility
@@ -48,7 +103,7 @@ export class TitanicStack extends cdk.Stack {
             entry: path.join(__dirname, "merge-tables.ts"),
             handler: "handler",
             runtime: Runtime.NODEJS_18_X,
-            timeout: cdk.Duration.seconds(900),
+            timeout: cdk.Duration.seconds(lambdaTimeout),
             bundling: {
                 externalModules: [
                     "@aws-sdk/client-glue",
@@ -57,7 +112,9 @@ export class TitanicStack extends cdk.Stack {
             },
             environment: {
                 // Source database to read from (always the same, where views are)
-                GLUE_DATABASE_NAME: glueDatabaseName,
+                GLUE_DATABASE_NAME: useCloudFormationParameters 
+                    ? parameters!.glueDatabaseName.valueAsString 
+                    : glueDatabaseName,
                 
                 // Target database to write to (changes based on USE_S3_TABLE)
                 S3TABLE_DATABASE_NAME: s3DatabaseName,
@@ -70,9 +127,15 @@ export class TitanicStack extends cdk.Stack {
                 ATHENA_RESULTS_BUCKET_ARN: glueTablesBucket.bucketArn,
                 
                 // Configuration
-                LAMBDA_TIMEOUT: (props.lambdaTimeout || 15000).toString(),
-                QUILT_READ_POLICY_ARN: props.quiltReadPolicyArn,
-                USE_S3_TABLE: useS3Table.toString(),
+                LAMBDA_TIMEOUT: useCloudFormationParameters 
+                    ? parameters!.lambdaTimeout.valueAsString 
+                    : lambdaTimeout.toString(),
+                QUILT_READ_POLICY_ARN: useCloudFormationParameters 
+                    ? parameters!.quiltReadPolicyArn.valueAsString 
+                    : quiltReadPolicyArn,
+                USE_S3_TABLE: useCloudFormationParameters 
+                    ? parameters!.useS3Table.valueAsString 
+                    : useS3Table.toString(),
             },
         });
 
@@ -162,7 +225,7 @@ export class TitanicStack extends cdk.Stack {
             iam.ManagedPolicy.fromManagedPolicyArn(
                 this,
                 "TitanicGrantQuiltReadPolicy",
-                props.quiltReadPolicyArn
+                quiltReadPolicyArn
             )
         );
 

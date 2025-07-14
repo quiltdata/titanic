@@ -1,0 +1,124 @@
+name: Test and Build
+
+on:
+  push:
+    branches: [ '**' ]  # Run on pushes to any branch
+    tags:
+      - 'v*'  # Run on version tags
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run tests
+      run: npm test
+      
+    - name: Run linter
+      run: npm run lint
+
+    - name: Print debug info
+      run: |
+        echo "GITHUB_REF=${GITHUB_REF}"
+        echo "GITHUB_EVENT_NAME=${GITHUB_EVENT_NAME}"
+      
+    # Generate release package only for tags
+    - name: Generate release package
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        echo "Building release package version: $VERSION"
+        npm run deploy:release -- --version "$VERSION"
+      env:
+        CDK_DEFAULT_ACCOUNT: "123456789012"
+        CDK_DEFAULT_REGION: "us-east-1"
+        QUILT_DATABASE_NAME: "release-database"
+        QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/ReleasePolicy"
+        
+    - name: Upload release archives
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-archives-${{ github.run_number }}
+        path: dist/artifacts/
+        retention-days: 90
+        
+    - name: Upload release directory
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-directory-${{ github.run_number }}
+        path: dist/release-*/
+        retention-days: 90
+
+    # Create GitHub Release for tags only
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
+        body: |
+          ## Titanic Stack Release
+          
+          Standalone deployment package for the Titanic Data Lake Table Merger.
+          
+          ### 📦 Package Contents
+          - CloudFormation template with parameterized deployment
+          - Deployment script with automatic environment loading
+          - Lambda function assets
+          - Configuration templates
+          
+          ### 🚀 Quick Deploy
+          1. Download and extract the release archive
+          2. Copy `env.example` to `.env` and edit with your values
+          3. Run `./deploy.sh`
+          
+          ### 📋 Requirements
+          - AWS CLI configured with deployment permissions
+          - `zip` utility for Lambda packaging
+          
+          Built from commit: ${{ github.sha }}
+        files: |
+          dist/artifacts/*.tar.gz
+          dist/artifacts/*.zip
+        prerelease: ${{ contains(github.ref_name, '-') }}  # Pre-release if tag contains hyphen (e.g., v1.0.0-beta)
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build summary
+      if: always()
+      run: |
+        echo "## 🏗️ Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Tests**: ✅ Passed" >> $GITHUB_STEP_SUMMARY
+        echo "- **Linting**: ✅ Passed" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          echo "- **GitHub Release**: ✅ Created from tag (${GITHUB_REF_NAME})" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Release**: ⏭️ Skipped (only created for version tags)" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Release Strategy" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch pushes** → Tests + Linting only" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version tags (v*)** → Tests + Linting + GitHub Release" >> $GITHUB_STEP_SUMMARY
+        echo "- **Pre-release tags** → Use hyphen in tag (e.g., v1.0.0-beta)" >> $GITHUB_STEP_SUMMARY

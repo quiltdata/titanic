@@ -1,7 +1,8 @@
 .env
+*.d.ts
 *.js
 !jest.config.js
-*.d.ts
+!eslint.config.js
 node_modules
 
 # CDK asset staging directory
@@ -10,3 +11,6 @@ cdk.out
 .aider*
 /coverage
 /test-results
+
+# Release and build artifacts
+/dist

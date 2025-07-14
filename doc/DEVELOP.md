@@ -1,97 +1,203 @@
 # Developer Guide - Titanic Data Lake Table Merger
 
-This guide covers the internal architecture, development patterns, and extension points for the Titanic project.
+This guide covers architecture, development workflow, testing, and deployment for developers.
 
-## Documentation Structure
 
-- **README.md** - Essential user information, deployment, and basic usage
-- **doc/DEVELOP.md** (this file) - Developer architecture, patterns, and extension points
-- **doc/schema.sql** - Complete SQL schema reference for both table formats
-- **doc/SCHEMA.md** - Schema design decisions and motivation
+## Development Workflow
 
-## Architecture
+### Setup
+
+```bash
+git clone https://github.com/quiltdata/titanic
+cd titanic
+cp env.example .env
+# Edit .env with your configuration
+npm install
+```
+
+### Building and Testing
+
+```bash
+npm run build              # Compile TypeScript
+npm run test               # Run tests without coverage
+npm run test:coverage      # Run tests with coverage report
+npm run lint               # Run ESLint and fix issues
+npm run test:watch         # Run tests in watch mode
+```
+
+### Local Development
+
+```bash
+npm run cdk                # Full deploy (test + deploy + event + logs)
+npm run deploy:event       # Send manual merge event
+npm run deploy:logs        # Monitor Lambda logs
+npm run deploy:outputs     # Show stack outputs
+```
+
+### Release Management
+
+```bash
+npm run deploy:release -- --version v1.0.0  # Generate standalone package
+npm run destroy            # Full cleanup and stack destruction
+```
+
+## Deployment Methods
+
+### Method 1: CDK Deployment 
+
+```bash
+cp env.example .env
+# Edit .env with required values
+npm run cdk
+
+# OR deploy with parameters
+npx cdk deploy \
+  --parameters GlueDatabaseName=mydb \
+  --parameters QuiltReadPolicyArn=arn:aws:iam::123456789012:policy/QuiltReadPolicy \
+  --parameters UseS3Table=false \
+  --parameters LambdaTimeout=900
+```
+
+### Method 2: CloudFormation from Generated Template
+
+```bash
+# Generate release package
+npm run deploy:release -- --version v1.0.0
+cd dist/release-v1.0.0/
+
+# Deploy with environment file
+cp env.example .env
+# Edit .env with your values
+./deploy.sh
+
+# OR deploy with parameters
+./deploy.sh --glue-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
+```
+
+## Environment Variables
+
+### Required for Deployment
+```bash
+QUILT_DATABASE_NAME=your_database_name           #  Stack Athena database with per-bucket package/object views
+QUILT_READ_POLICY_ARN=arn:aws:iam::123:policy/X  # Stack read-only policy (so we can add access to new buckets)
+```
+
+### Optional Configuration
+```bash
+USE_S3_TABLE=false          # Table format selection
+LAMBDA_TIMEOUT=900          # Lambda timeout (seconds)
+AWS_DEFAULT_REGION=us-east-1
+AWS_PROFILE=default
+```
+
+### Lambda Environment Variables (set by CDK stack)
+```bash
+GLUE_TABLES_BUCKET_ARN      # S3 bucket for Glue tables
+S3_TABLES_BUCKET_ARN        # S3 Tables bucket
+GLUE_DATABASE_NAME          # Source database (and target, for Glue tables)
+S3_TABLE_DATABASE_NAME      # S3 Tables database
+```
+## Architecture Overview
 
 ### Core Components
 
-The system is built with a modular architecture supporting dual table formats:
+**Lambda Handler** (`merge-tables.ts`)
+- EventBridge event processor and orchestrator
+- First-run table dropping using sentinel files
+- Error resilience with detailed reporting
 
-#### Lambda Handler (`merge-tables.ts`)
-- **Purpose**: EventBridge event processor and orchestrator
-- **Key Features**: 
-  - First-run table dropping using sentinel files
-  - Event parsing for bucket-specific and "all buckets" modes
-  - Error resilience with detailed reporting
-  - Statistics collection and reporting
+**Table Manager** (`table-manager.ts`)
+- Orchestrates table operations with format abstraction
+- Runtime table format selection via `USE_S3_TABLE`
+- Returns detailed creation/insertion statistics
 
-#### Table Manager (`table-manager.ts`)
-- **Purpose**: Orchestrates table operations with format abstraction
-- **Key Methods**:
-  - `ensureTablesExist()`: Returns detailed creation statistics
-  - `executeInserts()`: Returns detailed insertion statistics
-- **Dual Mode Support**: Runtime table format selection via `USE_S3_TABLE`
-
-#### Table Classes
-Each table type has a dedicated class with format-specific implementations:
-
+**Table Classes**
 - `PackageRevisionTable` - Package revision metadata
 - `PackageTagTable` - Package tag associations  
 - `PackageEntryTable` - Package file entries
 
-**Common Interface**:
-```typescript
-interface TableInterface {
-  createTableSQL(useS3Table: boolean): string;
-  insertSQL(registry: string): string;
-}
+### Table Format Support
+
+**Glue Tables** (`USE_S3_TABLE=false` - Default)
+- ACID transactions, schema evolution, time travel
+- Single S3 bucket with Glue metadata
+- CREATE TABLE AS SELECT (CTAS) operations
+
+**S3 Tables** (`USE_S3_TABLE=true` - Experimental)
+- AWS-native optimization, built-in partitioning
+- Dual-bucket architecture (S3 Tables + Athena results)
+- Empty table creation + separate INSERT operations
+
+## Testing Strategy
+
+### Test Structure
+- **Unit Tests**: Individual table classes with both S3 and Glue modes
+- **Integration Tests**: TableManager operations with statistics validation
+- **Handler Tests**: End-to-end event processing with error scenarios
+
+### Running Tests
+```bash
+npm test                    # Quick test run
+npm run test:coverage       # Full coverage report
+npm run test:fails          # Run only failed tests
+npm run test:debug          # Debug mode with detailed output
 ```
 
-### Table Format Modes
+### Test Patterns
+```typescript
+describe.each([
+  ['Glue', false],
+  ['S3 Tables', true]
+])('%s mode', (modeName, useS3Table) => {
+  // Test both formats with same assertions
+});
+```
 
-The system supports two distinct table storage formats that can be selected at deployment time:
+## Error Handling
 
-- S3 Tables mode stores the catalog metadata directly in a specialized S3 Tables bucket
-- Glue mode uses the AWS Glue Data Catalog to define the tables
+The system uses a "continue on error" approach:
+- **S3 Access Denied**: Log error, continue with other buckets
+- **Missing Tables**: Log warning, continue processing
+- **Athena Failures**: Report error, continue with remaining operations
 
-We always create one target bucket for each mode.  
-S3 Tables mode always writes Athena query results to the standard bucket.
-We pass in the existing (source) database, which is also where we create Glue tables.
+## Release Process
 
-On first run we drop both tables (if they exist),
-then create the tables.
-We always read from the existing views in the Glue Catalog,
-but may write the S3 Tables Catalog if USE_S3_TABLE is set.
+### GitHub Releases Strategy
+- **Production releases**: `main` branch pushes or `v*` tags
+- **Pre-releases**: `release` branch pushes (with `-rc.{run_number}`)
+- **Validation only**: Pull requests (no releases)
 
-#### Glue Tables (`USE_S3_TABLE=false`)
-- **Implementation**: CREATE TABLE AS SELECT (CTAS) with Glue catalog
-- **Benefits**: ACID transactions, schema evolution, time travel
-- **Storage**: Single S3 bucket with Glue metadata
-- **Partitioning**: Glue-managed with bucketing functions
+### Creating Releases
 
-#### S3 Tables (`USE_S3_TABLE=true`)
-- **Implementation**: Empty table creation + separate INSERT operations using AWS S3 Tables managed catalog
-- **Benefits**: AWS-native optimization, built-in partitioning
-- **Storage**: Dual-bucket architecture:
-  - S3 Tables bucket (ARN format) for table data
-  - Regular S3 bucket for Athena query results
-- **Partitioning**: Manual PARTITIONED BY clauses
-- **Athena Queries**: Uses `s3tablescatalog/{bucket-name}` catalog specification
+**Production Release:**
+```bash
+git checkout main
+git merge feature-branch
+git push origin main
+# OR create version tag:
+git tag v1.2.0 && git push origin v1.2.0
+```
 
-### Error Handling Strategy
+**Pre-Release for Testing:**
+```bash
+git checkout release
+git merge feature-branch
+git push origin release
+```
 
-The system implements a "continue on error" approach:
+### Release Artifacts
+Each release includes:
+- CloudFormation template (`template.json`)
+- Deployment script (`deploy.sh`)
+- Lambda function assets (in `assets/`)
+- Configuration template (`env.example`)
+- Compressed archives (`.tar.gz` and `.zip`)
 
-1. **S3 Access Denied**: Log error, continue with other buckets
-2. **Missing Tables**: Log warning, continue processing
-3. **Athena Query Failures**: Report error, continue with remaining operations
-4. **Individual Table Failures**: Track per-table failures, continue with other tables
-
-This ensures maximum data processing even when some sources are unavailable.
-
-## Development Patterns
+## Architecture Patterns
 
 ### Adding New Table Types
 
-1. **Create table class** implementing the standard interface:
+1. **Create table class**:
 ```typescript
 export class NewTable {
   createTableSQL(useS3Table: boolean): string {
@@ -118,198 +224,68 @@ this.tables = [
 ];
 ```
 
-3. **Add tests** following existing patterns in `table-manager.test.ts`
-
-### Testing Strategy
-
-The test suite covers both table formats comprehensively:
-
-#### Test Structure
-- **Unit Tests**: Individual table classes with both S3 and Glue modes
-- **Integration Tests**: TableManager operations with statistics validation
-- **Handler Tests**: End-to-end event processing with error scenarios
-
-#### Test Patterns
-```typescript
-describe('Table operations', () => {
-  describe.each([
-    ['Glue', false],
-    ['S3 Tables', true]
-  ])('%s mode', (modeName, useS3Table) => {
-    // Test both formats with same assertions
-  });
-});
-```
-
-#### Key Test Areas
-- Table creation SQL generation for both formats
-- Statistics collection and validation
-- Error handling and resilience
-- Sentinel file behavior
-- Event parsing edge cases
-
-### Extension Points
-
-#### Custom Table Formats
-To add support for additional table formats:
-
-1. Extend the `useS3Table` parameter to support more options
-2. Update table classes to handle new format in `createTableSQL()`
-3. Add format-specific logic in TableManager
-
-#### Custom Event Sources
-To support additional event sources beyond EventBridge:
-
-1. Create new handler functions in `merge-tables.ts`
-2. Add event parsing logic for new format
-3. Ensure bucket extraction works with new event structure
-
-#### Custom Error Handling
-To customize error handling behavior:
-
-1. Update `processAllBuckets()` in merge-tables.ts
-2. Modify error logging and statistics collection
-3. Adjust continuation logic based on error types
-
-## Code Quality
-
-### TypeScript Patterns
-- **Strict typing**: All functions have explicit return types
-- **Error types**: Custom error classes for different failure modes
-- **Async/await**: Consistent async pattern throughout
-- **Interface segregation**: Clean separation between table concerns
-
-### Testing Requirements
-- **Dual mode coverage**: All table operations tested in both formats
-- **Error scenarios**: Comprehensive error handling validation
-- **Statistics validation**: Detailed assertion of operation metrics
-- **Mock isolation**: Clean mocking without test interference
-
-### Performance Considerations
-- **Parallel operations**: Table creation and insertion can run concurrently
-- **Error isolation**: Failures in one table don't block others
-- **Resource cleanup**: Proper AWS resource management
-- **Query optimization**: Efficient SQL generation for both formats
-
-## Deployment
-
-### Environment Variables
-Key configuration for developers:
-
-```bash
-# Required: Deployment Configuration
-CDK_DEFAULT_ACCOUNT=123456789012
-CDK_DEFAULT_REGION=us-east-2
-QUILT_DATABASE_NAME=your_database_name
-QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/PolicyName
-
-# Optional: Table Format Selection
-USE_S3_TABLE=false  # Core functionality toggle (default: false)
-
-# Development/Testing
-NODE_ENV=development
-AWS_PROFILE=your-profile
-```
-
-**Runtime Environment Variables**: The following are automatically set by the CDK stack:
-- `GLUE_TABLES_BUCKET_ARN` - S3 bucket for Glue tables and Athena results
-- `S3_TABLES_BUCKET_ARN` - S3 Tables bucket
-- `GLUE_DATABASE_NAME` - Target database name for merged tables
-- `S3_TABLE_DATABASE_NAME` - S3 Tables database name
-- `CONFIG_TYPE` - Configuration type indicator
-
-### CDK Infrastructure
-The infrastructure is defined in TypeScript with:
-- **Lambda function** with configurable environment variables
-- **EventBridge rule** for event triggering
-- **IAM roles** with minimal required permissions
-- **CloudWatch logs** for monitoring and debugging
-- **Dual S3 buckets** (S3 Tables mode): S3 Tables bucket + Athena results bucket
-- **Single S3 bucket** (Glue mode): Combined storage for tables and results
-
-### Deployment Steps
-1. **Configure environment**: Set all required variables
-2. **Bootstrap CDK**: `cdk bootstrap` (first time only)
-3. **Deploy stack**: `npm run cdk`
-4. **Verify deployment**: Check Lambda and SQS resources
-5. **Test functionality**: Use npm scripts to trigger events
-
-## Monitoring and Debugging
-
-### CloudWatch Logs
-Lambda logs include:
-- **Operation statistics**: Tables created, rows inserted, errors encountered
-- **Error details**: Specific failure reasons with context
-- **Performance metrics**: Query execution times and resource usage
-- **Table mode indicators**: Which format is being used
-
-### Debugging Tips
-1. **Check environment variables** in Lambda console (especially `ATHENA_RESULTS_BUCKET` for S3 Tables)
-2. **Verify source views** exist in Glue Data Catalog
-3. **Monitor Athena queries** in AWS console for SQL issues
-4. **Review IAM permissions** if access denied errors occur
-5. **Test with npm scripts** for isolated debugging
-6. **Validate S3 Tables ARN format** if using S3 Tables mode
-7. **Check dual-bucket setup** for S3 Tables deployments
-
-### Performance Monitoring
-- **Query execution time**: Monitor Athena query performance
-- **Lambda duration**: Track function execution time
-- **Error rates**: Monitor failure patterns by bucket/table
-- **Resource utilization**: Check Lambda memory and timeout usage
-
-## Best Practices
-
-### Code Organization
-- **Single responsibility**: Each class handles one table type
-- **Configuration injection**: Environment variables passed down through constructors
-- **Error boundaries**: Clear error handling at each level
-- **Testable design**: Easy mocking and isolated testing
-
-### SQL Generation
-- **Format-specific logic**: Clear separation between S3 and Glue SQL
-- **Parameterized queries**: Safe registry and bucket name handling
-- **Consistent naming**: Predictable table and column naming conventions
-- **Partitioning strategy**: Optimized for query performance
-
-### Error Management
-- **Graceful degradation**: Continue processing on non-fatal errors
-- **Detailed logging**: Sufficient context for debugging
-- **User feedback**: Clear error messages in responses
-- **Retry logic**: Appropriate retry strategies for transient failures
-
 ### Athena Query Execution
 
-The system executes Athena queries differently based on table format:
-
-#### S3 Tables Query Structure
+**S3 Tables Query Structure:**
 ```typescript
 {
-  QueryString: "DROP TABLE IF EXISTS ...",
+  QueryString: "SQL...",
   QueryExecutionContext: {
-    Catalog: "s3tablescatalog/bucket-name",  // Extracted from S3 Tables ARN
+    Catalog: "s3tablescatalog/bucket-name",
     Database: "database_name"
   },
   ResultConfiguration: {
-    OutputLocation: "s3://athena-results-bucket/athena-results/"  // Separate bucket
+    OutputLocation: "s3://athena-results-bucket/athena-results/"
   }
 }
 ```
 
-#### Glue Query Structure
+**Glue Query Structure:**
 ```typescript
 {
-  QueryString: "DROP TABLE IF EXISTS ...",
+  QueryString: "SQL...",
   QueryExecutionContext: {
-    Database: "database_name"  // No catalog specification needed
+    Database: "database_name"
   },
   ResultConfiguration: {
-    OutputLocation: "s3://target-bucket/athena-results/"  // Same bucket as Glue tables
+    OutputLocation: "s3://target-bucket/athena-results/"
   }
 }
 ```
 
-#### ARN Handling for S3 Tables
-- S3 Tables buckets use ARN format: `arn:aws:s3tables:region:account:bucket/bucket-name`
-- The system extracts the bucket name from the ARN for catalog specification
-- Query results are stored in a separate regular S3 bucket (`ATHENA_RESULTS_BUCKET`)
+## Performance & Monitoring
+
+### Diagnostic Commands
+```bash
+# Check deployment
+npm run deploy:outputs
+aws cloudformation describe-stacks --stack-name TitanicStack
+
+# Monitor resources  
+aws s3 ls | grep titanic
+aws glue get-tables --database-name $QUILT_DATABASE_NAME
+
+# Logs and debugging
+npm run deploy:logs recent 30
+npm run deploy:logs errors
+npm run deploy:logs tail
+```
+
+### Common Development Issues
+
+**"Cannot find bucket"**: CDK stack deployment failed
+- Solution: Check `npm run deploy:outputs`, redeploy with `npm run cdk`
+
+**"Permission denied"**: IAM/credentials issue
+- Solution: Verify `QUILT_READ_POLICY_ARN`, check `aws sts get-caller-identity`
+
+**Test failures**: Environment variable mismatch
+- Solution: Ensure test environment matches deployment configuration
+
+## Best Practices
+
+- **Dual-mode testing**: Always test both Glue and S3 Tables formats
+- **Error isolation**: Continue processing when individual operations fail
+- **Resource cleanup**: Use `npm run destroy` for complete cleanup
+- **Version management**: Use semantic versioning for releases
+- **Documentation**: Update both README.md and this file for changes
