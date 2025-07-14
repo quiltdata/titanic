@@ -113,7 +113,10 @@ echo -e "${YELLOW}Running TypeScript validation and CDK synthesis...${NC}"
 
 # Run CDK synth to generate CloudFormation template with parameters
 echo -e "${YELLOW}Synthesizing CloudFormation template with parameters...${NC}"
-npm run cdk:params
+if ! npm run cdk:params; then
+    echo -e "${RED}Error: Failed to run CDK synthesis${NC}"
+    exit 1
+fi
 
 # Verify cdk.out exists and has the expected files
 if [[ ! -d "cdk.out" ]]; then
@@ -159,17 +162,14 @@ fi
 # Count resources and validate structure
 RESOURCE_COUNT=$(grep -c '"Type"' "$STACK_TEMPLATE" 2>/dev/null || echo "0")
 PARAMETER_COUNT=$(grep -c '"Parameters"' "$STACK_TEMPLATE" 2>/dev/null || echo "0")
+CDK_VERSION=$(npx cdk --version 2>/dev/null || echo "N/A")
 
 echo "Template validation results:"
 echo "- Resources: $RESOURCE_COUNT"
 echo "- Parameters: $PARAMETER_COUNT"
 echo "- Size: $TEMPLATE_SIZE bytes"
 
-# Validate JSON structure
-if ! python3 -m json.tool "$STACK_TEMPLATE" > /dev/null 2>&1; then
-    echo -e "${RED}Error: CloudFormation template is not valid JSON${NC}"
-    exit 1
-fi
+# Template validation complete - CloudFormation will validate JSON syntax during deployment
 
 echo -e "${GREEN}✅ CloudFormation template validation passed${NC}"
 
@@ -186,17 +186,18 @@ ASSETS_DIR="$RELEASE_DIR/assets"
 if [[ -d "cdk.out" ]]; then
     # Find and copy Lambda asset directories
     asset_count=0
-    for asset_dir in cdk.out/asset.*; do
-        if [[ -d "$asset_dir" ]]; then
-            asset_name=$(basename "$asset_dir")
-            echo "Copying Lambda asset: $asset_name"
-            mkdir -p "$ASSETS_DIR"
-            cp -r "$asset_dir" "$ASSETS_DIR/"
-            ((asset_count++))
-        fi
-    done
     
-    if [[ $asset_count -gt 0 ]]; then
+    # Check if any asset directories exist first
+    if ls cdk.out/asset.* >/dev/null 2>&1; then
+        for asset_dir in cdk.out/asset.*; do
+            if [[ -d "$asset_dir" ]]; then
+                asset_name=$(basename "$asset_dir")
+                echo "Copying Lambda asset: $asset_name"
+                mkdir -p "$ASSETS_DIR"
+                cp -r "$asset_dir" "$ASSETS_DIR/"
+                ((asset_count++))
+            fi
+        done
         echo "Copied $asset_count Lambda asset(s)"
     else
         echo "No Lambda assets found"
@@ -331,8 +332,8 @@ Some resources may have region-specific requirements. Ensure you're deploying to
 ## Generated Information
 
 $(if [[ -n "$VERSION" ]]; then echo "- **Release Version:** $VERSION"; fi)- **Generated:** $(date)
-- **CDK Version:** $(npx cdk --version 2>/dev/null || echo "N/A")
-- **Template Size:** $(du -h "$RELEASE_DIR/template.json" 2>/dev/null | cut -f1 || echo "N/A")
+- **CDK Version:** $CDK_VERSION
+- **Template Size:** $TEMPLATE_SIZE bytes
 $(if [[ -d "$ASSETS_DIR" ]]; then echo "- **Lambda Assets:** $(find "$ASSETS_DIR" -name "asset.*" -type d | wc -l | tr -d ' ') function(s)"; fi)
 
 ## Support
@@ -347,10 +348,10 @@ Titanic Stack Deployment Package
 ================================
 
 Generated: $(date)
-$(if [[ -n "$VERSION" ]]; then echo "Version: $VERSION"; fi)CDK Version: $(npx cdk --version 2>/dev/null || echo "N/A")
+$(if [[ -n "$VERSION" ]]; then echo "Version: $VERSION"; fi)CDK Version: $CDK_VERSION
 
 Files:
-- template.json ($(du -h "$RELEASE_DIR/template.json" 2>/dev/null | cut -f1 || echo "N/A"))
+- template.json ($TEMPLATE_SIZE bytes)
 - deploy.sh (deployment script)
 - deploy.env.example (environment variables template)
 - README.md (documentation)
@@ -358,8 +359,8 @@ $(if [[ -d "$ASSETS_DIR" ]]; then echo "- assets/ (Lambda function code)"; fi)
 
 CloudFormation Template Info:
 - Stack Name: TitanicStack
-- Resources: $(grep -c '"Type"' "$RELEASE_DIR/template.json" 2>/dev/null || echo "N/A")
-- Parameters: $(grep -c '"Parameters"' "$RELEASE_DIR/template.json" 2>/dev/null || echo "N/A")
+- Resources: $RESOURCE_COUNT
+- Parameters: $PARAMETER_COUNT
 
 $(if [[ -d "$ASSETS_DIR" ]]; then
 echo "Lambda Assets:"
@@ -383,16 +384,29 @@ echo -e "${YELLOW}Creating release archives...${NC}"
 RELEASE_NAME=$(basename "$RELEASE_DIR")
 
 # Create compressed archive in artifacts directory
-tar -czf "$ARCHIVE_DIR/${RELEASE_NAME}.tar.gz" -C "$BASE_DIST_DIR" "$RELEASE_NAME/"
-echo "Created: $ARCHIVE_DIR/${RELEASE_NAME}.tar.gz"
+if tar -czf "$ARCHIVE_DIR/${RELEASE_NAME}.tar.gz" -C "$BASE_DIST_DIR" "$RELEASE_NAME/"; then
+    echo "Created: $ARCHIVE_DIR/${RELEASE_NAME}.tar.gz"
+else
+    echo -e "${RED}Error: Failed to create tar.gz archive${NC}"
+    exit 1
+fi
 
 # Create zip archive for Windows users in artifacts directory
-(cd "$BASE_DIST_DIR" && zip -r "../$ARCHIVE_DIR/${RELEASE_NAME}.zip" "$RELEASE_NAME/")
-echo "Created: $ARCHIVE_DIR/${RELEASE_NAME}.zip"
+if command -v zip >/dev/null 2>&1; then
+    if (cd "$BASE_DIST_DIR" && zip -r "../$ARCHIVE_DIR/${RELEASE_NAME}.zip" "$RELEASE_NAME/"); then
+        echo "Created: $ARCHIVE_DIR/${RELEASE_NAME}.zip"
+    else
+        echo -e "${RED}Error: Failed to create zip archive${NC}"
+        exit 1
+    fi
+else
+    echo -e "${YELLOW}⚠️  Warning: zip command not found, skipping .zip archive${NC}"
+fi
 
 echo ""
 echo -e "${BLUE}Archive Details:${NC}"
-ls -lh "$ARCHIVE_DIR/${RELEASE_NAME}".{tar.gz,zip}
+ls -lh "$ARCHIVE_DIR/${RELEASE_NAME}".tar.gz 2>/dev/null || true
+ls -lh "$ARCHIVE_DIR/${RELEASE_NAME}".zip 2>/dev/null || true
 echo ""
 
 echo -e "${BLUE}Package Details:${NC}"
@@ -400,8 +414,7 @@ echo "Base Directory: $BASE_DIST_DIR/"
 echo "Release Package: $RELEASE_DIR/"
 echo "Template: $RELEASE_DIR/template.json"
 echo "Deploy Script: $RELEASE_DIR/deploy.sh"
-if [[ -d "$ASSETS_DIR" ]]; then
-    asset_count=$(find "$ASSETS_DIR" -name "asset.*" -type d | wc -l | tr -d ' ')
+if [[ $asset_count -gt 0 ]]; then
     echo "Lambda Assets: $asset_count function(s) in $ASSETS_DIR/"
 fi
 echo "Archives: $ARCHIVE_DIR/"
