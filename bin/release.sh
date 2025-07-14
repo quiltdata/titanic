@@ -216,10 +216,10 @@ chmod +x "$RELEASE_DIR/deploy.sh"
 
 # Copy example environment file
 echo "Copying example environment file..."
-if [[ -f "deploy.env.example" ]]; then
-    cp "deploy.env.example" "$RELEASE_DIR/"
-elif [[ -f "example.env" ]]; then
-    cp "example.env" "$RELEASE_DIR/deploy.env.example"
+if [[ -f "env.example" ]]; then
+    cp "env.example" "$RELEASE_DIR/"
+else
+    echo -e "${YELLOW}Warning: env.example not found${NC}"
 fi
 
 # Create release-specific README
@@ -233,7 +233,7 @@ $(if [[ -n "$VERSION" ]]; then echo "**Version:** $VERSION"; echo ""; fi)Standal
 
 \`\`\`bash
 # 1. Copy and edit configuration
-cp deploy.env.example .env
+cp env.example .env
 # Edit .env with your values
 
 # 2. Deploy
@@ -246,16 +246,14 @@ Edit \`.env\` with these required values:
 - \`QUILT_DATABASE_NAME\` - Your Glue database name
 - \`QUILT_READ_POLICY_ARN\` - Your Quilt read policy ARN
 
-## Alternative Deployment Methods
+## Command Line Deployment
 
 \`\`\`bash
-# Command line parameters
+# Deploy with parameters (no .env file needed)
 ./deploy.sh --glue-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
 
-# Environment variables
-export QUILT_DATABASE_NAME=mydb
-export QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/QuiltReadPolicy
-./deploy.sh
+# Deploy with S3 Tables enabled
+./deploy.sh --glue-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy --use-s3-table true
 \`\`\`
 
 ## Optional Parameters
@@ -282,7 +280,7 @@ export QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/QuiltReadPolicy
 
 - \`template.json\` - CloudFormation template ($TEMPLATE_SIZE bytes)
 - \`deploy.sh\` - Deployment script
-- \`deploy.env.example\` - Configuration template
+- \`env.example\` - Configuration template
 $(if [[ $asset_count -gt 0 ]]; then echo "- \`assets/\` - Lambda function code ($asset_count function(s))"; fi)
 
 $(if [[ -n "$VERSION" ]]; then echo "**Release:** $VERSION | "; fi)**Generated:** $(date) | **CDK:** $CDK_VERSION
@@ -301,7 +299,7 @@ Template: $TEMPLATE_SIZE bytes, $RESOURCE_COUNT resources, $PARAMETER_COUNT para
 $(if [[ $asset_count -gt 0 ]]; then echo "Lambda Functions: $asset_count"; fi)
 
 Quick Deploy:
-  cp deploy.env.example .env && edit .env
+  cp env.example .env && edit .env
   ./deploy.sh
 
 Command Line Deploy:
@@ -355,7 +353,7 @@ echo "Archives: $ARCHIVE_DIR/"
 echo ""
 echo -e "${YELLOW}To deploy:${NC}"
 echo "cd $RELEASE_DIR"
-echo "cp deploy.env.example .env && edit .env, then:"
+echo "cp env.example .env && edit .env, then:"
 echo "./deploy.sh"
 echo ""
 echo -e "${YELLOW}Or deploy with command line parameters:${NC}"

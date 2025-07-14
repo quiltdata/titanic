@@ -58,7 +58,7 @@ EXAMPLES:
        --lambda-timeout 300
 
     # Use .env file (automatically loaded if present)
-    cp deploy.env.example .env
+    cp env.example .env
     # Edit .env with your values, then:
     $0
 
@@ -66,9 +66,7 @@ EXAMPLES:
     QUILT_DATABASE_NAME=mydb QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/QuiltReadPolicy $0
 
 ENVIRONMENT VARIABLES:
-    The script automatically loads variables from:
-    1. .env file (if present)
-    2. deploy.env file (if present)
+    The script automatically loads variables from .env file (if present)
     
     Variables can also be set manually:
     - QUILT_DATABASE_NAME - Glue database name
@@ -92,12 +90,6 @@ if [[ -f ".env" ]]; then
     source .env
     set +a  # stop automatically exporting
     echo -e "${GREEN}✅ Environment variables loaded from .env${NC}"
-elif [[ -f "deploy.env" ]]; then
-    echo -e "${YELLOW}Loading environment variables from deploy.env file...${NC}"
-    set -a  # automatically export all variables
-    source deploy.env
-    set +a  # stop automatically exporting
-    echo -e "${GREEN}✅ Environment variables loaded from deploy.env${NC}"
 fi
 
 # Parse command line arguments

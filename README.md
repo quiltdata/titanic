@@ -1,326 +1,131 @@
 # Titanic - AWS Data Lake Table Merger
 
-Automatically merges the packages and objects views from every bucket into a single queryable Iceberg catalog while maintaining data consistency and avoiding duplicates. The system creates a standard S3 bucket to host the Iceberg catalog, and makes it readable by the Quilt stack.
+Automatically merges the packages and objects views from every bucket into a single queryable Iceberg catalog while maintaining data consistency and avoiding duplicates.
 
-There is also experimental support for S3 Table buckets (see Appendix).
+**🚀 Quick Start**: Download the [latest release](https://github.com/quiltdata/titanic/releases/latest) and follow the deployment steps below.
 
+## Installation
 
-## Table Structure
+Download and deploy a pre-built package:
 
-The lambda assumes you are running a Quilt stack that automatically creates tables and views for every bucket, e.g., `source-bucket_packages-view`, `source-bucket_objects-view`
+```bash
+# Download latest release
+curl -L -o titanic-release.tar.gz https://github.com/quiltdata/titanic/releases/latest/download/release-*.tar.gz
+tar -xzf titanic-release.tar.gz
+cd release-*/
 
-The system creates and manages three tables based on a normalized schema from those views:
+# Configure
+cp env.example .env
+# Edit .env with your required values (see Configuration below)
 
-- **Package Revisions** (`package_revision`): Specific versions of logical packages
-- **Package Tags** (`package_tag`): Named versions (like `latest`) pointing to revisions
-- **Package Entries** (`package_entry`): Individual files within package revisions
+# Deploy
+./deploy.sh
+```
 
-## Schema Design
+### Configuration
 
-The new Iceberg schema addresses several limitations of the legacy views:
+Edit `.env` with these **required** values:
 
-### Key Improvements
+```env
+# Required: Your Quilt stack configuration
+QUILT_DATABASE_NAME=your_glue_database_name
+QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/STACK-BucketReadPolicy-XXXX
 
-1. **Separation of Concerns**: Package revisions, tags, and entries are normalized into separate tables
-3. **Flexible Tagging**: Tags (like `latest`) can be updated to point to different revisions
-4. **Multihash Format**: Standardized content hashing based on the multihash spec (no need to parse a complex struct for each object hash)
-5. **Efficient Partitioning**: Tables are partitioned for optimal query performance
-
-### Write Policies
-
-- **package_tag**: Mutable - tracks which top_hash is the latest for each pkg_name
-- **package_revision**: Immutable - only insert new rows, never update or delete
-- **package_entry**: Immutable - only insert new rows, never update or delete
+# Optional: Advanced settings
+USE_S3_TABLE=false          # Use S3 Tables format (experimental)
+LAMBDA_TIMEOUT=900          # Lambda timeout in seconds
+AWS_DEFAULT_REGION=us-east-1
+```
 
 ## Usage
 
-### Prerequisites
-
-- Node.js 18.x or later
-- AWS CLI configured
-- AWS CDK CLI (`npm install -g aws-cdk`)
-
-
-### Environment Configuration
-
-Before deploying or running the project, configure the required environment variables. Copy the provided `example.env` file as a template:
+After deployment:
 
 ```bash
-cp example.env .env
-```
-
-Edit the `.env` file to include your specific configuration. The following variables are **required for deployment**:
-
-```env
-# Required: AWS Configuration
-CDK_DEFAULT_ACCOUNT=your-account-id
-CDK_DEFAULT_REGION=us-east-2
-
-# Required: Quilt Integration
-QUILT_DATABASE_NAME=your-stacks-glue-database-name
-QUILT_READ_POLICY_ARN=arn:aws:iam::$CDK_DEFAULT_ACCOUNT:policy/STACK-BucketReadPolicy-XXXX
-
-# Optional: Table Format (defaults to false)
-USE_S3_TABLE=false
-```
-
-**Note**: Additional environment variables like `GLUE_TABLES_BUCKET_ARN` and `S3_TABLES_BUCKET_ARN` are automatically configured by the CDK stack and do not need to be set manually.
-
-
-
-### Quick Start
-
-1.  Load the environment variables:
-
-```bash
-source .env
-```
-
-2. If you haven't already, you must bootstrap CDK for each region you use it in:
-
-```bash
-cdk bootstrap aws://$CDK_DEFAULT_ACCOUNT/$CDK_DEFAULT_REGION
-```
-
-3. Install dependencies:
-
-```bash
-npm install
-```
-
-
-4. Deploy:
-
-This will:
-
-a. run the tests
-b. create the CloudFormation template
-c. push it to your AWS account
-d. send an event  (if you agree) to merge tables from every bucket in your stack
-e. wait 20 seconds and then show recent logs
-
-```bash
-npm run cdk
-```
-
-### Triggering Manual Merges
-
-Once installed, the system will automatically update the iceberg catalog every time a new package revision is created.
-For testing and initialization purposes, you can also submit a manual event.
-
-The system provides an npm script to simplify that process:
-
-```bash
-# Process all buckets
+# Process all buckets manually
 npm run event
 
-# Process a specific bucket (e.g., s3://test-bucket)
-npm run event test-bucket
-
+# Monitor logs
+npm run logs recent 5 # show last 5 minutes
 ```
 
 ## Troubleshooting
 
-For detailed troubleshooting information, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
-
-### Error Handling
-
-The system includes robust error handling, and will try to recover from invalid inputs.
-
-- **S3 Access Denied**: Continues processing other buckets/tables
-- **Missing Buckets**: Logs warnings but doesn't crash
-- **Glue/Athena Errors**: Reports errors and continues with remaining operations
-- **First Run**: Automatically drops existing tables on first deployment
-
-
-### Logs and Monitoring
-
-Lambda logs are available in CloudWatch Logs. We provide convenience methods to monitor them:
-
-```bash
-npm run logs                    # Monitor logs in real-time
-npm run logs:delayed           # Wait 20 seconds then show recent logs
-```
-
-The `npm run logs` command accepts additional options:
-
-```bash
-# Show recent logs (default: 15 minutes)
-npm run logs recent [minutes]
-npm run logs r [minutes]
-
-# Show only errors (default: 15 minutes)
-npm run logs errors [minutes]
-npm run logs e [minutes]
-
-# Tail logs in real-time (press Ctrl+C to stop)
-npm run logs tail
-npm run logs t
-
-# Show Athena-related logs (default: 15 minutes)
-npm run logs athena [minutes]
-npm run logs a [minutes]
-
-# Show S3 bucket-related logs (default: 15 minutes)
-npm run logs s3 [minutes]
-npm run logs s [minutes]
-
-# Show all log types
-npm run logs all
-
-# Show help
-npm run logs help
-```
-
-**Examples:**
-```bash
-npm run logs recent 30      # Show logs from last 30 minutes
-npm run logs errors         # Show errors from last 15 minutes
-npm run logs tail           # Tail logs in real-time
-npm run logs athena 60      # Show Athena logs from last 60 minutes
-```
-
 ### Common Issues
 
-Look for:
-- Table creation/merge statistics
-- Error details with bucket/table context
-- Performance metrics per operation
+**❌ "Cannot find or access the specified bucket"**
+- **Cause**: CDK stack didn't deploy properly or missing S3 bucket
+- **Solution**: 
+  1. Check deployment: `npm run outputs`
+  2. Redeploy if needed: `npm run cdk`
 
-**Tables not found**: Check that source views exist and are accessible
+**❌ "User is not authorized" / Permission denied**
+- **Cause**: Wrong policy ARN or insufficient permissions
+- **Solution**: 
+  1. Verify `QUILT_READ_POLICY_ARN` is correct
+  2. Check AWS credentials: `aws sts get-caller-identity`
+
+**❌ "Table not found" errors**
+- **Cause**: Source Quilt views don't exist
+- **Solution**: Verify views exist: `aws glue get-tables --database-name $QUILT_DATABASE_NAME`
+
+**❌ "Missing required environment variables"**
+- **Cause**: `.env` file missing or incomplete
+- **Solution**: Copy `env.example` to `.env` and edit with your values
+
+### Diagnostic Commands
+
 ```bash
-aws glue get-tables --database-name $QUILT_DATABASE_NAME
-```
-
-**Cannot find or access the specified bucket**: The most common issue is missing or inaccessible S3 buckets for Athena results. This typically means:
-- The CDK stack wasn't deployed successfully
-- Environment variables are missing or incorrect  
-- Lambda lacks S3 permissions
-
-You can check your stack deployment status with:
-```bash
+# Check stack status
 npm run outputs
+aws cloudformation describe-stacks --stack-name TitanicStack
+
+# Check resources
+aws s3 ls | grep titanic
+aws glue get-tables --database-name $QUILT_DATABASE_NAME
+
+# Monitor logs
+npm run logs recent 30      # Last 30 minutes
+npm run logs errors         # Only errors
 ```
 
-**Permission errors**: Verify IAM roles have required permissions:
-- Glue: `GetTables`, `GetTable`
-- Athena: `StartQueryExecution`, `GetQueryExecution`  
-- S3: Read/write access to target bucket
-- SQS: `ReceiveMessage`, `DeleteMessage`
+### When to Redeploy
 
-**Wrong table format**: Check `USE_S3_TABLE` environment variable matches desired format
+**Full redeploy needed**:
+- First deployment failed
+- Changing `USE_S3_TABLE` setting
+- Missing AWS resources
 
+**Simple restart sufficient**:
+- Lambda code changes only
+- Temporary AWS API issues
 
-## Stack Destruction and Cleanup
+## Table Structure
 
-### Bucket Cleanup
+The system creates three normalized Iceberg tables:
 
-When destroying the Titanic stack, you may need to manually clean up the buckets before running `cdk destroy`. This is because CloudFormation cannot delete non-empty S3 buckets.
+- **Package Revisions** (`package_revision`): Specific versions of packages
+- **Package Tags** (`package_tag`): Named versions (like `latest`) 
+- **Package Entries** (`package_entry`): Individual files within packages
 
-The project provides cleanup scripts to handle this:
+See [doc/SCHEMA.md](doc/SCHEMA.md) for detailed schema design.
 
-#### Full Cleanup (Delete Buckets then destroy stack)
+## Cleanup
+
 ```bash
-npm run destroy
+npm run destroy              # Delete everything
+npm run destroy:buckets:contents    # Delete data only
 ```
 
-#### Contents-Only Cleanup (Preserve Empty Buckets)
-```bash
-npm run destroy:buckets:contents
-```
+## Documentation
 
-**Note**: The cleanup script requires the same environment variables (`CDK_DEFAULT_ACCOUNT`, `CDK_DEFAULT_REGION`) used for deployment.
+- **[doc/DEVELOP.md](doc/DEVELOP.md)** - Architecture, development, and building
+- **[doc/SCHEMA.md](doc/SCHEMA.md)** - Table schema design and decisions
 
-#### When Cleanup is Required
+## S3 Tables Support (Experimental)
 
-**You must run bucket cleanup before `cdk destroy` if:**
-- The Lambda function has processed any data (created Iceberg tables/files)
-- You enabled S3 Tables mode (`USE_S3_TABLE=true`) and created any tables
-- The stack deployment completed successfully and created bucket contents
+Set `USE_S3_TABLE=true` to use AWS S3 Tables instead of Glue tables. This is experimental and has limited tool support.
 
-**Cleanup handles:**
-- **S3 Bucket**: Removes all Iceberg table files, metadata, and versioned objects
-- **S3 Tables Bucket**: Deletes all tables, namespaces, and the bucket itself
+⚠️ **Warning**: Switching table modes recreates all tables, losing existing data.
 
 
-
-## Development
-
-For detailed development information, see [doc/DEVELOP.md](doc/DEVELOP.md).
-
-### Available Scripts
-
-The project includes several npm scripts for development and testing:
-
-#### Building and Cleaning
-```bash
-npm run build      # Compile TypeScript to JavaScript
-npm run clean      # Remove compiled files and CDK output
-npm run watch      # Watch for changes and compile automatically
-```
-
-#### Testing
-```bash
-npm run test              # Run tests without coverage
-npm run test:coverage     # Run tests with coverage report
-npm run test:fails        # Run only failed tests
-npm run test:watch        # Run tests in watch mode
-npm run test:debug        # Run tests in debug mode
-```
-
-#### Linting
-```bash
-npm run lint       # Run ESLint and fix issues automatically
-```
-
-#### AWS Operations
-```bash
-npm run cdk                      # Deploy stack (runs tests, deploys, sends event, shows logs)
-npm run event                    # Send manual merge event
-npm run logs                     # Monitor Lambda logs
-npm run logs:delayed             # Wait 20 seconds then show recent logs
-npm run outputs                  # Show CloudFormation stack outputs
-npm run destroy                  # Delete buckets then destroy stack
-npm run destroy:buckets          # Delete both buckets and all contents
-npm run destroy:buckets:contents # Delete only bucket contents (preserve buckets)
-```
-
-#### Release Management
-```bash
-npm run deploy:release           # Generate standalone deployment package
-npm run deploy:release -- --version v1.0.0  # Generate release with version tag
-npm run deploy:release -- --clean --output-dir my-release  # Custom output with cleanup
-```
-
-## Appendix: S3 Table Buckets
-
-WARNING: S3 Table Buckets are a relatively new feature in AWS, and not fully supported by some tools and services.
-This support is experimental; use at your risk.
-
-### Table Mode Selection
-
-Edit your `.env` file to enable S3 Table Buckets.
-
-#### Glue Tables (Default)
-- **Best for**: ACID transactions, schema evolution, time travel queries
-- **Format**: Glue catalog with Parquet storage
-- **Benefits**: Full transactional support, efficient query performance
-- **Setup**: `USE_S3_TABLE=false` (default)
-
-#### S3 Tables
-- **Best for**: Native AWS integration, automatic optimization
-- **Format**: AWS S3 Tables service format
-- **Benefits**: Built-in partitioning, AWS-managed optimization
-- **Setup**: `USE_S3_TABLE=true`
-- **Database**: Uses hardcoded `quilt_titanic` database name (required by S3 Tables Catalog)
-
-### Migration Between Modes
-
-When switching table modes:
-
-1. **Backup existing data** (if any)
-2. Set `USE_S3_TABLE` to desired value
-3. **Redeploy** the stack: `npm run cdk`
-4. Tables will be **automatically recreated** on first Lambda run after deployment
-
-⚠️ **Warning**: Switching modes will recreate all tables, losing existing data.
