@@ -33,6 +33,11 @@ jobs:
     - name: Run linter
       run: npm run lint
 
+    - name: Print debug info
+      run: |
+        echo "GITHUB_REF=${GITHUB_REF}"
+        echo "GITHUB_EVENT_NAME=${GITHUB_EVENT_NAME}"
+      
     # Generate release package only for tags
     - name: Generate release package
       if: startsWith(github.ref, 'refs/tags/v')

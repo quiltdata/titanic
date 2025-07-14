@@ -25,7 +25,7 @@
     "test:watch": "jest --watch --verbose",
     "test:debug": "jest --verbose --no-coverage --runInBand --detectOpenHandles",
     "tag:release": "git tag v$(node -p \"require('./package.json').version\") && git push origin v$(node -p \"require('./package.json').version\")",
-    "tag:prerelease": "git tag v$(node -p \"require('./package.json').version\")-$(git branch --show-current).$(date +%Y%m%d.%H%M%S) && git push origin v$(node -p \"require('./package.json').version\")-$(git branch --show-current).$(date +%Y%m%d.%H%M%S)"
+    "tag:prerelease": "git tag v$(node -p \"require('./package.json').version\")-rc.$(date +%Y%m%d.%H%M) && git push origin v$(node -p \"require('./package.json').version\")-rc.$(date +%Y%m%d.%H%M"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.149",
