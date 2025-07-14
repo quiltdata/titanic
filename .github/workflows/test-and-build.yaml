@@ -33,9 +33,9 @@ jobs:
     - name: Run linter
       run: npm run lint
       
-    # Generate release package on main or release branch pushes
+    # Generate release package on release branch pushes only
     - name: Generate release package
-      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release') && github.event_name == 'push'
+      if: github.ref == 'refs/heads/release' && github.event_name == 'push'
       run: |
         # Extract version from package.json
         VERSION=$(node -p "require('./package.json').version")
@@ -49,7 +49,7 @@ jobs:
         QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/ReleasePolicy"
         
     - name: Upload release archives
-      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release') && github.event_name == 'push'
+      if: github.ref == 'refs/heads/release' && github.event_name == 'push'
       uses: actions/upload-artifact@v4
       with:
         name: release-archives-v${{ github.run_number }}
@@ -57,7 +57,7 @@ jobs:
         retention-days: 90
         
     - name: Upload release directory
-      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release') && github.event_name == 'push'
+      if: github.ref == 'refs/heads/release' && github.event_name == 'push'
       uses: actions/upload-artifact@v4
       with:
         name: release-directory-v${{ github.run_number }}

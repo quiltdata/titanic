@@ -196,7 +196,7 @@ if [[ -d "cdk.out" ]]; then
                 asset_name=$(basename "$asset_dir")
                 echo "Copying Lambda asset: $asset_name"
                 if cp -r "$asset_dir" "$ASSETS_DIR/"; then
-                    ((asset_count++))
+                    asset_count=$((asset_count + 1))
                 else
                     echo -e "${RED}Error: Failed to copy asset $asset_name${NC}"
                     exit 1
@@ -225,125 +225,67 @@ fi
 # Create release-specific README
 echo "Creating README..."
 cat > "$RELEASE_DIR/README.md" << EOF
-# Titanic Stack Standalone Deployment Package
+# Titanic Stack Deployment Package
 
-$(if [[ -n "$VERSION" ]]; then echo "**Version:** $VERSION"; echo ""; fi)This package contains everything needed to deploy the Titanic Stack without CDK dependencies.
-
-## Contents
-
-- \`template.json\` - CloudFormation template
-- \`assets/\` - Lambda function code (if any)
-- \`deploy.sh\` - Deployment script
-- \`deploy.env.example\` - Example environment variables file
-- \`README.md\` - This file
-
-## Prerequisites
-
-- AWS CLI configured with appropriate permissions
-- \`zip\` utility (for Lambda function packaging)
+$(if [[ -n "$VERSION" ]]; then echo "**Version:** $VERSION"; echo ""; fi)Standalone deployment package for the Titanic Stack - no CDK dependencies required.
 
 ## Quick Start
 
 \`\`\`bash
-# Method 1: Use .env file (recommended)
-# Copy and edit the example file
+# 1. Copy and edit configuration
 cp deploy.env.example .env
-# Edit .env with your values, then deploy:
+# Edit .env with your values
+
+# 2. Deploy
 ./deploy.sh
+\`\`\`
 
-# Method 2: Use command line parameters
-./deploy.sh \\
-  --glue-database-name your-database-name \\
-  --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
+## Required Configuration
 
-# Method 3: Deploy with all options
-./deploy.sh \\
-  --glue-database-name your-database-name \\
-  --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy \\
-  --use-s3-table true \\
-  --lambda-timeout 300 \\
-  --stack-name MyTitanicStack \\
-  --region us-west-2
+Edit \`.env\` with these required values:
+- \`QUILT_DATABASE_NAME\` - Your Glue database name
+- \`QUILT_READ_POLICY_ARN\` - Your Quilt read policy ARN
 
-# Method 4: Use environment variables manually
-export QUILT_DATABASE_NAME=your-database-name
+## Alternative Deployment Methods
+
+\`\`\`bash
+# Command line parameters
+./deploy.sh --glue-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
+
+# Environment variables
+export QUILT_DATABASE_NAME=mydb
 export QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/QuiltReadPolicy
 ./deploy.sh
 \`\`\`
 
-## Parameters
+## Optional Parameters
 
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| \`--glue-database-name\` | Yes | - | Name of the Glue database |
-| \`--quilt-read-policy-arn\` | Yes | - | ARN of the Quilt read policy |
-| \`--use-s3-table\` | No | \`false\` | Use S3 Tables format |
-| \`--lambda-timeout\` | No | \`900\` | Lambda timeout in seconds |
-| \`--stack-name\` | No | \`TitanicStack\` | CloudFormation stack name |
-| \`--region\` | No | \`us-east-1\` | AWS region |
-| \`--profile\` | No | default | AWS profile |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| \`USE_S3_TABLE\` | \`false\` | Use S3 Tables format |
+| \`LAMBDA_TIMEOUT\` | \`900\` | Lambda timeout (seconds) |
+| \`AWS_DEFAULT_REGION\` | \`us-east-1\` | AWS region |
+| \`AWS_PROFILE\` | default | AWS profile |
 
-## Environment Variables
+## Prerequisites
 
-The deployment script automatically loads variables from:
-1. \`.env\` file (if present)
-2. \`deploy.env\` file (if present)
-
-You can also set parameters using environment variables manually:
-
-- \`QUILT_DATABASE_NAME\` - Glue database name
-- \`QUILT_READ_POLICY_ARN\` - Quilt read policy ARN
-- \`USE_S3_TABLE\` - Use S3 Tables format (true/false)
-- \`LAMBDA_TIMEOUT\` - Lambda timeout in seconds
-- \`AWS_DEFAULT_REGION\` - AWS region
-- \`AWS_PROFILE\` - AWS profile
-
-**Recommended approach:** Copy \`deploy.env.example\` to \`.env\` and edit the values.
-
-## What the deployment does
-
-1. **Validates parameters** - Ensures all required parameters are provided
-2. **Creates S3 bucket** - For Lambda assets (if needed)
-3. **Uploads Lambda code** - Packages and uploads function code
-4. **Updates template** - Replaces asset references with S3 locations
-5. **Deploys stack** - Uses CloudFormation directly
-6. **Shows outputs** - Displays stack outputs and resource information
+- AWS CLI configured with deployment permissions
+- \`zip\` utility (for Lambda packaging)
 
 ## Troubleshooting
 
-### Template not found
-\`\`\`
-Error: CloudFormation template not found: template.json
-\`\`\`
-Ensure you're running the script from the release package directory.
+**Template not found**: Run from the package directory  
+**Missing parameters**: Set required values in \`.env\`  
+**AWS permissions**: Ensure CloudFormation, S3, IAM, Glue access  
 
-### Missing parameters
-\`\`\`
-Error: Glue database name is required
-\`\`\`
-Provide the required parameters via command line or environment variables.
+## Package Contents
 
-### AWS permissions
-Ensure your AWS credentials have permissions for:
-- CloudFormation (create/update stacks)
-- S3 (create buckets, upload objects)
-- IAM (create roles, policies)
-- Glue (create databases, tables)
-- Lambda (create functions, if applicable)
+- \`template.json\` - CloudFormation template ($TEMPLATE_SIZE bytes)
+- \`deploy.sh\` - Deployment script
+- \`deploy.env.example\` - Configuration template
+$(if [[ $asset_count -gt 0 ]]; then echo "- \`assets/\` - Lambda function code ($asset_count function(s))"; fi)
 
-### Region-specific issues
-Some resources may have region-specific requirements. Ensure you're deploying to a supported region.
-
-## Generated Information
-
-$(if [[ -n "$VERSION" ]]; then echo "- **Release Version:** $VERSION"; fi)- **Generated:** $(date)
-- **CDK Version:** $CDK_VERSION
-- **Template Size:** $TEMPLATE_SIZE bytes
-$(if [[ -d "$ASSETS_DIR" ]]; then echo "- **Lambda Assets:** $(find "$ASSETS_DIR" -name "asset.*" -type d | wc -l | tr -d ' ') function(s)"; fi)
-
-## Support
-
-For issues with this deployment package, refer to the main project documentation or contact the development team.
+$(if [[ -n "$VERSION" ]]; then echo "**Release:** $VERSION | "; fi)**Generated:** $(date) | **CDK:** $CDK_VERSION
 EOF
 
 # Create a deployment summary
@@ -352,31 +294,18 @@ cat > "$RELEASE_DIR/DEPLOYMENT_INFO.txt" << EOF
 Titanic Stack Deployment Package
 ================================
 
-Generated: $(date)
-$(if [[ -n "$VERSION" ]]; then echo "Version: $VERSION"; fi)CDK Version: $CDK_VERSION
+$(if [[ -n "$VERSION" ]]; then echo "Version: $VERSION"; fi)Generated: $(date)
+CDK Version: $CDK_VERSION
 
-Files:
-- template.json ($TEMPLATE_SIZE bytes)
-- deploy.sh (deployment script)
-- deploy.env.example (environment variables template)
-- README.md (documentation)
-$(if [[ -d "$ASSETS_DIR" ]]; then echo "- assets/ (Lambda function code)"; fi)
+Template: $TEMPLATE_SIZE bytes, $RESOURCE_COUNT resources, $PARAMETER_COUNT parameters
+$(if [[ $asset_count -gt 0 ]]; then echo "Lambda Functions: $asset_count"; fi)
 
-CloudFormation Template Info:
-- Stack Name: TitanicStack
-- Resources: $RESOURCE_COUNT
-- Parameters: $PARAMETER_COUNT
+Quick Deploy:
+  cp deploy.env.example .env && edit .env
+  ./deploy.sh
 
-$(if [[ -d "$ASSETS_DIR" ]]; then
-echo "Lambda Assets:"
-find "$ASSETS_DIR" -name "asset.*" -type d | while read asset; do
-    echo "- $(basename "$asset")"
-done
-fi)
-
-Quick Deploy Command:
-cp deploy.env.example .env && edit .env, then: ./deploy.sh
-Or: ./deploy.sh --glue-database-name YOUR_DB --quilt-read-policy-arn YOUR_POLICY_ARN
+Command Line Deploy:
+  ./deploy.sh --glue-database-name YOUR_DB --quilt-read-policy-arn YOUR_POLICY_ARN
 EOF
 
 echo -e "${GREEN}Release package created successfully!${NC}"
