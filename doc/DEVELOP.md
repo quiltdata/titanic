@@ -29,9 +29,9 @@ npm run test:watch         # Run tests in watch mode
 
 ```bash
 npm run cdk                # Full deploy (test + deploy + event + logs)
-npm run event              # Send manual merge event
-npm run logs               # Monitor Lambda logs
-npm run outputs            # Show stack outputs
+npm run deploy:event       # Send manual merge event
+npm run deploy:logs        # Monitor Lambda logs
+npm run deploy:outputs     # Show stack outputs
 ```
 
 ### Release Management
@@ -258,7 +258,7 @@ this.tables = [
 ### Diagnostic Commands
 ```bash
 # Check deployment
-npm run outputs
+npm run deploy:outputs
 aws cloudformation describe-stacks --stack-name TitanicStack
 
 # Monitor resources  
@@ -266,15 +266,15 @@ aws s3 ls | grep titanic
 aws glue get-tables --database-name $QUILT_DATABASE_NAME
 
 # Logs and debugging
-npm run logs recent 30
-npm run logs errors
-npm run logs tail
+npm run deploy:logs recent 30
+npm run deploy:logs errors
+npm run deploy:logs tail
 ```
 
 ### Common Development Issues
 
 **"Cannot find bucket"**: CDK stack deployment failed
-- Solution: Check `npm run outputs`, redeploy with `npm run cdk`
+- Solution: Check `npm run deploy:outputs`, redeploy with `npm run cdk`
 
 **"Permission denied"**: IAM/credentials issue
 - Solution: Verify `QUILT_READ_POLICY_ARN`, check `aws sts get-caller-identity`

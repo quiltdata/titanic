@@ -43,10 +43,10 @@ After deployment:
 
 ```bash
 # Process all buckets manually
-npm run event
+npm run deploy:event
 
 # Monitor logs
-npm run logs recent 5 # show last 5 minutes
+npm run deploy:logs recent 5 # show last 5 minutes
 ```
 
 ## Troubleshooting
@@ -56,7 +56,7 @@ npm run logs recent 5 # show last 5 minutes
 **❌ "Cannot find or access the specified bucket"**
 - **Cause**: CDK stack didn't deploy properly or missing S3 bucket
 - **Solution**: 
-  1. Check deployment: `npm run outputs`
+  1. Check deployment: `npm run deploy:outputs`
   2. Redeploy if needed: `npm run cdk`
 
 **❌ "User is not authorized" / Permission denied**
@@ -77,7 +77,7 @@ npm run logs recent 5 # show last 5 minutes
 
 ```bash
 # Check stack status
-npm run outputs
+npm run deploy:outputs
 aws cloudformation describe-stacks --stack-name TitanicStack
 
 # Check resources
@@ -85,8 +85,8 @@ aws s3 ls | grep titanic
 aws glue get-tables --database-name $QUILT_DATABASE_NAME
 
 # Monitor logs
-npm run logs recent 30      # Last 30 minutes
-npm run logs errors         # Only errors
+npm run deploy:logs recent 30      # Last 30 minutes
+npm run deploy:logs errors         # Only errors
 ```
 
 ### When to Redeploy
