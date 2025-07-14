@@ -218,41 +218,17 @@ if grep -q "S3Bucket.*cdk-hnb659fds-assets\|AWS::Lambda::Function" "$TEMPLATE_FI
         echo "S3 bucket already exists: $BUCKET_NAME"
     fi
 
-    # Upload Lambda assets if assets directory exists
-    if [[ -d "assets" ]]; then
-        echo -e "${YELLOW}Uploading Lambda function code...${NC}"
-        for asset_dir in assets/asset.*; do
-            if [[ -d "$asset_dir" && -f "$asset_dir/index.js" ]]; then
-                asset_name=$(basename "$asset_dir")
-                echo "Packaging and uploading $asset_name..."
-                
-                # Create zip file
-                (cd "$asset_dir" && zip -q -r "../${asset_name}.zip" .)
-                
-                # Upload to S3
-                aws s3 cp "assets/${asset_name}.zip" "s3://$BUCKET_NAME/${asset_name}.zip" $AWS_OPTS
-                
-                echo "Uploaded: s3://$BUCKET_NAME/${asset_name}.zip"
-            fi
-        done
-
-        # Update template with actual S3 locations
-        echo -e "${YELLOW}Updating template with S3 asset locations...${NC}"
-        UPDATED_TEMPLATE="template-updated.json"
-        cp "$TEMPLATE_FILE" "$UPDATED_TEMPLATE"
-
-        # Replace asset references in template
-        for asset_dir in assets/asset.*; do
-            if [[ -d "$asset_dir" ]]; then
-                asset_name=$(basename "$asset_dir")
-                # Replace S3Bucket and S3Key references in the template
-                sed -i.bak "s|cdk-hnb659fds-assets-.*|$BUCKET_NAME|g" "$UPDATED_TEMPLATE"
-                sed -i.bak "s|${asset_name}|${asset_name}.zip|g" "$UPDATED_TEMPLATE"
-            fi
-        done
-        
-        TEMPLATE_FILE="$UPDATED_TEMPLATE"
-    fi
+    # Use AWS CloudFormation package to handle asset upload and template updates
+    echo -e "${YELLOW}Packaging template and uploading assets...${NC}"
+    PACKAGED_TEMPLATE="template-packaged.yaml"
+    
+    aws cloudformation package \
+        --template-file "$TEMPLATE_FILE" \
+        --s3-bucket "$BUCKET_NAME" \
+        --output-template-file "$PACKAGED_TEMPLATE" \
+        $AWS_OPTS
+    
+    TEMPLATE_FILE="$PACKAGED_TEMPLATE"
 fi
 
 # Deploy the stack
@@ -279,9 +255,6 @@ aws cloudformation describe-stacks \
     $AWS_OPTS
 
 # Clean up temporary files
-if [[ -f "template-updated.json" ]]; then
-    rm -f "template-updated.json" "template-updated.json.bak"
-fi
-if [[ -d "assets" ]]; then
-    rm -f assets/*.zip
+if [[ -f "template-packaged.yaml" ]]; then
+    rm -f "template-packaged.yaml"
 fi
