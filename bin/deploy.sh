@@ -197,8 +197,7 @@ if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
 fi
 
 # Deploy the stack
-echo -e "${YELLOW}Deploying CloudFormation stack...${NC}"
-aws cloudformation deploy \
+DEPLOY_OUTPUT=$(aws cloudformation deploy \
     --template-file "$TEMPLATE_FILE" \
     --stack-name "$STACK_NAME" \
     --capabilities CAPABILITY_IAM \
@@ -207,12 +206,16 @@ aws cloudformation deploy \
         QuiltReadPolicyArn="$QUILT_READ_POLICY_ARN" \
         UseS3Table="$USE_S3_TABLE" \
         LambdaTimeout="$LAMBDA_TIMEOUT" \
-    $AWS_OPTS
+    $AWS_OPTS 2>&1)
 
-if [[ $? -ne 0 ]]; then
-    echo -e "${RED}❌ Stack deployment failed. Showing recent stack events...${NC}"
-    aws cloudformation describe-stack-events --stack-name "$STACK_NAME" --max-items 10 $AWS_OPTS \
-        --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED`].[Timestamp, LogicalResourceId, ResourceStatus, ResourceStatusReason]' \
+DEPLOY_STATUS=$?
+echo "$DEPLOY_OUTPUT"
+
+if [[ $DEPLOY_STATUS -ne 0 ]]; then
+    echo -e "${RED}❌ Stack deployment failed.${NC}"
+    echo -e "${YELLOW}Fetching recent stack events...${NC}"
+    aws cloudformation describe-stack-events --stack-name "$STACK_NAME" $AWS_OPTS \
+        --query 'StackEvents[].[Timestamp, LogicalResourceId, ResourceStatus, ResourceStatusReason]' \
         --output table
     exit 1
 fi
