@@ -35,7 +35,7 @@ describe('Schema Validation Tests', () => {
                 const schema = table['generateCreateQuery']();
                 
                 // Basic CREATE TABLE structure from schema.sql
-                expect(schema).toContain('CREATE TABLE');
+                expect(schema).toContain('CREATE TABLE IF NOT EXISTS');
                 expect(schema).toContain('package_revision');
                 expect(schema).toContain('registry VARCHAR');
                 expect(schema).toContain('pkg_name VARCHAR');
@@ -49,6 +49,9 @@ describe('Schema Validation Tests', () => {
                 expect(schema).toContain('registry,');
                 expect(schema).toContain('bucket(8, pkg_name),');
                 expect(schema).toContain('bucket(8, top_hash)');
+                
+                // Should include S3 Tables specific properties
+                expect(schema).toContain("TBLPROPERTIES ('table_type' = 'ICEBERG', 'format' = 'PARQUET')");
                 
                 // Partitioning clause should be accessible separately
                 const partitionClause = table['getPartitioningClause']();
@@ -65,7 +68,7 @@ describe('Schema Validation Tests', () => {
                 const schema = table['generateCreateQuery']();
                 
                 // Basic CREATE TABLE structure from schema.sql
-                expect(schema).toContain('CREATE TABLE');
+                expect(schema).toContain('CREATE TABLE IF NOT EXISTS');
                 expect(schema).toContain('package_tag');
                 expect(schema).toContain('registry VARCHAR');
                 expect(schema).toContain('pkg_name VARCHAR');
@@ -77,6 +80,9 @@ describe('Schema Validation Tests', () => {
                 expect(schema).toContain('registry,');
                 expect(schema).toContain('tag_name,');
                 expect(schema).toContain('bucket(8, pkg_name)');
+                
+                // Should include S3 Tables specific properties
+                expect(schema).toContain("TBLPROPERTIES ('table_type' = 'ICEBERG', 'format' = 'PARQUET')");
                 
                 // Partitioning clause should be accessible separately
                 const partitionClause = table['getPartitioningClause']();
@@ -93,7 +99,7 @@ describe('Schema Validation Tests', () => {
                 const schema = table['generateCreateQuery']();
                 
                 // Basic CREATE TABLE structure from schema.sql
-                expect(schema).toContain('CREATE TABLE');
+                expect(schema).toContain('CREATE TABLE IF NOT EXISTS');
                 expect(schema).toContain('package_entry');
                 expect(schema).toContain('registry VARCHAR');
                 expect(schema).toContain('top_hash VARCHAR');
@@ -107,6 +113,9 @@ describe('Schema Validation Tests', () => {
                 expect(schema).toContain('PARTITIONED BY');
                 expect(schema).toContain('registry,');
                 expect(schema).toContain('bucket(64, physical_key)');
+                
+                // Should include S3 Tables specific properties
+                expect(schema).toContain("TBLPROPERTIES ('table_type' = 'ICEBERG', 'format' = 'PARQUET')");
                 
                 // Partitioning clause should be accessible separately
                 const partitionClause = table['getPartitioningClause']();

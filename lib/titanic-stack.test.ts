@@ -65,7 +65,26 @@ const expectGluePermissions = (template: Template, _expectedSourceDatabaseName: 
     
     expect(glueStatement).toBeDefined();
     expect(glueStatement.Effect).toBe("Allow");
-    expect(glueStatement.Action).toEqual(["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"]);
+    
+    // Check that all required Glue actions are present (order-independent)
+    const requiredActions = [
+        "glue:GetTables", 
+        "glue:GetTable", 
+        "glue:GetPartitions", 
+        "glue:GetDatabase", 
+        "glue:CreateTable", 
+        "glue:DeleteTable", 
+        "glue:UpdateTable"
+    ];
+    expect(glueStatement.Action).toEqual(expect.arrayContaining(requiredActions));
+    
+    // Also check that we don't have unexpected extra actions beyond what we know about
+    const knownActions = [
+        "glue:CreateDatabase",
+        "glue:GetDatabases", 
+        ...requiredActions
+    ];
+    expect(glueStatement.Action.every((action: string) => knownActions.includes(action))).toBe(true);
     
     // Check that the resources include both source and target databases
     const resources = glueStatement.Resource;

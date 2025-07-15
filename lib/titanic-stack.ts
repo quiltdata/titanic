@@ -33,7 +33,7 @@ export class TitanicStack extends cdk.Stack {
         console.log("TitanicStack configuration:", config);
 
         // Always create both buckets for maximum flexibility
-        
+
         // Regular S3 bucket for Athena results and Glue tables
         const glueTablesBucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
             bucketName: `titanic-glue-tables-${this.account}-${this.region}`,
@@ -61,17 +61,17 @@ export class TitanicStack extends cdk.Stack {
             environment: {
                 // Source database to read from (always the same, where views are)
                 ATHENA_DATABASE_NAME: config.athenaDatabaseName,
-                
+
                 // Target database to write to (changes based on USE_S3_TABLE)
                 S3TABLE_DATABASE_NAME: s3DatabaseName,
-                
+
                 // Target buckets - Always pass ARNs for consistency
                 GLUE_TABLES_BUCKET_ARN: glueTablesBucket.bucketArn,
                 S3_TABLES_BUCKET_ARN: s3TablesBucket.tableBucketArn,
-                
+
                 // Always use regular bucket for Athena results (ARN format)
                 ATHENA_RESULTS_BUCKET_ARN: glueTablesBucket.bucketArn,
-                
+
                 // Configuration
                 LAMBDA_TIMEOUT: "900",
                 QUILT_READ_POLICY_ARN: config.quiltReadPolicyArn,
@@ -97,12 +97,22 @@ export class TitanicStack extends cdk.Stack {
         // Grant Lambda permissions
         mergeLambda.addToRolePolicy(
             new iam.PolicyStatement({
-                actions: ["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
+                actions: [
+                    "glue:CreateDatabase",
+                    "glue:CreateTable",
+                    "glue:DeleteTable",
+                    "glue:GetDatabase",
+                    "glue:GetDatabases",
+                    "glue:GetPartitions",
+                    "glue:GetTable",
+                    "glue:GetTables",
+                    "glue:UpdateTable",
+                ],
                 resources: [
                     `arn:aws:glue:${this.region}:${this.account}:catalog`,
                     `arn:aws:glue:${this.region}:${this.account}:database/${config.athenaDatabaseName}`,
-                    `arn:aws:glue:${this.region}:${this.account}:table/${config.athenaDatabaseName}/*`,
                     `arn:aws:glue:${this.region}:${this.account}:database/${s3DatabaseName}`,
+                    `arn:aws:glue:${this.region}:${this.account}:table/${config.athenaDatabaseName}/*`,
                     `arn:aws:glue:${this.region}:${this.account}:table/${s3DatabaseName}/*`,
                 ],
             }),
@@ -123,7 +133,7 @@ export class TitanicStack extends cdk.Stack {
         );
 
         // Always grant permissions to both buckets since Lambda decides which to use
-        
+
         // Regular S3 bucket permissions (always used for Athena results, also for Glue tables)
         glueTablesBucket.grantReadWrite(mergeLambda);
         mergeLambda.addToRolePolicy(
@@ -227,13 +237,13 @@ export class TitanicStack extends cdk.Stack {
                 description: "Name of the Athena database containing the source views",
                 default: process.env.ATHENA_DATABASE_NAME || "",
             }),
-            
+
             quiltReadPolicyArn: new cdk.CfnParameter(this, "QuiltReadPolicyArn", {
                 type: "String",
                 description: "ARN of the IAM policy for reading from Quilt buckets",
                 default: process.env.QUILT_READ_POLICY_ARN || "",
             }),
-            
+
             useS3Table: new cdk.CfnParameter(this, "UseS3Table", {
                 type: "String",
                 description: "Whether to use S3 Tables format (true/false)",

@@ -40,12 +40,35 @@ export class TableManager {
     }
 
     /**
+     * Create the target database if it doesn't exist (needed for S3 Tables mode)
+     */
+    async createDatabaseIfNeeded(): Promise<void> {
+        // Only needed for S3 Tables mode where target database is different from source
+        if (this.config.useS3Table && this.targetDatabaseName !== this.athenaDatabaseName) {
+            console.log(`📋 Ensuring target database exists: ${this.targetDatabaseName}`);
+            
+            const createDatabaseQuery = `CREATE DATABASE IF NOT EXISTS ${this.targetDatabaseName}`;
+            const result = await this.athenaUtils.executeQuery(createDatabaseQuery);
+            
+            if (result.success) {
+                console.log(`✅ Database ready: ${this.targetDatabaseName}`);
+            } else {
+                console.warn(`⚠️ Database creation warning for ${this.targetDatabaseName}:`, result.error);
+                // Don't fail here - database might already exist and that's fine
+            }
+        }
+    }
+
+    /**
      * Explicitly create tables based on source tables found
      * This method creates empty tables for S3 Tables mode, or prepares for lazy creation in Glue mode.
      */
     async createTables(): Promise<{ successfulTables: number; failedTables: number; totalQueries: number }> {
         console.log(`📋 Creating tables in target database: ${this.targetDatabaseName}`);
         console.log(`📋 Config type: ${this.config.constructor.name}, Target bucket: ${this.targetBucket}`);
+
+        // Ensure target database exists (needed for S3 Tables mode)
+        await this.createDatabaseIfNeeded();
 
         const result = await this.execute('create');
         

@@ -156,4 +156,103 @@ describe("TableManager", () => {
             expect((tableManager as any).isS3AccessError(new Error("Some other error"))).toBe(false);
         });
     });
+
+    describe("createDatabaseIfNeeded", () => {
+        describe("S3 Tables mode", () => {
+            beforeEach(() => {
+                // Configure for S3 Tables mode with different source and target databases
+                mockConfig = Config.createTestInstance({
+                    athenaDatabaseName: "source-db",
+                    useS3Table: true
+                });
+                mockAthenaUtils = AthenaTest.createTestInstance(mockConfig);
+                tableManager = TableManager.createTestInstance(mockConfig, "source-db", "target-db", "test-bucket", mockAthenaUtils);
+            });
+
+            it("should create database when target database differs from source in S3 Tables mode", async () => {
+                // Execute the method
+                await tableManager.createDatabaseIfNeeded();
+
+                // Verify that CREATE DATABASE query was executed
+                const athenaCalls = mockAthenaUtils.getAthenaCalls();
+                expect(athenaCalls).toHaveLength(2); // StartQuery + GetQueryExecution
+                
+                // Check that the query was for creating the target database
+                const startQueryCall = athenaCalls.find(call => call.firstArg?.input?.QueryString);
+                expect(startQueryCall?.firstArg?.input?.QueryString).toBe("CREATE DATABASE IF NOT EXISTS target-db");
+            });
+
+            it("should not create database when target database is same as source in S3 Tables mode", async () => {
+                // Set up table manager with same source and target database
+                tableManager = TableManager.createTestInstance(mockConfig, "same-db", "same-db", "test-bucket", mockAthenaUtils);
+
+                await tableManager.createDatabaseIfNeeded();
+
+                // Verify no Athena calls were made
+                const athenaCalls = mockAthenaUtils.getAthenaCalls();
+                expect(athenaCalls).toHaveLength(0);
+            });
+
+            it("should handle database creation failure gracefully", async () => {
+                // Mock database creation to fail
+                mockAthenaUtils.mockQueryFailure("Permission denied");
+
+                // Should not throw an error
+                await expect(tableManager.createDatabaseIfNeeded()).resolves.not.toThrow();
+
+                // Verify that the query was attempted (only StartQuery call, no GetQueryExecution since it fails)
+                const athenaCalls = mockAthenaUtils.getAthenaCalls();
+                expect(athenaCalls).toHaveLength(1); // Only StartQuery since it throws
+            });
+
+            it("should handle database creation success", async () => {
+                // Default mock setup already handles success
+                await tableManager.createDatabaseIfNeeded();
+
+                // Verify that the query was executed successfully
+                const athenaCalls = mockAthenaUtils.getAthenaCalls();
+                expect(athenaCalls).toHaveLength(2); // StartQuery + GetQueryExecution
+                
+                const startQueryCall = athenaCalls.find(call => call.firstArg?.input?.QueryString);
+                expect(startQueryCall?.firstArg?.input?.QueryString).toBe("CREATE DATABASE IF NOT EXISTS target-db");
+            });
+        });
+
+        describe("Glue Tables mode", () => {
+            beforeEach(() => {
+                // Configure for Glue Tables mode (useS3Table = false)
+                mockConfig = Config.createTestInstance({
+                    athenaDatabaseName: "test-db",
+                    useS3Table: false
+                });
+                mockAthenaUtils = AthenaTest.createTestInstance(mockConfig);
+                tableManager = TableManager.createTestInstance(mockConfig, "test-db", "target-db", "test-bucket", mockAthenaUtils);
+            });
+
+            it("should not create database in Glue Tables mode even with different target database", async () => {
+                await tableManager.createDatabaseIfNeeded();
+
+                // Verify no Athena calls were made since it's Glue Tables mode
+                const athenaCalls = mockAthenaUtils.getAthenaCalls();
+                expect(athenaCalls).toHaveLength(0);
+            });
+        });
+
+        describe("Edge cases", () => {
+            it("should handle undefined useS3Table config gracefully", async () => {
+                // Create config without explicitly setting useS3Table
+                mockConfig = Config.createTestInstance({
+                    athenaDatabaseName: "test-db"
+                });
+                mockAthenaUtils = AthenaTest.createTestInstance(mockConfig);
+                tableManager = TableManager.createTestInstance(mockConfig, "test-db", "target-db", "test-bucket", mockAthenaUtils);
+
+                await tableManager.createDatabaseIfNeeded();
+
+                // Should default to Glue mode (no database creation)
+                const athenaCalls = mockAthenaUtils.getAthenaCalls();
+                expect(athenaCalls).toHaveLength(0);
+            });
+        });
+    });
 });

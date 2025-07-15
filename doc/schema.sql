@@ -5,10 +5,12 @@ DROP TABLE IF EXISTS package_tag;
 DROP TABLE IF EXISTS package_entry;
 
 ---
---- CREATE alternatives
+--- CREATE alternatives (for different bucket types)
 ---
 
--- S3_Tables: Uses explicit Create Tables + Partitions
+-- S3 Tables: Uses Create table AFTER creating database
+
+CREATE DATABASE IF NOT EXISTS quilt_titanic;
 
 CREATE TABLE package_revision (
   registry     STRING,   
@@ -22,6 +24,10 @@ PARTITIONED BY (
   registry,
   bucket(8, pkg_name),
   bucket(8, top_hash)
+)
+TBLPROPERTIES (
+  'table_type' = 'ICEBERG',
+  'format' = 'PARQUET'
 );
 
 CREATE TABLE package_tag (
@@ -34,6 +40,10 @@ PARTITIONED BY (
   registry,
   tag_name,
   bucket(8, pkg_name)
+)
+TBLPROPERTIES (
+  'table_type' = 'ICEBERG',
+  'format' = 'PARQUET'
 );
 
 CREATE TABLE package_entry (
@@ -48,6 +58,10 @@ CREATE TABLE package_entry (
 PARTITIONED BY (
   registry,
   bucket(64, physical_key)
+)
+TBLPROPERTIES (
+  'table_type' = 'ICEBERG',
+  'format' = 'PARQUET'
 );
 
 -- Glue_Tables: Uses CTAS with NULL values for empty table initialization

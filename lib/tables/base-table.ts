@@ -65,7 +65,7 @@ export abstract class BaseTable {
     private generateS3TableCreateQuery(): string {
         const columnDefs = this.generateColumnList("${name} ${type}");
         const partitioning = this.getPartitioningClause();
-        return `CREATE TABLE ${this.tableName} (${columnDefs}) ${partitioning}`;
+        return `CREATE TABLE IF NOT EXISTS ${this.tableName} (${columnDefs}) ${partitioning} TBLPROPERTIES ('table_type' = 'ICEBERG', 'format' = 'PARQUET')`;
     }
 
     /**
