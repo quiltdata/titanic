@@ -248,7 +248,7 @@ describe("Package Tables", () => {
             it("should throw error when target bucket is missing for Glue table creation", () => {
                 // Create a config with missing target bucket
                 const configWithoutBucket = Config.createTestInstance({
-                    glueDatabaseName: "test-db",
+                    athenaDatabaseName: "test-db",
                     glueTablesBucketArn: ""
                 });
                 

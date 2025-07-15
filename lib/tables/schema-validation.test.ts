@@ -18,7 +18,7 @@ describe('Schema Validation Tests', () => {
     
     beforeEach(() => {
         glueConfig = Config.createTestInstance({
-            glueDatabaseName: 'test-glue-db',
+            athenaDatabaseName: 'test-glue-db',
             glueTablesBucketArn: 'arn:aws:s3:::test-glue-bucket'
         });
         

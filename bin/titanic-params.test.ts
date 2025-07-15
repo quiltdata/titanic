@@ -77,8 +77,8 @@ describe("bin/titanic-params", () => {
         );
     });
 
-    it("should not require QUILT_DATABASE_NAME environment variable", () => {
-        delete process.env.QUILT_DATABASE_NAME;
+    it("should not require ATHENA_DATABASE_NAME environment variable", () => {
+        delete process.env.ATHENA_DATABASE_NAME;
         delete process.env.QUILT_READ_POLICY_ARN;
         process.env.CDK_DEFAULT_ACCOUNT = "123456789012";
         process.env.CDK_DEFAULT_REGION = "us-east-1";
@@ -99,7 +99,7 @@ describe("bin/titanic-params", () => {
     it("should only pass useCloudFormationParameters and env properties", () => {
         process.env.CDK_DEFAULT_ACCOUNT = "123456789012";
         process.env.CDK_DEFAULT_REGION = "us-east-1";
-        process.env.QUILT_DATABASE_NAME = "some-database";
+        process.env.ATHENA_DATABASE_NAME = "some-database";
         process.env.QUILT_READ_POLICY_ARN = "some-arn";
         process.env.USE_S3_TABLE = "true";
 
@@ -119,7 +119,7 @@ describe("bin/titanic-params", () => {
 
         // Verify no other properties are passed
         const calledWith = mockTitanicStack.mock.calls[0][2];
-        expect(calledWith).not.toHaveProperty("glueDatabaseName");
+        expect(calledWith).not.toHaveProperty("athenaDatabaseName");
         expect(calledWith).not.toHaveProperty("quiltReadPolicyArn");
         expect(calledWith).not.toHaveProperty("useS3Table");
     });
@@ -370,7 +370,7 @@ describe("bin/titanic-params", () => {
     describe("comparison with titanic.ts behavior", () => {
         it("should not throw errors for missing database environment variables", () => {
             // These would cause titanic.ts to throw, but titanic-params.ts should not
-            delete process.env.QUILT_DATABASE_NAME;
+            delete process.env.ATHENA_DATABASE_NAME;
             delete process.env.QUILT_READ_POLICY_ARN;
 
             expect(() => {
@@ -379,7 +379,7 @@ describe("bin/titanic-params", () => {
         });
 
         it("should ignore database-related environment variables", () => {
-            process.env.QUILT_DATABASE_NAME = "ignored-database";
+            process.env.ATHENA_DATABASE_NAME = "ignored-database";
             process.env.QUILT_READ_POLICY_ARN = "ignored-arn";
             process.env.USE_S3_TABLE = "true";
             process.env.CDK_DEFAULT_ACCOUNT = "123456789012";

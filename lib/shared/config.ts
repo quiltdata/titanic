@@ -4,7 +4,7 @@
  */
 export class Config {
   public readonly aws_region: string;
-  public readonly glueDatabaseName: string;
+  public readonly athenaDatabaseName: string;
   public readonly glueTablesBucketArn: string;
   public readonly s3TableDatabaseName: string;
   public readonly s3TablesBucketArn: string;
@@ -12,11 +12,11 @@ export class Config {
 
   constructor(config?: Partial<Config>) {
     this.aws_region = config?.aws_region ?? (process.env.AWS_REGION || 'us-east-1');
-    this.glueDatabaseName = config?.glueDatabaseName ?? (process.env.GLUE_DATABASE_NAME || 'glue_database');
+    this.athenaDatabaseName = config?.athenaDatabaseName ?? (process.env.ATHENA_DATABASE_NAME || 'athena_database');
     this.glueTablesBucketArn = config?.glueTablesBucketArn ?? (process.env.GLUE_TABLES_BUCKET_ARN || '');
     this.s3TableDatabaseName = config?.s3TableDatabaseName ?? (process.env.S3TABLE_DATABASE_NAME || 's3_table_database');
     this.s3TablesBucketArn = config?.s3TablesBucketArn ?? (process.env.S3_TABLES_BUCKET_ARN || '');
-    this.useS3Table = config?.useS3Table ?? false;
+    this.useS3Table = config?.useS3Table ?? (process.env.USE_S3_TABLE === 'true' || false);
   }
   
   // Factory method to create appropriate config type based on environment
@@ -32,11 +32,11 @@ export class Config {
   
   // Glue defaults
   public getReadDatabaseName(): string {
-    return this.glueDatabaseName;
+    return this.athenaDatabaseName;
   }
 
   public getWriteDatabaseName(): string {
-    return this.glueDatabaseName;
+    return this.athenaDatabaseName;
   }
   
   public getResultsBucket(): string {

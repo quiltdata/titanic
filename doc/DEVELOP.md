@@ -52,7 +52,7 @@ npm run cdk
 
 # OR deploy with parameters
 npx cdk deploy \
-  --parameters GlueDatabaseName=mydb \
+  --parameters AthenaDatabaseName=mydb \
   --parameters QuiltReadPolicyArn=arn:aws:iam::123456789012:policy/QuiltReadPolicy \
   --parameters UseS3Table=false
 ```
@@ -70,14 +70,14 @@ cp env.example .env
 ./deploy.sh
 
 # OR deploy with parameters
-./deploy.sh --glue-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
+./deploy.sh --athena-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
 ```
 
 ## Environment Variables
 
 ### Required for Deployment
 ```bash
-QUILT_DATABASE_NAME=your_database_name           #  Stack Athena database with per-bucket package/object views
+ATHENA_DATABASE_NAME=your_database_name           #  Stack Athena database with per-bucket package/object views
 QUILT_READ_POLICY_ARN=arn:aws:iam::123:policy/X  # Stack read-only policy (so we can add access to new buckets)
 ```
 
@@ -92,7 +92,7 @@ AWS_PROFILE=default
 ```bash
 GLUE_TABLES_BUCKET_ARN      # S3 bucket for Glue tables
 S3_TABLES_BUCKET_ARN        # S3 Tables bucket
-GLUE_DATABASE_NAME          # Source database (and target, for Glue tables)
+ATHENA_DATABASE_NAME          # Source database (and target, for Glue tables)
 S3_TABLE_DATABASE_NAME      # S3 Tables database
 ```
 ## Architecture Overview
@@ -261,7 +261,7 @@ aws cloudformation describe-stacks --stack-name TitanicStack
 
 # Monitor resources  
 aws s3 ls | grep titanic
-aws glue get-tables --database-name $QUILT_DATABASE_NAME
+aws glue get-tables --database-name $ATHENA_DATABASE_NAME
 
 # Logs and debugging
 npm run deploy:logs recent 30

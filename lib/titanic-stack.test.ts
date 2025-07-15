@@ -75,10 +75,10 @@ const expectGluePermissions = (template: Template, _expectedSourceDatabaseName: 
         }),
         // Source database (where views are read from) - uses CloudFormation parameter reference
         expect.objectContaining({
-            "Fn::Join": ["", expect.arrayContaining([":database/", { "Ref": "GlueDatabaseName" }])]
+            "Fn::Join": ["", expect.arrayContaining([":database/", { "Ref": "AthenaDatabaseName" }])]
         }),
         expect.objectContaining({
-            "Fn::Join": ["", expect.arrayContaining([":table/", { "Ref": "GlueDatabaseName" }, "/*"])]
+            "Fn::Join": ["", expect.arrayContaining([":table/", { "Ref": "AthenaDatabaseName" }, "/*"])]
         }),
         // Target database (where tables are written to) - always "quilt_titanic"
         expect.objectContaining({
@@ -112,7 +112,7 @@ const expectAthenaPermissions = (template: Template) => {
 
 describe("TitanicStack", () => {
     const defaultStackProps = {
-        glueDatabaseName: "test-database-env",
+        athenaDatabaseName: "test-database-env",
         quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
         useS3Table: false,
         useCloudFormationParameters: true, // Enable CF parameters for tests that expect them
@@ -129,7 +129,7 @@ describe("TitanicStack", () => {
                 const stackProps = {
                     ...defaultStackProps,
                     useS3Table,
-                    glueDatabaseName: dbName
+                    athenaDatabaseName: dbName
                 };
                     
                 template = createStackTemplate(stackId, stackProps);
@@ -174,7 +174,7 @@ describe("TitanicStack", () => {
         let template: Template;
 
         beforeAll(() => {
-            template = createStackTemplate("GlueStack", { ...defaultStackProps, glueDatabaseName: "test-database" });
+            template = createStackTemplate("GlueStack", { ...defaultStackProps, athenaDatabaseName: "test-database" });
         });
 
         it("should create both regular S3 bucket and S3 Tables bucket", () => {
@@ -190,7 +190,7 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        GLUE_DATABASE_NAME: { Ref: "GlueDatabaseName" },
+                        ATHENA_DATABASE_NAME: { Ref: "AthenaDatabaseName" },
                         USE_S3_TABLE: { Ref: "UseS3Table" },
                         QUILT_READ_POLICY_ARN: { Ref: "QuiltReadPolicyArn" },
                         GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
@@ -202,16 +202,16 @@ describe("TitanicStack", () => {
         });
 
         describe("Database name usage", () => {
-            it("should use the database name provided in glueDatabaseName prop", () => {
+            it("should use the database name provided in athenaDatabaseName prop", () => {
                 const envTemplate = createStackTemplate(
                     "GlueEnvDbStack", 
-                    { ...defaultStackProps, glueDatabaseName: "env_var_db_name" }
+                    { ...defaultStackProps, athenaDatabaseName: "env_var_db_name" }
                 );
 
                 envTemplate.hasResourceProperties("AWS::Lambda::Function", {
                     Environment: {
                         Variables: {
-                            GLUE_DATABASE_NAME: { Ref: "GlueDatabaseName" },
+                            ATHENA_DATABASE_NAME: { Ref: "AthenaDatabaseName" },
                             USE_S3_TABLE: { Ref: "UseS3Table" },
                             QUILT_READ_POLICY_ARN: { Ref: "QuiltReadPolicyArn" },
                             GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
@@ -243,7 +243,7 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        GLUE_DATABASE_NAME: { Ref: "GlueDatabaseName" },
+                        ATHENA_DATABASE_NAME: { Ref: "AthenaDatabaseName" },
                         S3TABLE_DATABASE_NAME: "quilt_titanic", // This is the hardcoded constant
                         USE_S3_TABLE: { Ref: "UseS3Table" },
                         QUILT_READ_POLICY_ARN: { Ref: "QuiltReadPolicyArn" },
@@ -279,7 +279,7 @@ describe("TitanicStack", () => {
 
     describe("Props mode (useCloudFormationParameters: false)", () => {
         const propsMode = {
-            glueDatabaseName: "test-glue-database",
+            athenaDatabaseName: "test-athena-database",
             quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/TestQuiltReadPolicy",
             useS3Table: false,
             useCloudFormationParameters: false
@@ -295,7 +295,7 @@ describe("TitanicStack", () => {
             it("should not create CloudFormation parameters", () => {
                 // Should only have CDK bootstrap parameter, not our custom parameters
                 const parameters = template.toJSON().Parameters;
-                expect(parameters).not.toHaveProperty("GlueDatabaseName");
+                expect(parameters).not.toHaveProperty("athenaDatabaseName");
                 expect(parameters).not.toHaveProperty("QuiltReadPolicyArn");
                 expect(parameters).not.toHaveProperty("UseS3Table");
             });
@@ -334,7 +334,7 @@ describe("TitanicStack", () => {
                 template.hasResourceProperties("AWS::Lambda::Function", {
                     Environment: {
                         Variables: {
-                            GLUE_DATABASE_NAME: "test-glue-database",
+                            ATHENA_DATABASE_NAME: "test-athena-database",
                             S3TABLE_DATABASE_NAME: "quilt_titanic",
                             QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/TestQuiltReadPolicy",
                             USE_S3_TABLE: "false",
@@ -379,10 +379,10 @@ describe("TitanicStack", () => {
                         "Fn::Join": ["", expect.arrayContaining([":catalog"])]
                     }),
                     expect.objectContaining({
-                        "Fn::Join": ["", expect.arrayContaining([":database/test-glue-database"])]
+                        "Fn::Join": ["", expect.arrayContaining([":database/test-athena-database"])]
                     }),
                     expect.objectContaining({
-                        "Fn::Join": ["", expect.arrayContaining([":table/test-glue-database/*"])]
+                        "Fn::Join": ["", expect.arrayContaining([":table/test-athena-database/*"])]
                     }),
                     expect.objectContaining({
                         "Fn::Join": ["", expect.arrayContaining([":database/quilt_titanic"])]
@@ -445,7 +445,7 @@ describe("TitanicStack", () => {
                     Environment: {
                         Variables: {
                             USE_S3_TABLE: "true",
-                            GLUE_DATABASE_NAME: "test-glue-database",
+                            ATHENA_DATABASE_NAME: "test-athena-database",
                             S3TABLE_DATABASE_NAME: "quilt_titanic",
                         },
                     },
@@ -477,7 +477,7 @@ describe("TitanicStack", () => {
         describe("Default values", () => {
             it("should handle minimal props configuration", () => {
                 const minimalTemplate = createStackTemplate("PropsMinimalStack", {
-                    glueDatabaseName: "minimal-db",
+                    athenaDatabaseName: "minimal-db",
                     quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/MinimalPolicy",
                     useCloudFormationParameters: false
                 });
@@ -485,7 +485,7 @@ describe("TitanicStack", () => {
                 minimalTemplate.hasResourceProperties("AWS::Lambda::Function", {
                     Environment: {
                         Variables: {
-                            GLUE_DATABASE_NAME: "minimal-db",
+                            ATHENA_DATABASE_NAME: "minimal-db",
                             QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/MinimalPolicy",
                             USE_S3_TABLE: "false",
                         },
@@ -496,7 +496,7 @@ describe("TitanicStack", () => {
 
             it("should default useS3Table to false when not specified", () => {
                 const template = createStackTemplate("PropsDefaultS3TableStack", {
-                    glueDatabaseName: "test-db",
+                    athenaDatabaseName: "test-db",
                     quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/TestPolicy",
                     useCloudFormationParameters: false
                 });
@@ -546,14 +546,14 @@ describe("TitanicStack", () => {
 
         it("should default useCloudFormationParameters to false", () => {
             const template = createStackTemplate("DefaultCFParamsStack", {
-                glueDatabaseName: "test-db",
+                athenaDatabaseName: "test-db",
                 quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/TestPolicy",
                 // useCloudFormationParameters not specified - should default to false
             });
 
             // Should not have our custom parameters (indicates CF params mode is disabled)
             const parameters = template.toJSON().Parameters;
-            expect(parameters).not.toHaveProperty("GlueDatabaseName");
+            expect(parameters).not.toHaveProperty("athenaDatabaseName");
             expect(parameters).not.toHaveProperty("QuiltReadPolicyArn");
             expect(parameters).not.toHaveProperty("UseS3Table");
 
@@ -561,7 +561,7 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        GLUE_DATABASE_NAME: "test-db",
+                        ATHENA_DATABASE_NAME: "test-db",
                         QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/TestPolicy",
                     },
                 },

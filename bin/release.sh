@@ -149,7 +149,7 @@ if ! grep -q '"Parameters"' "$STACK_TEMPLATE"; then
 fi
 
 # Check for required parameters
-REQUIRED_PARAMS=("GlueDatabaseName" "QuiltReadPolicyArn" "UseS3Table")
+REQUIRED_PARAMS=("AthenaDatabaseName" "QuiltReadPolicyArn" "UseS3Table")
 for param in "${REQUIRED_PARAMS[@]}"; do
     if ! grep -q "\"$param\"" "$STACK_TEMPLATE"; then
         echo -e "${RED}Error: Missing required parameter: $param${NC}"
@@ -252,23 +252,24 @@ cp env.example .env
 ## Required Configuration
 
 Edit \`.env\` with these required values:
-- \`QUILT_DATABASE_NAME\` - Your Glue database name
+- \`ATHENA_DATABASE_NAME\` - Your Athena database name
 - \`QUILT_READ_POLICY_ARN\` - Your Quilt read policy ARN
 
 ## Command Line Deployment
 
 \`\`\`bash
 # Deploy with parameters (no .env file needed)
-./deploy.sh --glue-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
+./deploy.sh --athena-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
 
 # Deploy with S3 Tables enabled
-./deploy.sh --glue-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy --use-s3-table true
+./deploy.sh --athena-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy --use-s3-table true
 \`\`\`
 
 ## Optional Parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
+| \`ATHENA_DATABASE_NAME\` | (required) | Athena database name |
 | \`USE_S3_TABLE\` | \`false\` | Use S3 Tables format |
 | \`AWS_DEFAULT_REGION\` | \`us-east-1\` | AWS region |
 | \`AWS_PROFILE\` | default | AWS profile |
@@ -311,7 +312,7 @@ Quick Deploy:
   ./deploy.sh
 
 Command Line Deploy:
-  ./deploy.sh --glue-database-name YOUR_DB --quilt-read-policy-arn YOUR_POLICY_ARN
+  ./deploy.sh --athena-database-name YOUR_DB --quilt-read-policy-arn YOUR_POLICY_ARN
 EOF
 
 echo -e "${GREEN}Release package created successfully!${NC}"
@@ -365,7 +366,7 @@ echo "cp env.example .env && edit .env, then:"
 echo "./deploy.sh"
 echo ""
 echo -e "${YELLOW}Or deploy with command line parameters:${NC}"
-echo "./deploy.sh --glue-database-name YOUR_DB --quilt-read-policy-arn YOUR_POLICY_ARN"
+echo "./deploy.sh --athena-database-name YOUR_DB --quilt-read-policy-arn YOUR_POLICY_ARN"
 echo ""
 
 echo -e "${YELLOW}Archives created and ready for distribution!${NC}"

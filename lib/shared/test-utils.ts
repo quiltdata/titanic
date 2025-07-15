@@ -20,14 +20,14 @@ export interface TableTestSetup {
 export function createTableTestSetup(): TableTestSetup {
     const mockConfig = Config.createTestInstance({
         glueTablesBucketArn: "arn:aws:s3:::test-bucket",
-        glueDatabaseName: "test-db",
+        athenaDatabaseName: "test-db",
         s3TablesBucketArn: "arn:aws:s3tables:us-east-1:123456789012:bucket/test-s3-bucket",
         s3TableDatabaseName: "test-s3-db"
     });
 
     const s3Config = S3Config.createTestInstance({
         glueTablesBucketArn: "arn:aws:s3:::test-bucket",
-        glueDatabaseName: "test-db",
+        athenaDatabaseName: "test-db",
         s3TablesBucketArn: "arn:aws:s3tables:us-east-1:123456789012:bucket/test-s3-bucket",
         s3TableDatabaseName: "test-s3-db"
     });

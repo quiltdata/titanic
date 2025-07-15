@@ -12,14 +12,14 @@ import * as path from "path";
 const s3DatabaseName = "quilt_titanic";
 
 export interface TitanicStackProps extends cdk.StackProps {
-    glueDatabaseName?: string;
+    athenaDatabaseName?: string;
     quiltReadPolicyArn?: string;
     useS3Table?: boolean;
     useCloudFormationParameters?: boolean;  // Flag to enable parameter mode
 }
 
 interface TitanicStackParameters {
-    glueDatabaseName: cdk.CfnParameter;
+    athenaDatabaseName: cdk.CfnParameter;
     quiltReadPolicyArn: cdk.CfnParameter;
     useS3Table: cdk.CfnParameter;
 }
@@ -35,10 +35,10 @@ export class TitanicStack extends cdk.Stack {
         
         if (useCloudFormationParameters) {
             parameters = {
-                glueDatabaseName: new cdk.CfnParameter(this, "GlueDatabaseName", {
+                athenaDatabaseName: new cdk.CfnParameter(this, "AthenaDatabaseName", {
                     type: "String",
-                    description: "Name of the Glue database containing the source views",
-                    default: process.env.QUILT_DATABASE_NAME || "",
+                    description: "Name of the Athena database containing the source views",
+                    default: process.env.ATHENA_DATABASE_NAME || "",
                 }),
                 
                 quiltReadPolicyArn: new cdk.CfnParameter(this, "QuiltReadPolicyArn", {
@@ -57,9 +57,9 @@ export class TitanicStack extends cdk.Stack {
         }
 
         // Get values from either props or parameters
-        const glueDatabaseName = useCloudFormationParameters 
-            ? parameters!.glueDatabaseName.valueAsString 
-            : props.glueDatabaseName!;
+        const athenaDatabaseName = useCloudFormationParameters 
+            ? parameters!.athenaDatabaseName.valueAsString 
+            : props.athenaDatabaseName!;
         
         const quiltReadPolicyArn = useCloudFormationParameters 
             ? parameters!.quiltReadPolicyArn.valueAsString 
@@ -98,9 +98,7 @@ export class TitanicStack extends cdk.Stack {
             },
             environment: {
                 // Source database to read from (always the same, where views are)
-                GLUE_DATABASE_NAME: useCloudFormationParameters 
-                    ? parameters!.glueDatabaseName.valueAsString 
-                    : glueDatabaseName,
+                ATHENA_DATABASE_NAME: athenaDatabaseName,
                 
                 // Target database to write to (changes based on USE_S3_TABLE)
                 S3TABLE_DATABASE_NAME: s3DatabaseName,
@@ -114,12 +112,8 @@ export class TitanicStack extends cdk.Stack {
                 
                 // Configuration
                 LAMBDA_TIMEOUT: "900",
-                QUILT_READ_POLICY_ARN: useCloudFormationParameters 
-                    ? parameters!.quiltReadPolicyArn.valueAsString 
-                    : quiltReadPolicyArn,
-                USE_S3_TABLE: useCloudFormationParameters 
-                    ? parameters!.useS3Table.valueAsString 
-                    : useS3Table.toString(),
+                QUILT_READ_POLICY_ARN: quiltReadPolicyArn,
+                USE_S3_TABLE: useS3Table.toString(),
             },
         });
 
@@ -144,8 +138,8 @@ export class TitanicStack extends cdk.Stack {
                 actions: ["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
                 resources: [
                     `arn:aws:glue:${this.region}:${this.account}:catalog`,
-                    `arn:aws:glue:${this.region}:${this.account}:database/${glueDatabaseName}`,
-                    `arn:aws:glue:${this.region}:${this.account}:table/${glueDatabaseName}/*`,
+                    `arn:aws:glue:${this.region}:${this.account}:database/${athenaDatabaseName}`,
+                    `arn:aws:glue:${this.region}:${this.account}:table/${athenaDatabaseName}/*`,
                     `arn:aws:glue:${this.region}:${this.account}:database/${s3DatabaseName}`,
                     `arn:aws:glue:${this.region}:${this.account}:table/${s3DatabaseName}/*`,
                 ],
@@ -235,12 +229,12 @@ export class TitanicStack extends cdk.Stack {
         });
 
         new cdk.CfnOutput(this, "SourceDatabaseName", {
-            value: glueDatabaseName,
+            value: athenaDatabaseName,
             description: "Source Glue database name (where views are read from)"
         });
 
         new cdk.CfnOutput(this, "TargetDatabaseName", {
-            value: useS3Table ? s3DatabaseName : glueDatabaseName,
+            value: useS3Table ? s3DatabaseName : athenaDatabaseName,
             description: "Target database name (where tables are written to)"
         });
 

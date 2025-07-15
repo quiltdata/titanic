@@ -8,7 +8,7 @@ const TEST_GLUE_BUCKET = 'test-glue-bucket';
 const TEST_CONFIG_PARAMS = {
     aws_region: "us-east-1",
     glueTablesBucketArn: `arn:aws:s3:::${TEST_GLUE_BUCKET}`,
-    glueDatabaseName: "test-db",
+    athenaDatabaseName: "test-db",
     s3TablesBucketArn: `arn:aws:s3tables:us-east-1:123456789012:bucket/${TEST_S3_BUCKET}`,
     s3TableDatabaseName: "test-s3-db"
 };
@@ -106,7 +106,7 @@ describe("AthenaUtils", () => {
             const call = athenaUtils.athenaMock.commandCalls(StartQueryExecutionCommand)[0];
             expect(call.args[0].input).toMatchObject({
                 QueryString: "SELECT 1",
-                QueryExecutionContext: { Database: TEST_CONFIG_PARAMS.glueDatabaseName },
+                QueryExecutionContext: { Database: TEST_CONFIG_PARAMS.athenaDatabaseName },
                 ResultConfiguration: { OutputLocation: `s3://${TEST_GLUE_BUCKET}/athena-results/` }
             });
         });
@@ -236,7 +236,7 @@ describe("AthenaUtils", () => {
             
             // Create a config with missing required values
             const badConfig = Config.createTestInstance({
-                glueDatabaseName: "",
+                athenaDatabaseName: "",
                 glueTablesBucketArn: ""
             });
             
@@ -403,7 +403,7 @@ describe("AthenaUtils", () => {
             
             expect(result).toEqual(["table1"]);
             expect(athenaUtils.glueMock.commandCalls(GetTablesCommand)[0].args[0].input).toMatchObject({
-                DatabaseName: TEST_CONFIG_PARAMS.glueDatabaseName
+                DatabaseName: TEST_CONFIG_PARAMS.athenaDatabaseName
             });
         });
     });

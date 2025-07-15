@@ -9,7 +9,7 @@ describe("TableManager", () => {
 
     beforeEach(() => {
         mockConfig = Config.createTestInstance({
-            glueDatabaseName: "test-db",
+            athenaDatabaseName: "test-db",
             glueTablesBucketArn: "arn:aws:s3:::test-bucket"
         });
         

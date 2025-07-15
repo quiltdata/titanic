@@ -30,7 +30,7 @@ describe("merge-tables lambda", () => {
 
     beforeEach(() => {
         process.env.NODE_ENV = "test";
-        process.env.GLUE_DATABASE_NAME = "test-db";
+        process.env.ATHENA_DATABASE_NAME = "test-db";
         process.env.S3TABLE_DATABASE_NAME = "test-db";
         process.env.GLUE_TABLES_BUCKET_ARN = "arn:aws:s3:::test-bucket";
         process.env.S3_TABLES_BUCKET_ARN = "arn:aws:s3tables:us-east-1:123456789012:bucket/test-tables-bucket";
@@ -39,7 +39,7 @@ describe("merge-tables lambda", () => {
 
         // Setup test config and AthenaTest
         testConfig = Config.createTestInstance({
-            glueDatabaseName: "test-db",
+            athenaDatabaseName: "test-db",
             glueTablesBucketArn: "arn:aws:s3:::test-bucket"
         });
         athenaTest = AthenaTest.createTestInstance(testConfig);
@@ -47,7 +47,7 @@ describe("merge-tables lambda", () => {
 
     describe("Mode-specific behavior", () => {
         it("should return skip message if environment variables are missing", async () => {
-            delete process.env.GLUE_DATABASE_NAME;
+            delete process.env.ATHENA_DATABASE_NAME;
             delete process.env.S3TABLE_DATABASE_NAME;
             
             athenaTest.mockTablesInDatabase([]);

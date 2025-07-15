@@ -30,11 +30,11 @@ export class AthenaUtils {
         }
 
         if (!this.config.getWriteDatabaseName()) {
-            issues.push('Write database name is empty - check GLUE_DATABASE_NAME or S3TABLE_DATABASE_NAME environment variables');
+            issues.push('Write database name is empty - check ATHENA_DATABASE_NAME or S3TABLE_DATABASE_NAME environment variables');
         }
 
         if (!this.config.getReadDatabaseName()) {
-            issues.push('Read database name is empty - check GLUE_DATABASE_NAME environment variable');
+            issues.push('Read database name is empty - check ATHENA_DATABASE_NAME environment variable');
         }
 
         if (issues.length > 0) {
@@ -49,7 +49,7 @@ export class AthenaUtils {
                 },
                 environmentVariables: {
                     GLUE_TABLES_BUCKET_ARN: process.env.GLUE_TABLES_BUCKET_ARN,
-                    GLUE_DATABASE_NAME: process.env.GLUE_DATABASE_NAME,
+                    ATHENA_DATABASE_NAME: process.env.ATHENA_DATABASE_NAME,
                     S3TABLE_DATABASE_NAME: process.env.S3TABLE_DATABASE_NAME,
                     S3_TABLES_BUCKET_ARN: process.env.S3_TABLES_BUCKET_ARN,
                     USE_S3_TABLE: process.env.USE_S3_TABLE

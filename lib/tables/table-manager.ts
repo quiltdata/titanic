@@ -11,7 +11,7 @@ export class TableManager {
 
     constructor(
         private config: Config, // Pass config as parameter
-        private glueDatabaseName: string,
+        private athenaDatabaseName: string,
         private targetDatabaseName: string,
         private targetBucket: string,
         athenaUtils?: AthenaUtils // Optional for testing
@@ -31,12 +31,12 @@ export class TableManager {
      */
     static createTestInstance(
         config: Config,
-        glueDatabaseName: string,
+        athenaDatabaseName: string,
         targetDatabaseName: string,
         targetBucket: string,
         athenaUtils: AthenaUtils
     ): TableManager {
-        return new TableManager(config, glueDatabaseName, targetDatabaseName, targetBucket, athenaUtils);
+        return new TableManager(config, athenaDatabaseName, targetDatabaseName, targetBucket, athenaUtils);
     }
 
     /**

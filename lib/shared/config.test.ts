@@ -18,7 +18,7 @@ describe('Config', () => {
         glueTablesBucketArn: 'arn:aws:s3:::glue-bucket',
         s3TablesBucketArn: 'arn:aws:s3tables:us-west-2:123456789012:bucket/s3-bucket',
         aws_region: 'us-west-2',
-        glueDatabaseName: 'glue_db',
+        athenaDatabaseName: 'glue_db',
         s3TableDatabaseName: 's3_db',
       });
 
@@ -27,7 +27,7 @@ describe('Config', () => {
       expect(config.getGlueTablesBucketName()).toBe('glue-bucket');
       expect(config.getS3TablesBucketName()).toBe('s3-bucket');
       expect(config.aws_region).toBe('us-west-2');
-      expect(config.glueDatabaseName).toBe('glue_db');
+      expect(config.athenaDatabaseName).toBe('glue_db');
       expect(config.s3TableDatabaseName).toBe('s3_db');
     });
 
@@ -42,7 +42,7 @@ describe('Config', () => {
       process.env.GLUE_TABLES_BUCKET_ARN = 'arn:aws:s3:::env-glue-bucket';
       process.env.S3_TABLES_BUCKET_ARN = 'arn:aws:s3tables:us-east-1:123456789012:bucket/env-s3-bucket';
       process.env.AWS_REGION = 'env-region';
-      process.env.GLUE_DATABASE_NAME = 'env-glue-db';
+      process.env.ATHENA_DATABASE_NAME = 'env-glue-db';
       process.env.S3TABLE_DATABASE_NAME = 'env-s3-db';
 
       const config = Config.create();
@@ -93,7 +93,7 @@ describe('Config', () => {
 
     it('should use Glue database for read and write operations', () => {
       const config = Config.createTestInstance({
-        glueDatabaseName: 'my-glue-db',
+        athenaDatabaseName: 'my-glue-db',
         s3TableDatabaseName: 'my-s3-db'
       });
 
@@ -103,7 +103,7 @@ describe('Config', () => {
 
     it('should provide database-only execution context', () => {
       const config = Config.createTestInstance({
-        glueDatabaseName: 'test-db'
+        athenaDatabaseName: 'test-db'
       });
 
       const context = config.getExecutionContext();
@@ -127,7 +127,7 @@ describe('Config', () => {
 
     it('should use different databases for read vs write operations', () => {
       const config = new S3Config({
-        glueDatabaseName: 'source-db',
+        athenaDatabaseName: 'source-db',
         s3TableDatabaseName: 'target-db'
       });
 

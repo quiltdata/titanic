@@ -4,7 +4,7 @@ import { Config, S3Config } from "../shared/config";
 // Global test configuration constants
 const TEST_CONFIG_PARAMS = {
     glueTablesBucketArn: "arn:aws:s3:::test-glue-bucket",
-    glueDatabaseName: "test-db",
+    athenaDatabaseName: "test-db",
     s3TablesBucketArn: "arn:aws:s3tables:us-east-1:123456789012:bucket/test-s3-bucket",
     s3TableDatabaseName: "test-s3-db"
 };

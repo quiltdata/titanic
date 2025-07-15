@@ -21,7 +21,7 @@ describe("Environment Variable Contract Tests", () => {
                 ATHENA_RESULTS_BUCKET_ARN: "arn:aws:s3:::titanic-glue-tables-123456789012-us-east-2",
                 
                 // Database names
-                GLUE_DATABASE_NAME: "source-database",
+                ATHENA_DATABASE_NAME: "source-database",
                 S3TABLE_DATABASE_NAME: "quilt_titanic",
                 
                 // Configuration flags
@@ -104,7 +104,7 @@ describe("Environment Variable Contract Tests", () => {
             ];
             
             const databaseEnvVars = [
-                "GLUE_DATABASE_NAME",
+                "ATHENA_DATABASE_NAME",
                 "S3TABLE_DATABASE_NAME"
             ];
             
