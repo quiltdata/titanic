@@ -54,8 +54,7 @@ npm run cdk
 npx cdk deploy \
   --parameters GlueDatabaseName=mydb \
   --parameters QuiltReadPolicyArn=arn:aws:iam::123456789012:policy/QuiltReadPolicy \
-  --parameters UseS3Table=false \
-  --parameters LambdaTimeout=900
+  --parameters UseS3Table=false
 ```
 
 ### Method 2: CloudFormation from Generated Template
@@ -85,7 +84,6 @@ QUILT_READ_POLICY_ARN=arn:aws:iam::123:policy/X  # Stack read-only policy (so we
 ### Optional Configuration
 ```bash
 USE_S3_TABLE=false          # Table format selection
-LAMBDA_TIMEOUT=900          # Lambda timeout (seconds)
 AWS_DEFAULT_REGION=us-east-1
 AWS_PROFILE=default
 ```

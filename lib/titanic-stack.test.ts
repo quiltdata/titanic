@@ -2,8 +2,6 @@ import * as cdk from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
 import { Match } from "aws-cdk-lib/assertions";
 import { TitanicStack } from "./titanic-stack";
-
-// Test utilities
 const createStackTemplate = (
     stackId: string,
     props: any
@@ -170,26 +168,6 @@ describe("TitanicStack", () => {
             });
         });
 
-        it("should support custom Lambda timeout configuration", () => {
-            const customTemplate = createStackTemplate(
-                "CustomTimeoutStack", 
-                { ...defaultStackProps, lambdaTimeout: 10000 }
-            );
-
-            customTemplate.hasResourceProperties("AWS::Lambda::Function", {
-                Environment: {
-                    Variables: {
-                        GLUE_DATABASE_NAME: { Ref: "GlueDatabaseName" },
-                        LAMBDA_TIMEOUT: { Ref: "LambdaTimeout" },
-                        USE_S3_TABLE: { Ref: "UseS3Table" },
-                        QUILT_READ_POLICY_ARN: { Ref: "QuiltReadPolicyArn" },
-                        GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
-                        S3_TABLES_BUCKET_ARN: Match.anyValue(),
-                        ATHENA_RESULTS_BUCKET_ARN: Match.anyValue(),
-                    },
-                },
-            });
-        });
     });
 
     describe("Glue mode (default)", () => {
@@ -304,7 +282,6 @@ describe("TitanicStack", () => {
             glueDatabaseName: "test-glue-database",
             quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/TestQuiltReadPolicy",
             useS3Table: false,
-            lambdaTimeout: 600,
             useCloudFormationParameters: false
         };
 
@@ -321,7 +298,6 @@ describe("TitanicStack", () => {
                 expect(parameters).not.toHaveProperty("GlueDatabaseName");
                 expect(parameters).not.toHaveProperty("QuiltReadPolicyArn");
                 expect(parameters).not.toHaveProperty("UseS3Table");
-                expect(parameters).not.toHaveProperty("LambdaTimeout");
             });
 
             it("should create both S3 bucket types", () => {
@@ -360,7 +336,6 @@ describe("TitanicStack", () => {
                         Variables: {
                             GLUE_DATABASE_NAME: "test-glue-database",
                             S3TABLE_DATABASE_NAME: "quilt_titanic",
-                            LAMBDA_TIMEOUT: "600",
                             QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/TestQuiltReadPolicy",
                             USE_S3_TABLE: "false",
                             GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
@@ -368,7 +343,7 @@ describe("TitanicStack", () => {
                             ATHENA_RESULTS_BUCKET_ARN: Match.anyValue(),
                         },
                     },
-                    Timeout: 600,
+                    Timeout: 900,
                 });
             });
 
@@ -499,38 +474,6 @@ describe("TitanicStack", () => {
             });
         });
 
-        describe("Custom timeout configuration", () => {
-            it("should support custom Lambda timeout in props mode", () => {
-                const customTemplate = createStackTemplate("PropsCustomTimeoutStack", {
-                    ...propsMode,
-                    lambdaTimeout: 300
-                });
-
-                customTemplate.hasResourceProperties("AWS::Lambda::Function", {
-                    Environment: {
-                        Variables: {
-                            LAMBDA_TIMEOUT: "300",
-                        },
-                    },
-                    Timeout: 300,
-                });
-            });
-
-            it("should default to 900 seconds when lambdaTimeout not specified", () => {
-                const { lambdaTimeout: _lambdaTimeout, ...propsWithoutTimeout } = propsMode;
-                const defaultTemplate = createStackTemplate("PropsDefaultTimeoutStack", propsWithoutTimeout);
-
-                defaultTemplate.hasResourceProperties("AWS::Lambda::Function", {
-                    Environment: {
-                        Variables: {
-                            LAMBDA_TIMEOUT: "900",
-                        },
-                    },
-                    Timeout: 900,
-                });
-            });
-        });
-
         describe("Default values", () => {
             it("should handle minimal props configuration", () => {
                 const minimalTemplate = createStackTemplate("PropsMinimalStack", {
@@ -545,7 +488,6 @@ describe("TitanicStack", () => {
                             GLUE_DATABASE_NAME: "minimal-db",
                             QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/MinimalPolicy",
                             USE_S3_TABLE: "false",
-                            LAMBDA_TIMEOUT: "900",
                         },
                     },
                     Timeout: 900,
@@ -614,7 +556,6 @@ describe("TitanicStack", () => {
             expect(parameters).not.toHaveProperty("GlueDatabaseName");
             expect(parameters).not.toHaveProperty("QuiltReadPolicyArn");
             expect(parameters).not.toHaveProperty("UseS3Table");
-            expect(parameters).not.toHaveProperty("LambdaTimeout");
 
             // Should use props directly in environment variables
             template.hasResourceProperties("AWS::Lambda::Function", {

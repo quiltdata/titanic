@@ -15,7 +15,6 @@ export interface TitanicStackProps extends cdk.StackProps {
     glueDatabaseName?: string;
     quiltReadPolicyArn?: string;
     useS3Table?: boolean;
-    lambdaTimeout?: number;
     useCloudFormationParameters?: boolean;  // Flag to enable parameter mode
 }
 
@@ -23,7 +22,6 @@ interface TitanicStackParameters {
     glueDatabaseName: cdk.CfnParameter;
     quiltReadPolicyArn: cdk.CfnParameter;
     useS3Table: cdk.CfnParameter;
-    lambdaTimeout: cdk.CfnParameter;
 }
 
 export class TitanicStack extends cdk.Stack {
@@ -55,14 +53,6 @@ export class TitanicStack extends cdk.Stack {
                     default: process.env.USE_S3_TABLE || "false",
                     allowedValues: ["true", "false"],
                 }),
-                
-                lambdaTimeout: new cdk.CfnParameter(this, "LambdaTimeout", {
-                    type: "Number",
-                    description: "Lambda function timeout in seconds",
-                    default: parseInt(process.env.LAMBDA_TIMEOUT || "900"),
-                    minValue: 1,
-                    maxValue: 900,
-                }),
             };
         }
 
@@ -78,10 +68,6 @@ export class TitanicStack extends cdk.Stack {
         const useS3Table = useCloudFormationParameters 
             ? parameters!.useS3Table.valueAsString === "true" 
             : (props.useS3Table ?? false);
-        
-        const lambdaTimeout = useCloudFormationParameters 
-            ? parameters!.lambdaTimeout.valueAsNumber 
-            : (props.lambdaTimeout || 900);
         
 
         // Always create both buckets for maximum flexibility
@@ -103,7 +89,7 @@ export class TitanicStack extends cdk.Stack {
             entry: path.join(__dirname, "merge-tables.ts"),
             handler: "handler",
             runtime: Runtime.NODEJS_18_X,
-            timeout: cdk.Duration.seconds(lambdaTimeout),
+            timeout: cdk.Duration.seconds(900),
             bundling: {
                 externalModules: [
                     "@aws-sdk/client-glue",
@@ -127,9 +113,7 @@ export class TitanicStack extends cdk.Stack {
                 ATHENA_RESULTS_BUCKET_ARN: glueTablesBucket.bucketArn,
                 
                 // Configuration
-                LAMBDA_TIMEOUT: useCloudFormationParameters 
-                    ? parameters!.lambdaTimeout.valueAsString 
-                    : lambdaTimeout.toString(),
+                LAMBDA_TIMEOUT: "900",
                 QUILT_READ_POLICY_ARN: useCloudFormationParameters 
                     ? parameters!.quiltReadPolicyArn.valueAsString 
                     : quiltReadPolicyArn,

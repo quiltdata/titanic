@@ -31,7 +31,6 @@ TEMPLATE_FILE="template.json"
 GLUE_DATABASE_NAME="${GLUE_DATABASE_NAME:-${QUILT_DATABASE_NAME:-}}"
 QUILT_READ_POLICY_ARN="${QUILT_READ_POLICY_ARN:-}"
 USE_S3_TABLE="${USE_S3_TABLE:-false}"
-LAMBDA_TIMEOUT="${LAMBDA_TIMEOUT:-900}"
 
 # Help function
 show_help() {
@@ -50,7 +49,6 @@ OPTIONS:
     --glue-database-name NAME       Glue database name (required)
     --quilt-read-policy-arn ARN     Quilt read policy ARN (required)
     --use-s3-table BOOL             Use S3 Tables format (true/false, default: false)
-    --lambda-timeout SECONDS        Lambda timeout in seconds (default: 900)
 
 EXAMPLES:
     # Deploy with required parameters
@@ -64,8 +62,7 @@ EXAMPLES:
     # Deploy with all parameters
     $0 --glue-database-name mydb \\
        --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy \\
-       --use-s3-table true \\
-       --lambda-timeout 300
+       --use-s3-table true
 
     # Use .env file (automatically loaded if present)
     cp env.example .env
@@ -82,7 +79,6 @@ ENVIRONMENT VARIABLES:
     - QUILT_DATABASE_NAME - Glue database name
     - QUILT_READ_POLICY_ARN - Quilt read policy ARN
     - USE_S3_TABLE - Use S3 Tables format (true/false)
-    - LAMBDA_TIMEOUT - Lambda timeout in seconds
     - AWS_DEFAULT_REGION - AWS region
     - AWS_PROFILE - AWS profile
 
@@ -128,10 +124,6 @@ while [[ $# -gt 0 ]]; do
             USE_S3_TABLE="$2"
             shift 2
             ;;
-        --lambda-timeout)
-            LAMBDA_TIMEOUT="$2"
-            shift 2
-            ;;
         *)
             echo -e "${RED}Error: Unknown option $1${NC}"
             show_help
@@ -158,12 +150,6 @@ if [[ "$USE_S3_TABLE" != "true" && "$USE_S3_TABLE" != "false" ]]; then
     exit 1
 fi
 
-# Validate LAMBDA_TIMEOUT is a number
-if ! [[ "$LAMBDA_TIMEOUT" =~ ^[0-9]+$ ]] || [[ "$LAMBDA_TIMEOUT" -lt 1 ]] || [[ "$LAMBDA_TIMEOUT" -gt 900 ]]; then
-    echo -e "${RED}Error: lambda-timeout must be a number between 1 and 900, got: $LAMBDA_TIMEOUT${NC}"
-    exit 1
-fi
-
 # Check if template exists
 if [[ ! -f "$TEMPLATE_FILE" ]]; then
     echo -e "${RED}Error: CloudFormation template not found: $TEMPLATE_FILE${NC}"
@@ -186,7 +172,6 @@ echo "Template File: $TEMPLATE_FILE"
 echo "Glue Database Name: $GLUE_DATABASE_NAME"
 echo "Quilt Read Policy ARN: $QUILT_READ_POLICY_ARN"
 echo "Use S3 Table: $USE_S3_TABLE"
-echo "Lambda Timeout: $LAMBDA_TIMEOUT seconds"
 echo ""
 
 echo -e "${YELLOW}Please verify the configuration above.${NC}"
@@ -205,7 +190,6 @@ DEPLOY_OUTPUT=$(aws cloudformation deploy \
         GlueDatabaseName="$GLUE_DATABASE_NAME" \
         QuiltReadPolicyArn="$QUILT_READ_POLICY_ARN" \
         UseS3Table="$USE_S3_TABLE" \
-        LambdaTimeout="$LAMBDA_TIMEOUT" \
     $AWS_OPTS 2>&1)
 
 DEPLOY_STATUS=$?

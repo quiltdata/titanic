@@ -149,7 +149,7 @@ if ! grep -q '"Parameters"' "$STACK_TEMPLATE"; then
 fi
 
 # Check for required parameters
-REQUIRED_PARAMS=("GlueDatabaseName" "QuiltReadPolicyArn" "UseS3Table" "LambdaTimeout")
+REQUIRED_PARAMS=("GlueDatabaseName" "QuiltReadPolicyArn" "UseS3Table")
 for param in "${REQUIRED_PARAMS[@]}"; do
     if ! grep -q "\"$param\"" "$STACK_TEMPLATE"; then
         echo -e "${RED}Error: Missing required parameter: $param${NC}"
@@ -270,7 +270,6 @@ Edit \`.env\` with these required values:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | \`USE_S3_TABLE\` | \`false\` | Use S3 Tables format |
-| \`LAMBDA_TIMEOUT\` | \`900\` | Lambda timeout (seconds) |
 | \`AWS_DEFAULT_REGION\` | \`us-east-1\` | AWS region |
 | \`AWS_PROFILE\` | default | AWS profile |
 

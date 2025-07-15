@@ -35,7 +35,6 @@ describe("merge-tables lambda", () => {
         process.env.GLUE_TABLES_BUCKET_ARN = "arn:aws:s3:::test-bucket";
         process.env.S3_TABLES_BUCKET_ARN = "arn:aws:s3tables:us-east-1:123456789012:bucket/test-tables-bucket";
         process.env.ATHENA_RESULTS_BUCKET_ARN = "arn:aws:s3:::test-bucket";
-        process.env.LAMBDA_TIMEOUT = "5000";
         delete process.env.USE_S3_TABLE; // Default to Glue mode
 
         // Setup test config and AthenaTest
@@ -63,17 +62,6 @@ describe("merge-tables lambda", () => {
                 totalQueries: 0,
             });
         });
-    });
-
-    it("should respect custom timeout configuration", async () => {
-        process.env.LAMBDA_TIMEOUT = "10000";
-
-        athenaTest.mockTablesInDatabase([]);
-        athenaTest.mockQueryResult(true);
-
-        const mockEvent = createEventBridgeEvent();
-        const result = await handler(mockEvent, {} as Context);
-        expect(result).toBeDefined();
     });
 
     describe("error handling scenarios", () => {

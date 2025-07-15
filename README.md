@@ -33,7 +33,6 @@ QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/STACK-BucketReadPolicy-XX
 
 # Optional: Advanced settings
 USE_S3_TABLE=false          # Use S3 Tables format (experimental)
-LAMBDA_TIMEOUT=900          # Lambda timeout in seconds
 AWS_DEFAULT_REGION=us-east-1
 ```
 
