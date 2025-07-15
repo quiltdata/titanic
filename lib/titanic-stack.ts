@@ -28,47 +28,9 @@ export class TitanicStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props: TitanicStackProps = {}) {
         super(scope, id, props);
 
-        const useCloudFormationParameters = props.useCloudFormationParameters ?? false;
-
-        // Create CloudFormation parameters if needed
-        let parameters: TitanicStackParameters | undefined;
-        
-        if (useCloudFormationParameters) {
-            parameters = {
-                athenaDatabaseName: new cdk.CfnParameter(this, "AthenaDatabaseName", {
-                    type: "String",
-                    description: "Name of the Athena database containing the source views",
-                    default: process.env.ATHENA_DATABASE_NAME || "",
-                }),
-                
-                quiltReadPolicyArn: new cdk.CfnParameter(this, "QuiltReadPolicyArn", {
-                    type: "String",
-                    description: "ARN of the IAM policy for reading from Quilt buckets",
-                    default: process.env.QUILT_READ_POLICY_ARN || "",
-                }),
-                
-                useS3Table: new cdk.CfnParameter(this, "UseS3Table", {
-                    type: "String",
-                    description: "Whether to use S3 Tables format (true/false)",
-                    default: process.env.USE_S3_TABLE || "false",
-                    allowedValues: ["true", "false"],
-                }),
-            };
-        }
-
-        // Get values from either props or parameters
-        const athenaDatabaseName = useCloudFormationParameters 
-            ? parameters!.athenaDatabaseName.valueAsString 
-            : props.athenaDatabaseName!;
-        
-        const quiltReadPolicyArn = useCloudFormationParameters 
-            ? parameters!.quiltReadPolicyArn.valueAsString 
-            : props.quiltReadPolicyArn!;
-        
-        const useS3Table = useCloudFormationParameters 
-            ? parameters!.useS3Table.valueAsString === "true" 
-            : (props.useS3Table ?? false);
-        
+        // Resolve configuration values once
+        const config = this.resolveConfiguration(props);
+        console.log("TitanicStack configuration:", config);
 
         // Always create both buckets for maximum flexibility
         
@@ -98,7 +60,7 @@ export class TitanicStack extends cdk.Stack {
             },
             environment: {
                 // Source database to read from (always the same, where views are)
-                ATHENA_DATABASE_NAME: athenaDatabaseName,
+                ATHENA_DATABASE_NAME: config.athenaDatabaseName,
                 
                 // Target database to write to (changes based on USE_S3_TABLE)
                 S3TABLE_DATABASE_NAME: s3DatabaseName,
@@ -112,8 +74,8 @@ export class TitanicStack extends cdk.Stack {
                 
                 // Configuration
                 LAMBDA_TIMEOUT: "900",
-                QUILT_READ_POLICY_ARN: quiltReadPolicyArn,
-                USE_S3_TABLE: useS3Table.toString(),
+                QUILT_READ_POLICY_ARN: config.quiltReadPolicyArn,
+                USE_S3_TABLE: config.useS3Table.toString(),
             },
         });
 
@@ -138,8 +100,8 @@ export class TitanicStack extends cdk.Stack {
                 actions: ["glue:GetTables", "glue:GetTable", "glue:GetPartitions", "glue:GetDatabase", "glue:CreateTable", "glue:DeleteTable", "glue:UpdateTable"],
                 resources: [
                     `arn:aws:glue:${this.region}:${this.account}:catalog`,
-                    `arn:aws:glue:${this.region}:${this.account}:database/${athenaDatabaseName}`,
-                    `arn:aws:glue:${this.region}:${this.account}:table/${athenaDatabaseName}/*`,
+                    `arn:aws:glue:${this.region}:${this.account}:database/${config.athenaDatabaseName}`,
+                    `arn:aws:glue:${this.region}:${this.account}:table/${config.athenaDatabaseName}/*`,
                     `arn:aws:glue:${this.region}:${this.account}:database/${s3DatabaseName}`,
                     `arn:aws:glue:${this.region}:${this.account}:table/${s3DatabaseName}/*`,
                 ],
@@ -203,7 +165,7 @@ export class TitanicStack extends cdk.Stack {
             iam.ManagedPolicy.fromManagedPolicyArn(
                 this,
                 "TitanicGrantQuiltReadPolicy",
-                quiltReadPolicyArn
+                config.quiltReadPolicyArn
             )
         );
 
@@ -229,14 +191,55 @@ export class TitanicStack extends cdk.Stack {
         });
 
         new cdk.CfnOutput(this, "SourceDatabaseName", {
-            value: athenaDatabaseName,
+            value: config.athenaDatabaseName,
             description: "Source Glue database name (where views are read from)"
         });
 
         new cdk.CfnOutput(this, "TargetDatabaseName", {
-            value: useS3Table ? s3DatabaseName : athenaDatabaseName,
+            value: config.useS3Table ? s3DatabaseName : config.athenaDatabaseName,
             description: "Target database name (where tables are written to)"
         });
 
+    }
+
+    private resolveConfiguration(props: TitanicStackProps) {
+        const useParameters = props.useCloudFormationParameters ?? false;
+        if (useParameters) {
+            const parameters = this.createParameters();
+            return {
+                athenaDatabaseName: parameters.athenaDatabaseName.valueAsString,
+                quiltReadPolicyArn: parameters.quiltReadPolicyArn.valueAsString,
+                useS3Table: parameters.useS3Table.valueAsString === "true",
+            };
+        } else {
+            return {
+                athenaDatabaseName: props.athenaDatabaseName!,
+                quiltReadPolicyArn: props.quiltReadPolicyArn!,
+                useS3Table: props.useS3Table ?? false,
+            };
+        }
+    }
+
+    private createParameters(): TitanicStackParameters {
+        return {
+            athenaDatabaseName: new cdk.CfnParameter(this, "AthenaDatabaseName", {
+                type: "String",
+                description: "Name of the Athena database containing the source views",
+                default: process.env.ATHENA_DATABASE_NAME || "",
+            }),
+            
+            quiltReadPolicyArn: new cdk.CfnParameter(this, "QuiltReadPolicyArn", {
+                type: "String",
+                description: "ARN of the IAM policy for reading from Quilt buckets",
+                default: process.env.QUILT_READ_POLICY_ARN || "",
+            }),
+            
+            useS3Table: new cdk.CfnParameter(this, "UseS3Table", {
+                type: "String",
+                description: "Whether to use S3 Tables format (true/false)",
+                default: process.env.USE_S3_TABLE || "false",
+                allowedValues: ["true", "false"],
+            }),
+        };
     }
 }

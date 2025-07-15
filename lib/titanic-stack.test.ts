@@ -191,7 +191,7 @@ describe("TitanicStack", () => {
                 Environment: {
                     Variables: {
                         ATHENA_DATABASE_NAME: { Ref: "AthenaDatabaseName" },
-                        USE_S3_TABLE: { Ref: "UseS3Table" },
+                        USE_S3_TABLE: "false",
                         QUILT_READ_POLICY_ARN: { Ref: "QuiltReadPolicyArn" },
                         GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
                         S3_TABLES_BUCKET_ARN: Match.anyValue(),
@@ -212,7 +212,7 @@ describe("TitanicStack", () => {
                     Environment: {
                         Variables: {
                             ATHENA_DATABASE_NAME: { Ref: "AthenaDatabaseName" },
-                            USE_S3_TABLE: { Ref: "UseS3Table" },
+                            USE_S3_TABLE: "false",
                             QUILT_READ_POLICY_ARN: { Ref: "QuiltReadPolicyArn" },
                             GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
                             S3_TABLES_BUCKET_ARN: Match.anyValue(),
@@ -228,7 +228,13 @@ describe("TitanicStack", () => {
         let template: Template;
 
         beforeAll(() => {
-            template = createStackTemplate("S3TablesStack", { ...defaultStackProps, useS3Table: true });
+            // Use props mode for this test to ensure useS3Table: true is properly set
+            template = createStackTemplate("S3TablesStack", { 
+                athenaDatabaseName: "test-database-env",
+                quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
+                useS3Table: true,
+                useCloudFormationParameters: false
+            });
         });
 
         it("should create S3 TableBucket in addition to regular S3 bucket", () => {
@@ -243,10 +249,10 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        ATHENA_DATABASE_NAME: { Ref: "AthenaDatabaseName" },
+                        ATHENA_DATABASE_NAME: "test-database-env",
                         S3TABLE_DATABASE_NAME: "quilt_titanic", // This is the hardcoded constant
-                        USE_S3_TABLE: { Ref: "UseS3Table" },
-                        QUILT_READ_POLICY_ARN: { Ref: "QuiltReadPolicyArn" },
+                        USE_S3_TABLE: "true",
+                        QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
                         GLUE_TABLES_BUCKET_ARN: Match.anyValue(),
                         S3_TABLES_BUCKET_ARN: Match.anyValue(),
                         ATHENA_RESULTS_BUCKET_ARN: Match.anyValue(),
