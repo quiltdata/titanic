@@ -8,38 +8,22 @@ export class PackageEntryTable extends BaseTable {
 
     protected getColumnDefinitions(): ColumnDefinitions {
         return {
-            'registry': 'VARCHAR',
-            'top_hash': 'VARCHAR',
-            'logical_key': 'VARCHAR',
-            'physical_key': 'VARCHAR',
-            'multihash': 'VARCHAR',
+            'registry': 'STRING',
+            'top_hash': 'STRING',
+            'logical_key': 'STRING',
+            'physical_key': 'STRING',
+            'multihash': 'STRING',
             'size': 'BIGINT',
-            'metadata': 'VARCHAR'
+            'metadata': 'STRING'
         };
     }
 
     protected getPartitioningClause(): string {
-        return `PARTITIONED BY (
-              registry,
-              bucket(64, physical_key)
-            )`;
+        return `PARTITIONED BY (registry, bucket(64, physical_key))`;
     }
 
     protected generateSelectClause(registryName: string, sourceAlias: string): string {
-        return `'${registryName}' AS registry,
-              ${sourceAlias}.top_hash,
-              ${sourceAlias}.logical_key,
-              ${sourceAlias}.physical_key,
-              concat(
-                CASE ${sourceAlias}.hash.type
-                  WHEN 'SHA256' THEN '1220'
-                  WHEN 'sha2-256-chunked' THEN 'b150'
-                  ELSE '0000'
-                END,
-                ${sourceAlias}.hash.value
-              ) AS multihash,
-              ${sourceAlias}.size,
-              ${sourceAlias}.meta AS metadata`;
+        return `'${registryName}' AS registry, ${sourceAlias}.top_hash, ${sourceAlias}.logical_key, ${sourceAlias}.physical_key, concat(CASE ${sourceAlias}.hash.type WHEN 'SHA256' THEN '1220' WHEN 'sha2-256-chunked' THEN 'b150' ELSE '0000' END, ${sourceAlias}.hash.value) AS multihash, ${sourceAlias}.size, ${sourceAlias}.meta AS metadata`;
     }
 
     protected generateWhereClauseForCtas(_sourceAlias: string): string {
@@ -52,8 +36,8 @@ export class PackageEntryTable extends BaseTable {
         const registryName = this.extractRegistryName(objectsView);
         const selectClause = this.generateSelectClause(registryName, 's');
         
-        // Target table is SQL safe and unquoted, source table needs quoting
-        const targetTable = this.tableName;
+        // Target table uses fully-qualified name for S3 Tables, simple name for Glue
+        const targetTable = this.getTargetTableName();
         const sourceTable = `"${objectsView}"`;
         
         return `

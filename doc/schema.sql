@@ -12,7 +12,9 @@ DROP TABLE IF EXISTS package_entry;
 
 CREATE DATABASE IF NOT EXISTS quilt_titanic;
 
-CREATE TABLE package_revision (
+CREATE NAMESPACE IF NOT EXISTS preview
+
+CREATE TABLE preview.package_revision (
   registry     STRING,   
   pkg_name     STRING,   
   top_hash     STRING,   
@@ -20,6 +22,7 @@ CREATE TABLE package_revision (
   message      STRING,   
   metadata    STRING       
 )
+LOCATION 's3://titanic-s3-tables-712023778557-us-east-2/iceberg_catalog/package_revision'
 PARTITIONED BY (
   registry,
   bucket(8, pkg_name),
@@ -30,7 +33,7 @@ TBLPROPERTIES (
   'format' = 'PARQUET'
 );
 
-CREATE TABLE package_tag (
+CREATE TABLE preview.package_tag (
   registry   STRING,      
   pkg_name   STRING,      
   tag_name   STRING,      
@@ -46,7 +49,7 @@ TBLPROPERTIES (
   'format' = 'PARQUET'
 );
 
-CREATE TABLE package_entry (
+CREATE TABLE preview.package_entry (
   registry     STRING,    
   top_hash     STRING,
   logical_key  STRING,    
@@ -70,7 +73,7 @@ CREATE TABLE package_revision
 WITH (
   format = 'PARQUET',
   write_compression = 'SNAPPY',
-  location = 's3://${targetBucket}/iceberg_catalog/package_revision',
+  location = 's3://titanic-s3-tables-712023778557-us-east-2/iceberg_catalog/package_revision',
   table_type = 'ICEBERG',
   is_external = false
 ) AS
@@ -87,7 +90,7 @@ CREATE TABLE package_tag
 WITH (
   format = 'PARQUET',
   write_compression = 'SNAPPY',
-  location = 's3://${targetBucket}/iceberg_catalog/package_tag',
+  location = 's3://titanic-s3-tables-712023778557-us-east-2/iceberg_catalog/package_tag',
   table_type = 'ICEBERG',
   is_external = false
 ) AS
@@ -102,7 +105,7 @@ CREATE TABLE package_entry
 WITH (
   format = 'PARQUET',
   write_compression = 'SNAPPY',
-  location = 's3://${targetBucket}/iceberg_catalog/package_entry',
+  location = 's3://titanic-s3-tables-712023778557-us-east-2/iceberg_catalog/package_entry',
   table_type = 'ICEBERG',
   is_external = false
 ) AS

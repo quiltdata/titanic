@@ -8,26 +8,19 @@ export class PackageTagTable extends BaseTable {
 
     protected getColumnDefinitions(): ColumnDefinitions {
         return {
-            'registry': 'VARCHAR',
-            'pkg_name': 'VARCHAR',
-            'tag_name': 'VARCHAR',
-            'top_hash': 'VARCHAR'
+            'registry': 'STRING',
+            'pkg_name': 'STRING',
+            'tag_name': 'STRING',
+            'top_hash': 'STRING'
         };
     }
 
     protected getPartitioningClause(): string {
-        return `PARTITIONED BY (
-              registry,
-              tag_name,
-              bucket(8, pkg_name)
-            )`;
+        return `PARTITIONED BY (registry, tag_name, bucket(8, pkg_name))`;
     }
 
     protected generateSelectClause(registryName: string, sourceAlias: string): string {
-        return `'${registryName}' AS registry,
-              ${sourceAlias}.pkg_name,
-              ${sourceAlias}.timestamp AS tag_name,
-              ${sourceAlias}.top_hash`;
+        return `'${registryName}' AS registry, ${sourceAlias}.pkg_name, ${sourceAlias}.timestamp AS tag_name, ${sourceAlias}.top_hash`;
     }
 
     protected generateWhereClauseForCtas(sourceAlias: string): string {
@@ -39,8 +32,8 @@ export class PackageTagTable extends BaseTable {
         const registryName = this.extractRegistryName(packagesView);
         const selectClause = this.generateSelectClause(registryName, 's');
         
-        // Target table is SQL safe and unquoted, source table needs quoting
-        const targetTable = this.tableName;
+        // Target table uses fully-qualified name for S3 Tables, simple name for Glue
+        const targetTable = this.getTargetTableName();
         const sourceTable = `"${packagesView}"`;
         
         return `

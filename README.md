@@ -125,6 +125,17 @@ npm run destroy:buckets:contents    # Delete data only
 
 Set `USE_S3_TABLE=true` to use AWS S3 Tables instead of Glue tables. This is experimental and has limited tool support.
 
-⚠️ **Warning**: Switching table modes recreates all tables, losing existing data.
+### Automated Setup
 
+Use the provided utility to create namespaces and tables automatically:
 
+```bash
+# Create both namespace and tables
+npm run s3tables:create
+
+# Create only namespace
+npm run s3tables:namespace
+
+# Create only tables (namespace must exist)
+npm run s3tables:tables
+```

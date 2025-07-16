@@ -8,8 +8,7 @@ import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import * as path from "path";
-
-const s3DatabaseName = "quilt_titanic";
+import { Config } from "./shared/config";
 
 export interface TitanicStackProps extends cdk.StackProps {
     athenaDatabaseName?: string;
@@ -28,22 +27,32 @@ export class TitanicStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props: TitanicStackProps = {}) {
         super(scope, id, props);
 
-        // Resolve configuration values once
-        const config = this.resolveConfiguration(props);
-        console.log("TitanicStack configuration:", config);
+        // Create config instance that knows about account and region
+        const configProps = this.resolveConfiguration(props);
+        const config = Config.createFromStack(this.account, this.region, configProps);
+        
+        console.log("TitanicStack configuration:", {
+            account: this.account,
+            region: this.region,
+            athenaDatabaseName: configProps.athenaDatabaseName,
+            useS3Table: configProps.useS3Table
+        });
+
+        // Get standardized names using Config class
+        const s3DatabaseName = config.s3TableDatabaseName;
 
         // Always create both buckets for maximum flexibility
 
         // Regular S3 bucket for Athena results and Glue tables
         const glueTablesBucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
-            bucketName: `titanic-glue-tables-${this.account}-${this.region}`,
+            bucketName: config.generateGlueTablesBucketName(),
             removalPolicy: cdk.RemovalPolicy.DESTROY,
             autoDeleteObjects: true,
         });
 
         // S3 Tables bucket for S3 Tables format
         const s3TablesBucket = new s3tables.TableBucket(this, "TitanicS3TablesBucket", {
-            tableBucketName: `titanic-s3-tables-${this.account}-${this.region}`,
+            tableBucketName: config.generateS3TablesBucketName(),
         });
 
         // Create merge tables Lambda
@@ -65,12 +74,13 @@ export class TitanicStack extends cdk.Stack {
                 // Target database to write to (changes based on USE_S3_TABLE)
                 S3TABLE_DATABASE_NAME: s3DatabaseName,
 
-                // Target buckets - Always pass ARNs for consistency
-                GLUE_TABLES_BUCKET_ARN: glueTablesBucket.bucketArn,
-                S3_TABLES_BUCKET_ARN: s3TablesBucket.tableBucketArn,
+                // Target buckets - Pass bucket names instead of ARNs
+                GLUE_TABLES_BUCKET_NAME: glueTablesBucket.bucketName,
+                S3_TABLES_BUCKET_NAME: s3TablesBucket.tableBucketName,
 
-                // Always use regular bucket for Athena results (ARN format)
-                ATHENA_RESULTS_BUCKET_ARN: glueTablesBucket.bucketArn,
+                // AWS context for ARN generation
+                AWS_ACCOUNT_ID: this.account,
+                CDK_DEFAULT_REGION: this.region,
 
                 // Configuration
                 LAMBDA_TIMEOUT: "900",
@@ -206,7 +216,7 @@ export class TitanicStack extends cdk.Stack {
         });
 
         new cdk.CfnOutput(this, "TargetDatabaseName", {
-            value: config.useS3Table ? s3DatabaseName : config.athenaDatabaseName,
+            value: config.useS3Table ? config.s3TableDatabaseName : config.athenaDatabaseName,
             description: "Target database name (where tables are written to)"
         });
 
@@ -222,9 +232,17 @@ export class TitanicStack extends cdk.Stack {
                 useS3Table: parameters.useS3Table.valueAsString === "true",
             };
         } else {
+            // Validate required props when not using parameters
+            if (!props.athenaDatabaseName) {
+                throw new Error("athenaDatabaseName is required when useCloudFormationParameters is false");
+            }
+            if (!props.quiltReadPolicyArn) {
+                throw new Error("quiltReadPolicyArn is required when useCloudFormationParameters is false");
+            }
+            
             return {
-                athenaDatabaseName: props.athenaDatabaseName!,
-                quiltReadPolicyArn: props.quiltReadPolicyArn!,
+                athenaDatabaseName: props.athenaDatabaseName,
+                quiltReadPolicyArn: props.quiltReadPolicyArn,
                 useS3Table: props.useS3Table ?? false,
             };
         }

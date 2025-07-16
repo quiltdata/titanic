@@ -287,3 +287,48 @@ npm run deploy:logs tail
 - **Resource cleanup**: Use `npm run destroy` for complete cleanup
 - **Version management**: Use semantic versioning for releases
 - **Documentation**: Update both README.md and this file for changes
+
+### Manual Setup of S3 Tables
+
+If you prefer manual setup:
+
+1. **Create a namespace** using the [AWS Console](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-tables-namespace-create.html) or AWS CLI:
+
+```bash
+aws s3tables create-namespace \
+    --table-bucket-arn arn:aws:s3tables:us-east-1:111122223333:bucket/amzn-s3-demo-bucket1 \ 
+    --namespace preview
+```
+
+2. **Create tables** using the AWS Console or AWS CLI:
+
+```bash
+aws s3tables create-table --cli-input-json file://mytabledefinition.json
+```
+
+Example table definition:
+
+```json
+{
+    "tableBucketARN": "arn:aws:s3tables:us-east-1:111122223333:bucket/amzn-s3-demo-table-bucket",
+    "namespace": "your_namespace",
+    "name": "example_table",
+    "format": "ICEBERG",
+    "metadata": {
+        "iceberg": {
+            "schema": {
+                "fields": [
+                     {"name": "id", "type": "int","required": true},
+                     {"name": "name", "type": "string"},
+                     {"name": "value", "type": "int"}
+                ]
+            }
+        }
+    }
+}
+```
+
+
+⚠️ **Warning**: Switching table modes may drop all tables, losing existing data.
+
+

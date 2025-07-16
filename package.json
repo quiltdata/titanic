@@ -1,6 +1,6 @@
 {
   "name": "titanic",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "bin": {
     "titanic": "bin/titanic.js"
   },
@@ -11,7 +11,7 @@
     "cdk:synth": "npx cdk synth --app 'npx ts-node bin/titanic.ts'",
     "cdk:params": "npx cdk synth --app 'npx ts-node bin/titanic-params.ts'",
     "lint": "eslint . --ext .ts --fix",
-    "deploy:event": "dotenv -- ./bin/send-event.sh",
+    "deploy:event": "dotenv -- ./bin/send-event.sh quilt-bake",
     "deploy:logs": "dotenv -- ./bin/monitor-logs.sh",
     "deploy:logs:delayed": "sleep 20 && npm run deploy:logs recent 1",
     "deploy:outputs": "dotenv -- aws cloudformation describe-stacks --stack-name TitanicStack --query 'Stacks[0].Outputs'",
@@ -24,6 +24,9 @@
     "test:fails": "jest --onlyFailures --verbose",
     "test:watch": "jest --watch --verbose",
     "test:debug": "jest --verbose --no-coverage --runInBand --detectOpenHandles",
+    "s3tables:create": "npx ts-node lib/tables/create-s3-tables.ts all",
+    "s3tables:namespace": "npx ts-node lib/tables/create-s3-tables.ts namespace",
+    "s3tables:tables": "npx ts-node lib/tables/create-s3-tables.ts tables",
     "tag:release": "git tag v$(node -p \"require('./package.json').version\") && git push origin v$(node -p \"require('./package.json').version\")",
     "tag:prerelease": "git tag v$(node -p \"require('./package.json').version\")-rc.$(date +%Y%m%d.%H%M) && git push origin v$(node -p \"require('./package.json').version\")-rc.$(date +%Y%m%d.%H%M"
   },

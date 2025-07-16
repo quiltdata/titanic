@@ -3,9 +3,9 @@ import { Config, S3Config } from "../shared/config";
 
 // Global test configuration constants
 const TEST_CONFIG_PARAMS = {
-    glueTablesBucketArn: "arn:aws:s3:::test-glue-bucket",
+    glueTablesBucketName: "test-glue-bucket",
     athenaDatabaseName: "test-db",
-    s3TablesBucketArn: "arn:aws:s3tables:us-east-1:123456789012:bucket/test-s3-bucket",
+    s3TablesBucketName: "test-s3-bucket",
     s3TableDatabaseName: "test-s3-db"
 };
 
@@ -38,7 +38,7 @@ describe("Table Schema Configuration", () => {
             const table = new PackageRevisionTable(config);
             const schema = table.generateCreateQuery();
             
-            expect(schema).toContain('CREATE TABLE package_revision');
+            expect(schema).toContain('CREATE TABLE IF NOT EXISTS preview.package_revision');
             expect(schema).toContain("PARTITIONED BY");
             expect(schema).not.toContain("LOCATION");
         });
@@ -51,7 +51,7 @@ describe("Table Schema Configuration", () => {
             const schema = table.generateCreateQuery();
             
             // S3 Tables should have PARTITIONED BY but no LOCATION or WITH clause
-            expect(schema).toContain("CREATE TABLE package_revision");
+            expect(schema).toContain("CREATE TABLE IF NOT EXISTS preview.package_revision");
             expect(schema).toContain("PARTITIONED BY");
             expect(schema).not.toContain("WITH (");
             expect(schema).not.toContain("LOCATION");

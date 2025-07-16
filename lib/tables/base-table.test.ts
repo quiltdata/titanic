@@ -148,7 +148,7 @@ describe("Package Tables", () => {
             }
 
             protected getColumnDefinitions(): ColumnDefinitions {
-                return { id: "bigint", name: "varchar(255)" };
+                return { id: "bigint", name: "string" };
             }
 
             protected getPartitioningClause(): string {
@@ -249,7 +249,7 @@ describe("Package Tables", () => {
                 // Create a config with missing target bucket
                 const configWithoutBucket = Config.createTestInstance({
                     athenaDatabaseName: "test-db",
-                    glueTablesBucketArn: ""
+                    glueTablesBucketName: ""
                 });
                 
                 const table = new TestTable(configWithoutBucket);
@@ -267,6 +267,46 @@ describe("Package Tables", () => {
                 const table = new TestTable(testSetup.mockConfig);
                 expect(() => table.query('insert')).toThrow("At least one of packagesView or objectsView is required for insert queries");
             });
+        });
+    });
+
+    describe("S3 Tables fully-qualified names", () => {
+        let testSetup: ReturnType<typeof createTableTestSetup>;
+
+        beforeEach(() => {
+            testSetup = createTableTestSetup();
+        });
+
+        it("should use fully-qualified table names in INSERT queries for S3 Tables mode", () => {
+            // Create S3 Tables config
+            const mockS3Config = {
+                useS3Table: true,
+                getNamespacedTableName: jest.fn((tableName: string) => `preview.${tableName}`),
+                // Add other required methods as needed
+            } as any;
+
+            const table = new PackageRevisionTable(mockS3Config);
+            const insertQuery = table.generateInsertQuery("test_packages-view", "test_objects-view");
+            
+            // Verify that the query uses the fully-qualified table name
+            expect(insertQuery).toContain("INSERT INTO preview.package_revision");
+            expect(insertQuery).toContain("LEFT JOIN preview.package_revision");
+        });
+
+        it("should use simple table names in INSERT queries for Glue mode", () => {
+            // Create Glue config
+            const mockGlueConfig = {
+                useS3Table: false,
+                // Add other required methods as needed  
+            } as any;
+
+            const table = new PackageRevisionTable(mockGlueConfig);
+            const insertQuery = table.generateInsertQuery("test_packages-view", "test_objects-view");
+            
+            // Verify that the query uses the simple table name
+            expect(insertQuery).toContain("INSERT INTO package_revision");
+            expect(insertQuery).toContain("LEFT JOIN package_revision");
+            expect(insertQuery).not.toContain("preview");
         });
     });
 });

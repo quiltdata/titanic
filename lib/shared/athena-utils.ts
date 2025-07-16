@@ -26,7 +26,7 @@ export class AthenaUtils {
         const issues: string[] = [];
 
         if (!this.config.getResultsBucket()) {
-            issues.push('Results bucket is empty - check GLUE_TABLES_BUCKET_ARN environment variable');
+            issues.push('Results bucket is empty - check GLUE_TABLES_BUCKET_NAME environment variable');
         }
 
         if (!this.config.getWriteDatabaseName()) {
@@ -48,10 +48,10 @@ export class AthenaUtils {
                     useS3Table: this.config.useS3Table
                 },
                 environmentVariables: {
-                    GLUE_TABLES_BUCKET_ARN: process.env.GLUE_TABLES_BUCKET_ARN,
+                    GLUE_TABLES_BUCKET_NAME: process.env.GLUE_TABLES_BUCKET_NAME,
                     ATHENA_DATABASE_NAME: process.env.ATHENA_DATABASE_NAME,
                     S3TABLE_DATABASE_NAME: process.env.S3TABLE_DATABASE_NAME,
-                    S3_TABLES_BUCKET_ARN: process.env.S3_TABLES_BUCKET_ARN,
+                    S3_TABLES_BUCKET_NAME: process.env.S3_TABLES_BUCKET_NAME,
                     USE_S3_TABLE: process.env.USE_S3_TABLE
                 }
             });
@@ -119,8 +119,8 @@ export class AthenaUtils {
             configType: this.config.constructor.name,
             resultsBucket: this.config.getResultsBucket(),
             tablesBucket: this.config.getTargetBucket(),
-            gluebucketFromEnv: process.env.GLUE_TABLES_BUCKET_ARN,
-            s3BucketFromEnv: process.env.S3_TABLES_BUCKET_ARN,
+            gluebucketFromEnv: process.env.GLUE_TABLES_BUCKET_NAME,
+            s3BucketFromEnv: process.env.S3_TABLES_BUCKET_NAME,
             executionContext: this.config.getExecutionContext(),
             query: query
         });
@@ -178,11 +178,11 @@ export class AthenaUtils {
                             '1. Verify the CDK stack was deployed successfully',
                             '2. Check if the bucket exists in the AWS console',
                             '3. Verify Lambda has s3:PutObject permissions on the bucket',
-                            '4. Check the GLUE_TABLES_BUCKET_ARN environment variable is set correctly'
+                            '4. Check the GLUE_TABLES_BUCKET_NAME environment variable is set correctly'
                         ],
                         environmentVariables: {
-                            GLUE_TABLES_BUCKET_ARN: process.env.GLUE_TABLES_BUCKET_ARN,
-                            S3_TABLES_BUCKET_ARN: process.env.S3_TABLES_BUCKET_ARN,
+                            GLUE_TABLES_BUCKET_NAME: process.env.GLUE_TABLES_BUCKET_NAME,
+                            S3_TABLES_BUCKET_NAME: process.env.S3_TABLES_BUCKET_NAME,
                             USE_S3_TABLE: process.env.USE_S3_TABLE
                         }
                     });

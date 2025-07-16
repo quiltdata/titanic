@@ -32,15 +32,18 @@ describe("merge-tables lambda", () => {
         process.env.NODE_ENV = "test";
         process.env.ATHENA_DATABASE_NAME = "test-db";
         process.env.S3TABLE_DATABASE_NAME = "test-db";
-        process.env.GLUE_TABLES_BUCKET_ARN = "arn:aws:s3:::test-bucket";
-        process.env.S3_TABLES_BUCKET_ARN = "arn:aws:s3tables:us-east-1:123456789012:bucket/test-tables-bucket";
-        process.env.ATHENA_RESULTS_BUCKET_ARN = "arn:aws:s3:::test-bucket";
+        process.env.GLUE_TABLES_BUCKET_NAME = "test-bucket";
+        process.env.S3_TABLES_BUCKET_NAME = "test-tables-bucket";
+        process.env.AWS_ACCOUNT_ID = "123456789012";
+        process.env.CDK_DEFAULT_REGION = "us-east-1";
         delete process.env.USE_S3_TABLE; // Default to Glue mode
 
         // Setup test config and AthenaTest
         testConfig = Config.createTestInstance({
             athenaDatabaseName: "test-db",
-            glueTablesBucketArn: "arn:aws:s3:::test-bucket"
+            glueTablesBucketName: "test-bucket",
+            awsAccountId: "123456789012",
+            aws_region: "us-east-1"
         });
         athenaTest = AthenaTest.createTestInstance(testConfig);
     });

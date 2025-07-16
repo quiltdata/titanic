@@ -7,9 +7,10 @@ const TEST_S3_BUCKET = 'test-s3-bucket';
 const TEST_GLUE_BUCKET = 'test-glue-bucket';
 const TEST_CONFIG_PARAMS = {
     aws_region: "us-east-1",
-    glueTablesBucketArn: `arn:aws:s3:::${TEST_GLUE_BUCKET}`,
+    awsAccountId: "123456789012",
+    glueTablesBucketName: TEST_GLUE_BUCKET,
     athenaDatabaseName: "test-db",
-    s3TablesBucketArn: `arn:aws:s3tables:us-east-1:123456789012:bucket/${TEST_S3_BUCKET}`,
+    s3TablesBucketName: TEST_S3_BUCKET,
     s3TableDatabaseName: "test-s3-db"
 };
 
@@ -237,7 +238,7 @@ describe("AthenaUtils", () => {
             // Create a config with missing required values
             const badConfig = Config.createTestInstance({
                 athenaDatabaseName: "",
-                glueTablesBucketArn: ""
+                glueTablesBucketName: ""
             });
             
             // Creating AthenaUtils should trigger validation
