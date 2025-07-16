@@ -17,6 +17,7 @@ export class Config {
   public readonly quiltReadPolicyArn: string;
 
   constructor(config?: Partial<Config>) {
+    this.awsAccountId = config?.awsAccountId ?? (process.env.CDK_DEFAULT_ACCOUNT || '');
     this.aws_region = config?.aws_region ?? (process.env.CDK_DEFAULT_REGION || 'us-east-1');
     this.athenaDatabaseName = config?.athenaDatabaseName ?? (process.env.ATHENA_DATABASE_NAME || 'athena_database');
     this.glueTablesBucketName = config?.glueTablesBucketName ?? (process.env.GLUE_TABLES_BUCKET_NAME || '');
@@ -24,7 +25,6 @@ export class Config {
     this.s3TablesBucketName = config?.s3TablesBucketName ?? (process.env.S3_TABLES_BUCKET_NAME || '');
     this.useS3Table = config?.useS3Table ?? (process.env.USE_S3_TABLE === 'true' || false);
     this.namespace = config?.namespace ?? (process.env.S3_TABLES_NAMESPACE || Config.S3_TABLES_NAMESPACE);
-    this.awsAccountId = config?.awsAccountId ?? (process.env.CDK_DEFAULT_ACCOUNT || '');
     this.quiltReadPolicyArn = config?.quiltReadPolicyArn ?? (process.env.QUILT_READ_POLICY_ARN || '');
   }
   

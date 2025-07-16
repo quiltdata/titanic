@@ -51,8 +51,9 @@ export class TitanicStack extends cdk.Stack {
         });
 
         // S3 Tables bucket for S3 Tables format
+        const s3TablesBucketName = config.generateS3TablesBucketName();
         const s3TablesBucket = new s3tables.TableBucket(this, "TitanicS3TablesBucket", {
-            tableBucketName: config.generateS3TablesBucketName(),
+            tableBucketName: s3TablesBucketName,
         });
 
         // Create merge tables Lambda
@@ -76,7 +77,7 @@ export class TitanicStack extends cdk.Stack {
 
                 // Target buckets - Pass bucket names instead of ARNs
                 GLUE_TABLES_BUCKET_NAME: glueTablesBucket.bucketName,
-                S3_TABLES_BUCKET_NAME: s3TablesBucket.tableBucketName,
+                S3_TABLES_BUCKET_NAME: s3TablesBucketName,
 
                 // AWS context for ARN generation
                 AWS_ACCOUNT_ID: this.account,
@@ -206,7 +207,7 @@ export class TitanicStack extends cdk.Stack {
         });
 
         new cdk.CfnOutput(this, "S3TablesBucket", {
-            value: s3TablesBucket.tableBucketName,
+            value: s3TablesBucketName,
             description: "S3 Tables bucket name"
         });
 

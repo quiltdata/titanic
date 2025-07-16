@@ -90,10 +90,14 @@ AWS_PROFILE=default
 
 ### Lambda Environment Variables (set by CDK stack)
 ```bash
-GLUE_TABLES_BUCKET_ARN      # S3 bucket for Glue tables
-S3_TABLES_BUCKET_ARN        # S3 Tables bucket
-ATHENA_DATABASE_NAME          # Source database (and target, for Glue tables)
-S3_TABLE_DATABASE_NAME      # S3 Tables database
+GLUE_TABLES_BUCKET_NAME     # S3 bucket name for Glue tables
+S3_TABLES_BUCKET_NAME       # S3 Tables bucket name
+ATHENA_DATABASE_NAME        # Source database (and target, for Glue tables)
+S3TABLE_DATABASE_NAME       # S3 Tables database
+AWS_ACCOUNT_ID              # AWS account ID for ARN generation
+CDK_DEFAULT_REGION          # AWS region for ARN generation
+USE_S3_TABLE                # Configuration flag (true/false)
+QUILT_READ_POLICY_ARN       # ARN of the IAM policy for reading from Quilt buckets
 ```
 ## Architecture Overview
 
