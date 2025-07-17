@@ -6,7 +6,7 @@ export class PackageTagTable extends BaseTable {
         return "package_tag";
     }
 
-    protected getColumnDefinitions(): ColumnDefinitions {
+    public getColumnDefinitions(): ColumnDefinitions {
         return {
             'registry': 'STRING',
             'pkg_name': 'STRING',

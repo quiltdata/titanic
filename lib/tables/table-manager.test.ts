@@ -164,10 +164,10 @@ describe("TableManager", () => {
 
             it("should handle mixed table existence results", async () => {
                 // Mock first table to exist, others to fail
-                let queryCallCount = 0;
+                let _queryCallCount = 0;
                 const originalExecuteQuery = mockAthenaUtils.executeQuery;
                 mockAthenaUtils.executeQuery = jest.fn().mockImplementation(async (query: string) => {
-                    queryCallCount++;
+                    _queryCallCount++;
                     
                     // Database creation calls
                     if (query.includes('CREATE DATABASE')) {
@@ -274,7 +274,7 @@ describe("TableManager", () => {
             // Mock first table to exist (success=true), others to fail (success=false)
             let callCount = 0;
             const originalExecuteQuery = mockAthenaUtils.executeQuery;
-            mockAthenaUtils.executeQuery = jest.fn().mockImplementation(async (query: string) => {
+            mockAthenaUtils.executeQuery = jest.fn().mockImplementation(async (_query: string) => {
                 callCount++;
                 if (callCount === 1) {
                     return { success: true, data: [] };
@@ -296,7 +296,7 @@ describe("TableManager", () => {
             // Mock some queries to throw exceptions
             let callCount = 0;
             const originalExecuteQuery = mockAthenaUtils.executeQuery;
-            mockAthenaUtils.executeQuery = jest.fn().mockImplementation(async (query: string) => {
+            mockAthenaUtils.executeQuery = jest.fn().mockImplementation(async (_query: string) => {
                 callCount++;
                 if (callCount === 1) {
                     return { success: true, data: [] };

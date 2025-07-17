@@ -6,7 +6,7 @@ export class PackageEntryTable extends BaseTable {
         return "package_entry";
     }
 
-    protected getColumnDefinitions(): ColumnDefinitions {
+    public getColumnDefinitions(): ColumnDefinitions {
         return {
             'registry': 'STRING',
             'top_hash': 'STRING',

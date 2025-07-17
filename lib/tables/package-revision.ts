@@ -6,7 +6,7 @@ export class PackageRevisionTable extends BaseTable {
         return "package_revision";
     }
 
-    protected getColumnDefinitions(): ColumnDefinitions {
+    public getColumnDefinitions(): ColumnDefinitions {
         return {
             'registry': 'STRING',
             'pkg_name': 'STRING',

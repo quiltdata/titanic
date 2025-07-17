@@ -147,7 +147,7 @@ describe("Package Tables", () => {
                 return "test_table";
             }
 
-            protected getColumnDefinitions(): ColumnDefinitions {
+            public getColumnDefinitions(): ColumnDefinitions {
                 return { id: "bigint", name: "string" };
             }
 
@@ -174,7 +174,7 @@ describe("Package Tables", () => {
                 return "empty_table";
             }
 
-            protected getColumnDefinitions(): ColumnDefinitions {
+            public getColumnDefinitions(): ColumnDefinitions {
                 return {};
             }
 
@@ -201,7 +201,7 @@ describe("Package Tables", () => {
                 return "invalid_table";
             }
 
-            protected getColumnDefinitions(): ColumnDefinitions {
+            public getColumnDefinitions(): ColumnDefinitions {
                 return { "": "bigint", "name": "" };
             }
 
@@ -271,10 +271,10 @@ describe("Package Tables", () => {
     });
 
     describe("S3 Tables fully-qualified names", () => {
-        let testSetup: ReturnType<typeof createTableTestSetup>;
+        let _testSetup: ReturnType<typeof createTableTestSetup>;
 
         beforeEach(() => {
-            testSetup = createTableTestSetup();
+            _testSetup = createTableTestSetup();
         });
 
         it("should use fully-qualified table names in INSERT queries for S3 Tables mode", () => {
