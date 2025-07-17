@@ -3,7 +3,8 @@ import { Construct } from "constructs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3tables from "@aws-cdk/aws-s3tables-alpha";
 import * as iam from "aws-cdk-lib/aws-iam";
-import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as lambdaNodejs from "aws-cdk-lib/aws-lambda-nodejs";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
@@ -15,6 +16,7 @@ export interface TitanicStackProps extends cdk.StackProps {
     quiltReadPolicyArn?: string;
     useS3Table?: boolean;
     useCloudFormationParameters?: boolean;  // Flag to enable parameter mode
+    usePreBuiltAssets?: boolean;  // Flag to use pre-built assets from public bucket
 }
 
 interface TitanicStackParameters {
@@ -56,39 +58,59 @@ export class TitanicStack extends cdk.Stack {
             tableBucketName: s3TablesBucketName,
         });
 
-        // Create merge tables Lambda
-        const mergeLambda = new lambda.NodejsFunction(this, "TitanicMergeTables", {
-            entry: path.join(__dirname, "merge-tables.ts"),
-            handler: "handler",
-            runtime: Runtime.NODEJS_18_X,
-            timeout: cdk.Duration.seconds(900),
-            bundling: {
-                externalModules: [
-                    "@aws-sdk/client-glue",
-                    "@aws-sdk/client-athena",
-                ],
-            },
-            environment: {
-                // Source database to read from (always the same, where views are)
-                ATHENA_DATABASE_NAME: config.athenaDatabaseName,
+        // Reference to pre-existing public assets bucket controlled by Quilt
+        // This bucket contains Lambda code and other deployment assets
+        const assetsBucketName = "quilt-titanic-assets";
+        const assetsBucket = s3.Bucket.fromBucketName(this, "TitanicAssetsBucket", assetsBucketName);
 
-                // Target database to write to (changes based on USE_S3_TABLE)
-                S3TABLE_DATABASE_NAME: s3DatabaseName,
+        // Create Lambda environment configuration
+        const lambdaEnvironment = {
+            // Source database to read from (always the same, where views are)
+            ATHENA_DATABASE_NAME: config.athenaDatabaseName,
 
-                // Target buckets - Pass bucket names instead of ARNs
-                GLUE_TABLES_BUCKET_NAME: glueTablesBucket.bucketName,
-                S3_TABLES_BUCKET_NAME: s3TablesBucketName,
+            // Target database to write to (changes based on USE_S3_TABLE)
+            S3TABLE_DATABASE_NAME: s3DatabaseName,
 
-                // AWS context for ARN generation
-                AWS_ACCOUNT_ID: this.account,
-                CDK_DEFAULT_REGION: this.region,
+            // Target buckets - Pass bucket names instead of ARNs
+            GLUE_TABLES_BUCKET_NAME: glueTablesBucket.bucketName,
+            S3_TABLES_BUCKET_NAME: s3TablesBucketName,
 
-                // Configuration
-                LAMBDA_TIMEOUT: "900",
-                QUILT_READ_POLICY_ARN: config.quiltReadPolicyArn,
-                USE_S3_TABLE: config.useS3Table.toString(),
-            },
-        });
+            // AWS context for ARN generation
+            AWS_ACCOUNT_ID: this.account,
+            CDK_DEFAULT_REGION: this.region,
+
+            // Configuration
+            LAMBDA_TIMEOUT: "900",
+            QUILT_READ_POLICY_ARN: config.quiltReadPolicyArn,
+            USE_S3_TABLE: config.useS3Table.toString(),
+        };
+
+        // Create merge tables Lambda - use different approaches based on deployment mode
+        const usePreBuiltAssets = props.usePreBuiltAssets ?? false;
+        const mergeLambda = usePreBuiltAssets 
+            ? new lambda.Function(this, "TitanicMergeTables", {
+                runtime: Runtime.NODEJS_18_X,
+                handler: "index.handler",
+                timeout: cdk.Duration.seconds(900),
+                code: lambda.Code.fromBucket(
+                    assetsBucket,
+                    "lambda/merge-tables.zip" // Always uses latest version
+                ),
+                environment: lambdaEnvironment,
+            })
+            : new lambdaNodejs.NodejsFunction(this, "TitanicMergeTables", {
+                entry: path.join(__dirname, "merge-tables.ts"),
+                handler: "handler",
+                runtime: Runtime.NODEJS_18_X,
+                timeout: cdk.Duration.seconds(900),
+                bundling: {
+                    externalModules: [
+                        "@aws-sdk/client-glue",
+                        "@aws-sdk/client-athena",
+                    ],
+                },
+                environment: lambdaEnvironment,
+            });
 
         // Create EventBridge rule to route package events to Lambda
         const packageEventRule = new events.Rule(this, "TitanicUpdateEventRule", {
@@ -209,6 +231,16 @@ export class TitanicStack extends cdk.Stack {
         new cdk.CfnOutput(this, "S3TablesBucket", {
             value: s3TablesBucketName,
             description: "S3 Tables bucket name"
+        });
+
+        new cdk.CfnOutput(this, "AssetsBucket", {
+            value: assetsBucketName,
+            description: "Quilt-controlled public S3 bucket hosting deployment assets and Lambda code"
+        });
+
+        new cdk.CfnOutput(this, "AssetsBucketUrl", {
+            value: `https://${assetsBucketName}.s3.amazonaws.com`,
+            description: "Public URL for the assets bucket"
         });
 
         new cdk.CfnOutput(this, "SourceDatabaseName", {

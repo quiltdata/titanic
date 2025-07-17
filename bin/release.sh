@@ -26,6 +26,7 @@ BASE_DIST_DIR="dist"
 RELEASE_SUBDIR="release"
 ARTIFACTS_DIR="artifacts"
 VERSION=""
+USE_PREBUILT_ASSETS=false
 
 # Help function
 show_help() {
@@ -38,6 +39,7 @@ This creates a self-contained package with CloudFormation template, Lambda asset
 OPTIONS:
     -h, --help                      Show this help message
     -v, --version VERSION           Version tag for the release (e.g., v1.0.0)
+    --use-prebuilt-assets          Use pre-built Lambda assets from public bucket
 
 DIRECTORY STRUCTURE:
     dist/
@@ -75,6 +77,10 @@ while [[ $# -gt 0 ]]; do
         -v|--version)
             VERSION="$2"
             shift 2
+            ;;
+        --use-prebuilt-assets)
+            USE_PREBUILT_ASSETS=true
+            shift
             ;;
         *)
             echo -e "${RED}Error: Unknown option $1${NC}"
@@ -120,11 +126,49 @@ echo ""
 # Build the project
 echo -e "${YELLOW}Running TypeScript validation and CDK synthesis...${NC}"
 
+# Verify assets are available when using pre-built assets
+if [[ "$USE_PREBUILT_ASSETS" == "true" ]]; then
+    echo -e "${YELLOW}Verifying Lambda assets are available in public bucket...${NC}"
+    
+    ASSETS_BUCKET="quilt-titanic-assets"
+    LAMBDA_ZIP_PATH="lambda/merge-tables.zip"
+    
+    # Use anonymous access to check if assets exist
+    echo "Checking for Lambda assets at s3://$ASSETS_BUCKET/$LAMBDA_ZIP_PATH"
+    if curl -f -s -I "https://$ASSETS_BUCKET.s3.amazonaws.com/$LAMBDA_ZIP_PATH" > /dev/null; then
+        echo -e "${GREEN}✅ Lambda assets found in public bucket${NC}"
+        echo "Asset URL: https://$ASSETS_BUCKET.s3.amazonaws.com/$LAMBDA_ZIP_PATH"
+        echo -e "${BLUE}ℹ️  All deployments will use the latest available Lambda code${NC}"
+    else
+        echo -e "${RED}❌ Lambda assets not found in public bucket${NC}"
+        echo -e "${RED}Please upload Lambda assets to s3://$ASSETS_BUCKET/$LAMBDA_ZIP_PATH before releasing${NC}"
+        echo "Expected URL: https://$ASSETS_BUCKET.s3.amazonaws.com/$LAMBDA_ZIP_PATH"
+        echo ""
+        echo -e "${YELLOW}To upload assets manually:${NC}"
+        echo "1. Build the Lambda: npm run build"
+        echo "2. Bundle: zip -j lambda-merge-tables.zip lib/merge-tables.js"
+        echo "3. Upload: aws s3 cp lambda-merge-tables.zip s3://$ASSETS_BUCKET/$LAMBDA_ZIP_PATH --acl public-read"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}Asset verification completed successfully${NC}"
+    echo ""
+fi
+
 # Run CDK synth to generate CloudFormation template with parameters
 echo -e "${YELLOW}Synthesizing CloudFormation template with parameters...${NC}"
-if ! npm run cdk:params; then
-    echo -e "${RED}Error: Failed to run CDK synthesis${NC}"
-    exit 1
+if [[ "$USE_PREBUILT_ASSETS" == "true" ]]; then
+    echo "Using pre-built Lambda assets from public bucket"
+    if ! npx cdk synth --app "node bin/titanic-params.js" --context usePreBuiltAssets=true; then
+        echo -e "${RED}Error: Failed to run CDK synthesis with pre-built assets${NC}"
+        exit 1
+    fi
+else
+    echo "Using local Lambda bundling"
+    if ! npm run cdk:params; then
+        echo -e "${RED}Error: Failed to run CDK synthesis${NC}"
+        exit 1
+    fi
 fi
 
 # Verify cdk.out exists and has the expected files
@@ -190,31 +234,36 @@ mkdir -p "$RELEASE_DIR"
 echo "Copying CloudFormation template..."
 cp "$STACK_TEMPLATE" "$RELEASE_DIR/template.json"
 
-# Copy Lambda assets if they exist
+# Copy Lambda assets if they exist (only for local bundling)
 ASSETS_DIR="$RELEASE_DIR/assets"
 asset_count=0
 
-if [[ -d "cdk.out" ]]; then
-    # Check if any asset directories exist first
-    if ls cdk.out/asset.* >/dev/null 2>&1; then
-        echo "Found Lambda assets, creating assets directory..."
-        mkdir -p "$ASSETS_DIR"
-        
-        for asset_dir in cdk.out/asset.*; do
-            if [[ -d "$asset_dir" ]]; then
-                asset_name=$(basename "$asset_dir")
-                echo "Copying Lambda asset: $asset_name"
-                if cp -r "$asset_dir" "$ASSETS_DIR/"; then
-                    asset_count=$((asset_count + 1))
-                else
-                    echo -e "${RED}Error: Failed to copy asset $asset_name${NC}"
-                    exit 1
+if [[ "$USE_PREBUILT_ASSETS" == "true" ]]; then
+    echo "Skipping asset copying - using pre-built assets from public bucket"
+    echo "Lambda code will be loaded from: s3://quilt-titanic-assets/lambda/merge-tables.zip"
+else
+    if [[ -d "cdk.out" ]]; then
+        # Check if any asset directories exist first
+        if ls cdk.out/asset.* >/dev/null 2>&1; then
+            echo "Found Lambda assets, creating assets directory..."
+            mkdir -p "$ASSETS_DIR"
+            
+            for asset_dir in cdk.out/asset.*; do
+                if [[ -d "$asset_dir" ]]; then
+                    asset_name=$(basename "$asset_dir")
+                    echo "Copying Lambda asset: $asset_name"
+                    if cp -r "$asset_dir" "$ASSETS_DIR/"; then
+                        asset_count=$((asset_count + 1))
+                    else
+                        echo -e "${RED}Error: Failed to copy asset $asset_name${NC}"
+                        exit 1
+                    fi
                 fi
-            fi
-        done
-        echo "Copied $asset_count Lambda asset(s)"
-    else
-        echo "No Lambda assets found"
+            done
+            echo "Copied $asset_count Lambda asset(s)"
+        else
+            echo "No Lambda assets found"
+        fi
     fi
 fi
 
@@ -290,7 +339,11 @@ Edit \`.env\` with these required values:
 - \`template.json\` - CloudFormation template ($TEMPLATE_SIZE bytes)
 - \`deploy.sh\` - Deployment script
 - \`env.example\` - Configuration template
-$(if [[ $asset_count -gt 0 ]]; then echo "- \`assets/\` - Lambda function code ($asset_count function(s))"; fi)
+$(if [[ "$USE_PREBUILT_ASSETS" == "true" ]]; then
+    echo "- Lambda code loaded from: \`s3://quilt-titanic-assets/lambda/merge-tables.zip\`"
+elif [[ $asset_count -gt 0 ]]; then
+    echo "- \`assets/\` - Lambda function code ($asset_count function(s))"
+fi)
 
 $(if [[ -n "$VERSION" ]]; then echo "**Release:** $VERSION | "; fi)**Generated:** $(date) | **CDK:** $CDK_VERSION
 EOF
@@ -305,7 +358,11 @@ $(if [[ -n "$VERSION" ]]; then echo "Version: $VERSION"; fi)Generated: $(date)
 CDK Version: $CDK_VERSION
 
 Template: $TEMPLATE_SIZE bytes, $RESOURCE_COUNT resources, $PARAMETER_COUNT parameters
-$(if [[ $asset_count -gt 0 ]]; then echo "Lambda Functions: $asset_count"; fi)
+$(if [[ "$USE_PREBUILT_ASSETS" == "true" ]]; then
+    echo "Lambda Assets: Pre-built (s3://quilt-titanic-assets/lambda/merge-tables.zip)"
+elif [[ $asset_count -gt 0 ]]; then
+    echo "Lambda Functions: $asset_count (bundled)"
+fi)
 
 Quick Deploy:
   cp env.example .env && edit .env

@@ -7,10 +7,11 @@
   "scripts": {
     "clean:js": "rm -rf */**/{*.js,*.js.map,*.d.ts} && rm -rf bin/{*.js,*.js.map}",
     "clean": "rm -rf cdk.out test-results node_modules coverage dist",
-    "cdk": "npm run test && npx cdk deploy --app 'npx ts-node bin/titanic.ts' --require-approval never && npm run deploy:event && npm run deploy:logs:delayed",
+    "cdk": "npm run test &&  npm run deploy:cdk && npm run deploy:event && npm run deploy:logs:delayed",
     "cdk:synth": "npx cdk synth --app 'npx ts-node bin/titanic.ts'",
     "cdk:params": "npx cdk synth --app 'npx ts-node bin/titanic-params.ts'",
     "lint": "eslint . --ext .ts --fix",
+    "deploy:cdk": "npx cdk deploy --app 'npx ts-node bin/titanic.ts' --require-approval never",
     "deploy:event": "dotenv -- ./bin/send-event.sh quilt-bake",
     "deploy:logs": "dotenv -- ./bin/monitor-logs.sh",
     "deploy:logs:delayed": "sleep 20 && npm run deploy:logs recent 1",

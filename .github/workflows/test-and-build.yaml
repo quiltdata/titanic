@@ -44,7 +44,7 @@ jobs:
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
         echo "Building release package version: $VERSION"
-        npm run deploy:release -- --version "$VERSION"
+        npm run deploy:release -- --version "$VERSION" --use-prebuilt-assets
       env:
         CDK_DEFAULT_ACCOUNT: "123456789012"
         CDK_DEFAULT_REGION: "us-east-1"
@@ -112,7 +112,13 @@ jobs:
         echo "- **Linting**: ✅ Passed" >> $GITHUB_STEP_SUMMARY
         
         if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          echo "- **Asset Verification**: ✅ Verified during release build" >> $GITHUB_STEP_SUMMARY
           echo "- **GitHub Release**: ✅ Created from tag (${GITHUB_REF_NAME})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Asset Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Assets Bucket**: \`quilt-titanic-assets\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Lambda Code**: \`lambda/merge-tables.zip\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Verification**: Assets verified in \`release.sh\` before template generation" >> $GITHUB_STEP_SUMMARY
         else
           echo "- **Release**: ⏭️ Skipped (only created for version tags)" >> $GITHUB_STEP_SUMMARY
         fi
@@ -120,5 +126,5 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📋 Release Strategy" >> $GITHUB_STEP_SUMMARY
         echo "- **Branch pushes** → Tests + Linting only" >> $GITHUB_STEP_SUMMARY
-        echo "- **Version tags (v*)** → Tests + Linting + GitHub Release" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version tags (v*)** → Tests + Linting + Asset Verification + GitHub Release" >> $GITHUB_STEP_SUMMARY
         echo "- **Pre-release tags** → Use hyphen in tag (e.g., v1.0.0-beta)" >> $GITHUB_STEP_SUMMARY
