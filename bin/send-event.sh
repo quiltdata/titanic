@@ -18,15 +18,21 @@ if ! command -v uuidgen &> /dev/null; then
   exit 1
 fi
 
-# Check for required environment variables
-if [ -z "$CDK_DEFAULT_ACCOUNT" ]; then
-  echo "Error: CDK_DEFAULT_ACCOUNT environment variable is not set." >&2
-  exit 1
+# Check for deployment-config.json
+if [ ! -f "deployment-config.json" ]; then
+    echo "Error: deployment-config.json not found" >&2
+    echo "Please run 'npm run cdk:synth' first to generate deployment-config.json" >&2
+    exit 1
 fi
 
-if [ -z "$CDK_DEFAULT_REGION" ]; then
-  echo "Error: CDK_DEFAULT_REGION environment variable is not set." >&2
-  exit 1
+# Load configuration from deployment-config.json
+ACCOUNT=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).account")
+REGION=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).region")
+
+# Validate required configuration
+if [ -z "$ACCOUNT" ] || [ -z "$REGION" ]; then
+    echo "Error: Invalid deployment-config.json - missing account or region" >&2
+    exit 1
 fi
 
 # Parse options
@@ -59,8 +65,8 @@ DETAIL_JSON=$(jq -n \
 EVENT_JSON=$(jq -n \
   --arg id "$EVENT_ID" \
   --arg timestamp "$TIMESTAMP" \
-  --arg account "$CDK_DEFAULT_ACCOUNT" \
-  --arg region "$CDK_DEFAULT_REGION" \
+  --arg account "$ACCOUNT" \
+  --arg region "$REGION" \
   --argjson detail "$DETAIL_JSON" \
   '{
     version: "0",

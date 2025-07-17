@@ -73,7 +73,7 @@ export abstract class BaseTable {
      * Generate CTAS query for Glue tables
      */
     private generateGlueTableCreateQuery(): string {
-        const selectColumns = this.generateColumnList("CAST(NULL AS ${type}) AS ${name}");
+        const selectColumns = this.generateColumnList("CAST(NULL AS ${type}) AS ${name}").replace(/AS STRING/g, 'AS VARCHAR');
         const targetBucket = this.config.getTargetBucket();
         
         if (!targetBucket) {

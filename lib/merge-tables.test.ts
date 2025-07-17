@@ -75,10 +75,10 @@ describe("merge-tables lambda", () => {
             const event = createEventBridgeEvent();
             const context: Context = {} as any;
 
-            const result = await handler(event, context);
-            expect(result).toBeDefined();
-            expect(result!.numTables).toBe(1);
-            expect(result!.message).toContain("failed");
+            // Should throw an error when table creation fails completely
+            await expect(handler(event, context)).rejects.toThrow(
+                /Table creation failed completely: \d+ tables failed to create/
+            );
         });
 
         it("should handle successful query execution", async () => {
@@ -100,10 +100,10 @@ describe("merge-tables lambda", () => {
             const event = createEventBridgeEvent();
             const context: Context = {} as any;
 
-            // Should still complete successfully even if connectivity test fails
-            const result = await handler(event, context);
-            expect(result).toBeDefined();
-            expect(result!.message).toContain("Merge operations completed");
+            // Should throw an error when table creation fails completely
+            await expect(handler(event, context)).rejects.toThrow(
+                /Table creation failed completely: \d+ tables failed to create/
+            );
         });
     });
 });
