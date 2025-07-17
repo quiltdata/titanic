@@ -292,8 +292,6 @@ create_release_package() {
     copy_deployment_config
     copy_lambda_assets
     copy_scripts_and_docs
-    create_version_info
-    create_deployment_summary
 
     echo -e "${GREEN}Release package created successfully!${NC}"
     echo ""
@@ -332,7 +330,7 @@ copy_scripts_and_docs() {
     if [[ -f "bin/send-event.sh" ]]; then
         # Generate a default event file for the release
         echo "Generating default event file..."
-        (cd "$RELEASE_DIR" && bin/send-event.sh --write initial-event.json)
+        bin/send-event.sh --write "$RELEASE_DIR"
     else
         echo -e "${YELLOW}Warning: bin/send-event.sh not found${NC}"
     fi
@@ -391,25 +389,9 @@ display_summary() {
     ls -lh "$ARCHIVE_DIR/${release_name}".zip 2>/dev/null || true
     echo ""
 
-    echo -e "${BLUE}Package Details:${NC}"
-    echo "Base Directory: $BASE_DIST_DIR/"
-    echo "Release Package: $RELEASE_DIR/"
-    echo "Template: $RELEASE_DIR/template.json"
-    echo "Deploy Script: $RELEASE_DIR/deploy.sh"
-    echo "Lambda Assets: Pre-built (s3://$ASSETS_BUCKET/lambda/merge-tables.zip)"
-    echo "Archives: $ARCHIVE_DIR/"
-    echo ""
-    echo -e "${YELLOW}To deploy:${NC}"
-    echo "cd $RELEASE_DIR"
-    echo "cp env.example .env && edit .env, then:"
-    echo "./deploy.sh"
-    echo ""
-    echo -e "${YELLOW}Or deploy with command line parameters:${NC}"
-    echo "./deploy.sh --athena-database-name YOUR_DB --quilt-read-policy-arn YOUR_POLICY_ARN"
-    echo ""
-
-    echo -e "${YELLOW}Archives created and ready for distribution!${NC}"
-    echo "Location: $ARCHIVE_DIR/"
+    # For more details about the release process, refer to the release README.
+    echo -e "${BLUE}For release details, see: $RELEASE_DIR/README.md${NC}"
+    echo -e "${GREEN}Release package is ready!${NC}"
 }
 
 # Main execution flow

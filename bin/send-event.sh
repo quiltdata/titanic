@@ -36,9 +36,9 @@ if [ -z "$ACCOUNT" ] || [ -z "$REGION" ]; then
 fi
 
 # Parse options
-WRITE_FILE=""
+OUTPUT_DIR=""
 if [[ "$1" == "--write" ]]; then
-    WRITE_FILE="$2"
+    OUTPUT_DIR="$2"
     shift 2
 fi
 
@@ -91,9 +91,10 @@ EVENTBRIDGE_JSON=$(jq -n \
   }]')
 
 # If writing to file, save and exit
-if [[ -n "$WRITE_FILE" ]]; then
-    echo "$EVENTBRIDGE_JSON" > "$WRITE_FILE"
-    echo "Event written to $WRITE_FILE"
+if [[ -n "$OUTPUT_DIR" ]]; then
+    OUTPUT_PATH="$OUTPUT_DIR/initial-event.json"
+    echo "$EVENTBRIDGE_JSON" > "$OUTPUT_PATH"
+    echo "Event written to $OUTPUT_PATH"
     exit 0
 fi
 

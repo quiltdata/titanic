@@ -37,14 +37,14 @@ find_lambda_asset() {
     local largest_asset=""
     local largest_size=0
     
-    echo -e "${YELLOW}Locating Lambda asset in cdk.out...${NC}"
+    echo -e "${YELLOW}Locating Lambda asset in cdk.out...${NC}" >&2
     
     for asset_dir in $(find cdk.out -name "asset.*" -type d); do
         local index_file="$asset_dir/index.js"
         if [[ -f "$index_file" ]]; then
             # Get file size (works on both macOS and Linux)
             local size=$(stat -f%z "$index_file" 2>/dev/null || stat -c%s "$index_file" 2>/dev/null)
-            echo "Found asset: $asset_dir (size: $size bytes)"
+            echo "Found asset: $asset_dir (size: $size bytes)" >&2
             
             if [[ $size -gt $largest_size ]]; then
                 largest_size=$size

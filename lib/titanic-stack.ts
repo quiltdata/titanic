@@ -1,5 +1,6 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
+import { Annotations } from "aws-cdk-lib";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3tables from "@aws-cdk/aws-s3tables-alpha";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -140,6 +141,14 @@ export class TitanicStack extends cdk.Stack {
                 },
                 environment: lambdaEnvironment,
             });
+
+        // Suppress objectVersion undefined warning for external deployment Lambda
+        if (isExternalDeployment) {
+            Annotations.of(mergeLambda).addWarningV2(
+                'codeFromBucketObjectVersionNotSpecified',
+                'Suppressing objectVersion undefined warning - using latest version from public bucket'
+            );
+        }
 
         // Create EventBridge rule to route package events to Lambda
         const packageEventRule = new events.Rule(this, "TitanicUpdateEventRule", {

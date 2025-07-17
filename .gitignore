@@ -1,4 +1,4 @@
-.env
+.env*
 deployment-config.json
 *.d.ts
 *.js

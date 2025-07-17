@@ -188,8 +188,9 @@ if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
+echo -e "\n${GREEN}Starting deployment....${NC}"
 # Deploy the stack
-DEPLOY_OUTPUT=$(aws cloudformation deploy \
+aws cloudformation deploy \
     --template-file "$TEMPLATE_FILE" \
     --stack-name "$STACK_NAME" \
     --capabilities CAPABILITY_IAM \
@@ -197,10 +198,9 @@ DEPLOY_OUTPUT=$(aws cloudformation deploy \
         AthenaDatabaseName="$ATHENA_DATABASE_NAME" \
         QuiltReadPolicyArn="$QUILT_READ_POLICY_ARN" \
         UseS3Table="$USE_S3_TABLE" \
-    $AWS_OPTS 2>&1)
+    $AWS_OPTS
 
 DEPLOY_STATUS=$?
-echo "$DEPLOY_OUTPUT"
 
 if [[ $DEPLOY_STATUS -ne 0 ]]; then
     echo -e "${RED}❌ Stack deployment failed.${NC}"
