@@ -5,58 +5,68 @@ import { Config, S3Config } from "./shared/config";
  * 
  * The CDK stack passes environment variables to the Lambda function.
  * We need to be explicit about:
- * a) Always pass ARNs from stack to Lambda for consistency
- * b) Clearly named environment variables ending in _ARN
- * c) Config methods that translate between ARN and name formats
- * d) Each method gets exactly what it needs (ARN vs name)
+ * a) Pass bucket names from stack to Lambda (simpler and cleaner)
+ * b) Config methods that generate ARNs when needed from names + region + account
+ * c) Each method gets exactly what it needs (name vs ARN)
  */
 describe("Environment Variable Contract Tests", () => {
     describe("Stack-to-Lambda environment variable contract", () => {
-        it("should pass ARNs consistently with clear naming", () => {
-            // Document what the stack SHOULD pass to Lambda (ARNs for all buckets)
+        it("should pass bucket names with clear naming", () => {
+            // Document what the stack SHOULD pass to Lambda (bucket names for all buckets)
             const expectedEnvVars = {
-                // Always ARNs for buckets (clear naming)
-                GLUE_TABLES_BUCKET_ARN: "arn:aws:s3:::titanic-glue-tables-123456789012-us-east-2",
-                S3_TABLES_BUCKET_ARN: "arn:aws:s3tables:us-east-2:123456789012:bucket/titanic-s3-tables-123456789012-us-east-2",
-                ATHENA_RESULTS_BUCKET_ARN: "arn:aws:s3:::titanic-glue-tables-123456789012-us-east-2",
+                // Bucket names (simpler and cleaner)
+                GLUE_TABLES_BUCKET_NAME: "titanic-glue-tables-123456789012-us-east-2",
+                S3_TABLES_BUCKET_NAME: "titanic-s3-tables-123456789012-us-east-2",
+                
+                // AWS context for ARN generation
+                AWS_ACCOUNT_ID: "123456789012",
+                CDK_DEFAULT_REGION: "us-east-2",
                 
                 // Database names
-                GLUE_DATABASE_NAME: "source-database",
+                ATHENA_DATABASE_NAME: "source-database",
                 S3TABLE_DATABASE_NAME: "quilt_titanic",
                 
                 // Configuration flags
                 USE_S3_TABLE: "false" // or "true"
             };
 
-            // All bucket env vars should end with _ARN for clarity
-            expect(expectedEnvVars.GLUE_TABLES_BUCKET_ARN).toContain("arn:aws:s3:::");
-            expect(expectedEnvVars.S3_TABLES_BUCKET_ARN).toContain("arn:aws:s3tables:");
-            expect(expectedEnvVars.ATHENA_RESULTS_BUCKET_ARN).toContain("arn:aws:s3:::");
+            // All bucket env vars should end with _NAME for clarity
+            expect(expectedEnvVars.GLUE_TABLES_BUCKET_NAME).not.toContain("arn:");
+            expect(expectedEnvVars.S3_TABLES_BUCKET_NAME).not.toContain("arn:");
         });
     });
 
-    describe("Config class ARN handling and conversion", () => {
-        it("should extract bucket names from ARNs correctly", () => {
-            // Test S3 bucket ARN
-            const s3Arn = "arn:aws:s3:::titanic-glue-tables-123456789012-us-east-2";
-            expect(Config.extractBucketNameFromArn(s3Arn)).toBe("titanic-glue-tables-123456789012-us-east-2");
+    describe("Config class bucket name handling and ARN generation", () => {
+        it("should generate ARNs correctly from bucket names", () => {
+            const config = new Config({
+                glueTablesBucketName: "titanic-glue-tables-123456789012-us-east-2",
+                s3TablesBucketName: "titanic-s3-tables-123456789012-us-east-2",
+                aws_region: "us-east-2",
+                awsAccountId: "123456789012"
+            });
             
-            // Test S3 Tables ARN
-            const s3TablesArn = "arn:aws:s3tables:us-east-2:123456789012:bucket/titanic-s3-tables-123456789012-us-east-2";
-            expect(Config.extractBucketNameFromArn(s3TablesArn)).toBe("titanic-s3-tables-123456789012-us-east-2");
+            // Should store bucket names directly
+            expect(config.glueTablesBucketName).toBe("titanic-glue-tables-123456789012-us-east-2");
+            expect(config.s3TablesBucketName).toBe("titanic-s3-tables-123456789012-us-east-2");
             
-            // Test regular bucket name (should pass through unchanged)
-            const bucketName = "regular-bucket-name";
-            expect(Config.extractBucketNameFromArn(bucketName)).toBe("regular-bucket-name");
+            // Should generate ARNs when requested
+            expect(config.getGlueTablesBucketArn()).toBe("arn:aws:s3:::titanic-glue-tables-123456789012-us-east-2");
+            expect(config.getS3TablesBucketArn()).toBe("arn:aws:s3tables:us-east-2:123456789012:bucket/titanic-s3-tables-123456789012-us-east-2");
+            
+            // Should provide bucket names when requested
+            expect(config.getGlueTablesBucketName()).toBe("titanic-glue-tables-123456789012-us-east-2");
+            expect(config.getS3TablesBucketName()).toBe("titanic-s3-tables-123456789012-us-east-2");
         });
 
-        it("should handle Glue config with ARN inputs", () => {
+        it("should handle Glue config with bucket name inputs", () => {
             const config = new Config({
-                glueTablesBucketArn: "arn:aws:s3:::titanic-glue-tables-123456789012-us-east-2",
-                s3TablesBucketArn: "arn:aws:s3tables:us-east-2:123456789012:bucket/titanic-s3-tables-123456789012-us-east-2"
+                glueTablesBucketName: "titanic-glue-tables-123456789012-us-east-2",
+                s3TablesBucketName: "titanic-s3-tables-123456789012-us-east-2",
+                aws_region: "us-east-2",
+                awsAccountId: "123456789012"
             });
 
-            // Should extract bucket names for operations
+            // Should use bucket names for operations
             expect(config.getTargetBucket()).toBe("titanic-glue-tables-123456789012-us-east-2");
             expect(config.getResultsBucket()).toBe("titanic-glue-tables-123456789012-us-east-2");
             
@@ -64,7 +74,7 @@ describe("Environment Variable Contract Tests", () => {
             expect(config.getGlueTablesBucketArn()).toBe("arn:aws:s3:::titanic-glue-tables-123456789012-us-east-2");
             expect(config.getS3TablesBucketArn()).toBe("arn:aws:s3tables:us-east-2:123456789012:bucket/titanic-s3-tables-123456789012-us-east-2");
             
-            // Should provide extracted names
+            // Should provide bucket names
             expect(config.getGlueTablesBucketName()).toBe("titanic-glue-tables-123456789012-us-east-2");
             expect(config.getS3TablesBucketName()).toBe("titanic-s3-tables-123456789012-us-east-2");
             
@@ -73,10 +83,12 @@ describe("Environment Variable Contract Tests", () => {
             expect(context).toEqual({ Database: config.getReadDatabaseName() });
         });
 
-        it("should handle S3Config with ARN inputs", () => {
+        it("should handle S3Config with bucket name inputs", () => {
             const config = new S3Config({
-                glueTablesBucketArn: "arn:aws:s3:::titanic-glue-tables-123456789012-us-east-2",
-                s3TablesBucketArn: "arn:aws:s3tables:us-east-2:123456789012:bucket/titanic-s3-tables-123456789012-us-east-2",
+                glueTablesBucketName: "titanic-glue-tables-123456789012-us-east-2",
+                s3TablesBucketName: "titanic-s3-tables-123456789012-us-east-2",
+                aws_region: "us-east-2",
+                awsAccountId: "123456789012",
                 s3TableDatabaseName: "quilt_titanic"
             });
 
@@ -95,16 +107,20 @@ describe("Environment Variable Contract Tests", () => {
     });
 
     describe("Environment variable usage in merge-tables handler", () => {
-        it("should expect ARN-named environment variables", () => {
+        it("should expect bucket name environment variables", () => {
             // These are the environment variables merge-tables.ts should read
             const bucketEnvVars = [
-                "GLUE_TABLES_BUCKET_ARN",
-                "S3_TABLES_BUCKET_ARN", 
-                "ATHENA_RESULTS_BUCKET_ARN"
+                "GLUE_TABLES_BUCKET_NAME",
+                "S3_TABLES_BUCKET_NAME"
+            ];
+            
+            const contextEnvVars = [
+                "AWS_ACCOUNT_ID",
+                "CDK_DEFAULT_REGION"
             ];
             
             const databaseEnvVars = [
-                "GLUE_DATABASE_NAME",
+                "ATHENA_DATABASE_NAME",
                 "S3TABLE_DATABASE_NAME"
             ];
             
@@ -112,9 +128,15 @@ describe("Environment Variable Contract Tests", () => {
                 "USE_S3_TABLE"
             ];
 
-            // All bucket environment variables should contain ARN
+            // All bucket environment variables should contain NAME
             bucketEnvVars.forEach(envVar => {
-                expect(envVar).toContain("ARN");
+                expect(envVar).toContain("NAME");
+                expect(envVar).not.toContain("ARN");
+            });
+            
+            // Context vars should identify their purpose
+            contextEnvVars.forEach(envVar => {
+                expect(envVar).toMatch(/AWS_(ACCOUNT_ID|REGION)|CDK_DEFAULT_REGION/);
             });
             
             // Database and config vars should not contain ARN
@@ -125,18 +147,21 @@ describe("Environment Variable Contract Tests", () => {
     });
 
     describe("CDK stack environment variable output", () => {
-        it("should pass bucket ARNs with clear variable names", () => {
+        it("should pass bucket names with clear variable names", () => {
             // The stack should set these environment variables on the Lambda
             const stackOutputs = {
-                GLUE_TABLES_BUCKET_ARN: "arn:aws:s3:::bucket-name",
-                S3_TABLES_BUCKET_ARN: "arn:aws:s3tables:region:account:bucket/bucket-name",
-                ATHENA_RESULTS_BUCKET_ARN: "arn:aws:s3:::bucket-name"
+                GLUE_TABLES_BUCKET_NAME: "bucket-name",
+                S3_TABLES_BUCKET_NAME: "bucket-name",
+                AWS_ACCOUNT_ID: "123456789012",
+                CDK_DEFAULT_REGION: "us-east-1"
             };
 
-            // Verify the ARN formats are correct
+            // Verify the name formats are correct
             Object.entries(stackOutputs).forEach(([key, value]) => {
-                expect(key).toContain("ARN");
-                expect(value).toContain("arn:aws:");
+                if (key.includes("BUCKET")) {
+                    expect(key).toContain("NAME");
+                    expect(value).not.toContain("arn:aws:");
+                }
             });
         });
     });
@@ -144,8 +169,10 @@ describe("Environment Variable Contract Tests", () => {
     describe("Method usage patterns", () => {
         it("should use appropriate methods for different operations", () => {
             const config = new S3Config({
-                glueTablesBucketArn: "arn:aws:s3:::glue-bucket",
-                s3TablesBucketArn: "arn:aws:s3tables:us-east-2:123456789012:bucket/s3tables-bucket"
+                glueTablesBucketName: "glue-bucket",
+                s3TablesBucketName: "s3tables-bucket",
+                aws_region: "us-east-2",
+                awsAccountId: "123456789012"
             });
 
             // For Athena query locations (needs bucket names)

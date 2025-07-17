@@ -18,13 +18,15 @@ describe('Schema Validation Tests', () => {
     
     beforeEach(() => {
         glueConfig = Config.createTestInstance({
-            glueDatabaseName: 'test-glue-db',
-            glueTablesBucketArn: 'arn:aws:s3:::test-glue-bucket'
+            athenaDatabaseName: 'test-glue-db',
+            glueTablesBucketName: 'test-glue-bucket',
+            awsAccountId: '123456789012'
         });
         
         s3Config = S3Config.createTestInstance({
             s3TableDatabaseName: 'test-s3-db',
-            s3TablesBucketArn: 'arn:aws:s3tables:us-east-1:123456789012:bucket/test-s3-bucket'
+            s3TablesBucketName: 'test-s3-bucket',
+            awsAccountId: '123456789012'
         });
     });
 
@@ -35,20 +37,23 @@ describe('Schema Validation Tests', () => {
                 const schema = table['generateCreateQuery']();
                 
                 // Basic CREATE TABLE structure from schema.sql
-                expect(schema).toContain('CREATE TABLE');
+                expect(schema).toContain('CREATE TABLE IF NOT EXISTS');
                 expect(schema).toContain('package_revision');
-                expect(schema).toContain('registry VARCHAR');
-                expect(schema).toContain('pkg_name VARCHAR');
-                expect(schema).toContain('top_hash VARCHAR');
+                expect(schema).toContain('registry STRING');
+                expect(schema).toContain('pkg_name STRING');
+                expect(schema).toContain('top_hash STRING');
                 expect(schema).toContain('timestamp TIMESTAMP');
-                expect(schema).toContain('message VARCHAR');
-                expect(schema).toContain('metadata VARCHAR');
+                expect(schema).toContain('message STRING');
+                expect(schema).toContain('metadata STRING');
                 
                 // Schema.sql shows S3 tables should include partitioning but NOT LOCATION clause
                 expect(schema).toContain('PARTITIONED BY');
                 expect(schema).toContain('registry,');
                 expect(schema).toContain('bucket(8, pkg_name),');
                 expect(schema).toContain('bucket(8, top_hash)');
+                
+                // Should include S3 Tables specific properties
+                expect(schema).toContain("TBLPROPERTIES ('table_type' = 'ICEBERG', 'format' = 'PARQUET')");
                 
                 // Partitioning clause should be accessible separately
                 const partitionClause = table['getPartitioningClause']();
@@ -65,18 +70,21 @@ describe('Schema Validation Tests', () => {
                 const schema = table['generateCreateQuery']();
                 
                 // Basic CREATE TABLE structure from schema.sql
-                expect(schema).toContain('CREATE TABLE');
+                expect(schema).toContain('CREATE TABLE IF NOT EXISTS');
                 expect(schema).toContain('package_tag');
-                expect(schema).toContain('registry VARCHAR');
-                expect(schema).toContain('pkg_name VARCHAR');
-                expect(schema).toContain('tag_name VARCHAR');
-                expect(schema).toContain('top_hash VARCHAR');
+                expect(schema).toContain('registry STRING');
+                expect(schema).toContain('pkg_name STRING');
+                expect(schema).toContain('tag_name STRING');
+                expect(schema).toContain('top_hash STRING');
                 
                 // Schema.sql shows S3 tables should include partitioning but NOT LOCATION clause
                 expect(schema).toContain('PARTITIONED BY');
                 expect(schema).toContain('registry,');
                 expect(schema).toContain('tag_name,');
                 expect(schema).toContain('bucket(8, pkg_name)');
+                
+                // Should include S3 Tables specific properties
+                expect(schema).toContain("TBLPROPERTIES ('table_type' = 'ICEBERG', 'format' = 'PARQUET')");
                 
                 // Partitioning clause should be accessible separately
                 const partitionClause = table['getPartitioningClause']();
@@ -93,20 +101,23 @@ describe('Schema Validation Tests', () => {
                 const schema = table['generateCreateQuery']();
                 
                 // Basic CREATE TABLE structure from schema.sql
-                expect(schema).toContain('CREATE TABLE');
+                expect(schema).toContain('CREATE TABLE IF NOT EXISTS');
                 expect(schema).toContain('package_entry');
-                expect(schema).toContain('registry VARCHAR');
-                expect(schema).toContain('top_hash VARCHAR');
-                expect(schema).toContain('logical_key VARCHAR');
-                expect(schema).toContain('physical_key VARCHAR');
-                expect(schema).toContain('multihash VARCHAR');
+                expect(schema).toContain('registry STRING');
+                expect(schema).toContain('top_hash STRING');
+                expect(schema).toContain('logical_key STRING');
+                expect(schema).toContain('physical_key STRING');
+                expect(schema).toContain('multihash STRING');
                 expect(schema).toContain('size BIGINT');
-                expect(schema).toContain('metadata VARCHAR');
+                expect(schema).toContain('metadata STRING');
                 
                 // Schema.sql shows S3 tables should include partitioning but NOT LOCATION clause
                 expect(schema).toContain('PARTITIONED BY');
                 expect(schema).toContain('registry,');
                 expect(schema).toContain('bucket(64, physical_key)');
+                
+                // Should include S3 Tables specific properties
+                expect(schema).toContain("TBLPROPERTIES ('table_type' = 'ICEBERG', 'format' = 'PARQUET')");
                 
                 // Partitioning clause should be accessible separately
                 const partitionClause = table['getPartitioningClause']();
@@ -131,12 +142,12 @@ describe('Schema Validation Tests', () => {
                 expect(ctas).toContain("table_type = 'ICEBERG'");
                 expect(ctas).toContain("is_external = false");
                 expect(ctas).toContain('AS SELECT');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS registry');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS pkg_name');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS top_hash');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS registry');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS pkg_name');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS top_hash');
                 expect(ctas).toContain('CAST(NULL AS TIMESTAMP) AS timestamp');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS message');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS metadata');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS message');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS metadata');
                 expect(ctas).toContain('WHERE 1=0');
             });
         });
@@ -154,10 +165,10 @@ describe('Schema Validation Tests', () => {
                 expect(ctas).toContain("table_type = 'ICEBERG'");
                 expect(ctas).toContain("is_external = false");
                 expect(ctas).toContain('AS SELECT');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS registry');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS pkg_name');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS tag_name');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS top_hash');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS registry');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS pkg_name');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS tag_name');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS top_hash');
                 expect(ctas).toContain('WHERE 1=0');
             });
         });
@@ -175,13 +186,13 @@ describe('Schema Validation Tests', () => {
                 expect(ctas).toContain("table_type = 'ICEBERG'");
                 expect(ctas).toContain("is_external = false");
                 expect(ctas).toContain('AS SELECT');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS registry');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS top_hash');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS logical_key');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS physical_key');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS multihash');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS registry');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS top_hash');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS logical_key');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS physical_key');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS multihash');
                 expect(ctas).toContain('CAST(NULL AS BIGINT) AS size');
-                expect(ctas).toContain('CAST(NULL AS VARCHAR) AS metadata');
+                expect(ctas).toContain('CAST(NULL AS STRING) AS metadata');
                 expect(ctas).toContain('WHERE 1=0');
             });
         });
@@ -356,15 +367,15 @@ describe('Schema Validation Tests', () => {
             
             expect(sql).toContain('CREATE TABLE');
             expect(sql).toContain('package_revision');
-            expect(sql).toContain('registry VARCHAR');
-            expect(sql).toContain('pkg_name VARCHAR');
+            expect(sql).toContain('registry STRING');
+            expect(sql).toContain('pkg_name STRING');
         });
 
         it('should generate DROP TABLE SQL', () => {
             const table = new PackageRevisionTable(s3Config);
             const sql = table.query('drop');
             
-            expect(sql).toBe('DROP TABLE IF EXISTS package_revision');
+            expect(sql).toBe('DROP TABLE IF EXISTS preview.package_revision');
         });
     });
 });

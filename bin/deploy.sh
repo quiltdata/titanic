@@ -28,10 +28,9 @@ TEMPLATE_FILE="template.json"
 
 # Initialize parameter values (CLI args will override these later)
 # Use environment variables if set, otherwise use defaults
-GLUE_DATABASE_NAME="${GLUE_DATABASE_NAME:-${QUILT_DATABASE_NAME:-}}"
+ATHENA_DATABASE_NAME="${ATHENA_DATABASE_NAME:-${ATHENA_DATABASE_NAME:-${ATHENA_DATABASE_NAME:-}}}"
 QUILT_READ_POLICY_ARN="${QUILT_READ_POLICY_ARN:-}"
 USE_S3_TABLE="${USE_S3_TABLE:-false}"
-LAMBDA_TIMEOUT="${LAMBDA_TIMEOUT:-900}"
 
 # Help function
 show_help() {
@@ -47,25 +46,23 @@ OPTIONS:
     -r, --region REGION             AWS region (default: \$AWS_DEFAULT_REGION or us-east-1)
     -p, --profile PROFILE           AWS profile to use
     -t, --template-file FILE        CloudFormation template file (default: template.json)
-    --glue-database-name NAME       Glue database name (required)
+    --athena-database-name NAME     Athena database name (required)
     --quilt-read-policy-arn ARN     Quilt read policy ARN (required)
     --use-s3-table BOOL             Use S3 Tables format (true/false, default: false)
-    --lambda-timeout SECONDS        Lambda timeout in seconds (default: 900)
 
 EXAMPLES:
     # Deploy with required parameters
-    $0 --glue-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
+    $0 --athena-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
 
     # Deploy with custom template file
     $0 --template-file my-template.json \\
-       --glue-database-name mydb \\
+       --athena-database-name mydb \\
        --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
 
     # Deploy with all parameters
-    $0 --glue-database-name mydb \\
+    $0 --athena-database-name mydb \\
        --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy \\
-       --use-s3-table true \\
-       --lambda-timeout 300
+       --use-s3-table true
 
     # Use .env file (automatically loaded if present)
     cp env.example .env
@@ -73,16 +70,15 @@ EXAMPLES:
     $0
 
     # Use environment variables manually
-    QUILT_DATABASE_NAME=mydb QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/QuiltReadPolicy $0
+    ATHENA_DATABASE_NAME=mydb QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/QuiltReadPolicy $0
 
 ENVIRONMENT VARIABLES:
     The script automatically loads variables from .env file (if present)
     
     Variables can also be set manually:
-    - QUILT_DATABASE_NAME - Glue database name
+    - ATHENA_DATABASE_NAME - Athena database name
     - QUILT_READ_POLICY_ARN - Quilt read policy ARN
     - USE_S3_TABLE - Use S3 Tables format (true/false)
-    - LAMBDA_TIMEOUT - Lambda timeout in seconds
     - AWS_DEFAULT_REGION - AWS region
     - AWS_PROFILE - AWS profile
 
@@ -116,8 +112,8 @@ while [[ $# -gt 0 ]]; do
             TEMPLATE_FILE="$2"
             shift 2
             ;;
-        --glue-database-name)
-            GLUE_DATABASE_NAME="$2"
+        --athena-database-name)
+            ATHENA_DATABASE_NAME="$2"
             shift 2
             ;;
         --quilt-read-policy-arn)
@@ -128,8 +124,10 @@ while [[ $# -gt 0 ]]; do
             USE_S3_TABLE="$2"
             shift 2
             ;;
-        --lambda-timeout)
-            LAMBDA_TIMEOUT="$2"
+        # Backward compatibility for old parameter name
+        --glue-database-name)
+            echo -e "${YELLOW}Warning: --glue-database-name is deprecated, use --athena-database-name instead${NC}"
+            ATHENA_DATABASE_NAME="$2"
             shift 2
             ;;
         *)
@@ -142,8 +140,8 @@ done
 
 
 # Validate required parameters
-if [[ -z "$GLUE_DATABASE_NAME" ]]; then
-    echo -e "${RED}Error: Glue database name is required. Use --glue-database-name or set QUILT_DATABASE_NAME environment variable.${NC}"
+if [[ -z "$ATHENA_DATABASE_NAME" ]]; then
+    echo -e "${RED}Error: Athena database name is required. Use --athena-database-name or set ATHENA_DATABASE_NAME environment variable.${NC}"
     exit 1
 fi
 
@@ -155,12 +153,6 @@ fi
 # Validate USE_S3_TABLE value
 if [[ "$USE_S3_TABLE" != "true" && "$USE_S3_TABLE" != "false" ]]; then
     echo -e "${RED}Error: use-s3-table must be 'true' or 'false', got: $USE_S3_TABLE${NC}"
-    exit 1
-fi
-
-# Validate LAMBDA_TIMEOUT is a number
-if ! [[ "$LAMBDA_TIMEOUT" =~ ^[0-9]+$ ]] || [[ "$LAMBDA_TIMEOUT" -lt 1 ]] || [[ "$LAMBDA_TIMEOUT" -gt 900 ]]; then
-    echo -e "${RED}Error: lambda-timeout must be a number between 1 and 900, got: $LAMBDA_TIMEOUT${NC}"
     exit 1
 fi
 
@@ -183,10 +175,9 @@ echo "Stack Name: $STACK_NAME"
 echo "Region: $REGION"
 echo "Profile: ${PROFILE:-default}"
 echo "Template File: $TEMPLATE_FILE"
-echo "Glue Database Name: $GLUE_DATABASE_NAME"
+echo "Athena Database Name: $ATHENA_DATABASE_NAME"
 echo "Quilt Read Policy ARN: $QUILT_READ_POLICY_ARN"
 echo "Use S3 Table: $USE_S3_TABLE"
-echo "Lambda Timeout: $LAMBDA_TIMEOUT seconds"
 echo ""
 
 echo -e "${YELLOW}Please verify the configuration above.${NC}"
@@ -202,10 +193,9 @@ DEPLOY_OUTPUT=$(aws cloudformation deploy \
     --stack-name "$STACK_NAME" \
     --capabilities CAPABILITY_IAM \
     --parameter-overrides \
-        GlueDatabaseName="$GLUE_DATABASE_NAME" \
+        AthenaDatabaseName="$ATHENA_DATABASE_NAME" \
         QuiltReadPolicyArn="$QUILT_READ_POLICY_ARN" \
         UseS3Table="$USE_S3_TABLE" \
-        LambdaTimeout="$LAMBDA_TIMEOUT" \
     $AWS_OPTS 2>&1)
 
 DEPLOY_STATUS=$?

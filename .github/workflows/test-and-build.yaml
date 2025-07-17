@@ -48,7 +48,7 @@ jobs:
       env:
         CDK_DEFAULT_ACCOUNT: "123456789012"
         CDK_DEFAULT_REGION: "us-east-1"
-        QUILT_DATABASE_NAME: "release-database"
+        ATHENA_DATABASE_NAME: "release-database"
         QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/ReleasePolicy"
         
     - name: Upload release archives

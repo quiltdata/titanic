@@ -20,8 +20,8 @@ describe("bin/titanic", () => {
         process.env = originalEnv;
     });
 
-    it("should pass correct props including glueDatabaseName and useS3Table from environment variables", () => {
-        process.env.QUILT_DATABASE_NAME = "test-database";
+    it("should pass correct props including athenaDatabaseName and useS3Table from environment variables", () => {
+        process.env.ATHENA_DATABASE_NAME = "test-database";
         process.env.QUILT_READ_POLICY_ARN = "arn:aws:iam::123456789012:policy/test-policy";
         process.env.USE_S3_TABLE = "true";
 
@@ -33,15 +33,15 @@ describe("bin/titanic", () => {
             expect.any(cdk.App),
             "TitanicStack",
             expect.objectContaining({
-                glueDatabaseName: "test-database",
+                athenaDatabaseName: "test-database",
                 quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
                 useS3Table: true,
             })
         );
     });
 
-    it("should pass glueDatabaseName from QUILT_DATABASE_NAME environment variable", () => {
-        process.env.QUILT_DATABASE_NAME = "custom_database_name";
+    it("should pass athenaDatabaseName from ATHENA_DATABASE_NAME environment variable", () => {
+        process.env.ATHENA_DATABASE_NAME = "custom_database_name";
         process.env.QUILT_READ_POLICY_ARN = "arn:aws:iam::123456789012:policy/test-policy";
         process.env.USE_S3_TABLE = "false";
 
@@ -53,7 +53,7 @@ describe("bin/titanic", () => {
             expect.any(cdk.App),
             "TitanicStack",
             expect.objectContaining({
-                glueDatabaseName: "custom_database_name",
+                athenaDatabaseName: "custom_database_name",
                 quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
                 useS3Table: false,
             })
@@ -82,17 +82,17 @@ describe("bin/titanic", () => {
     });
 
     describe("environment variable handling", () => {
-        it("should throw error when QUILT_DATABASE_NAME is missing", () => {
-            delete process.env.QUILT_DATABASE_NAME;
+        it("should throw error when ATHENA_DATABASE_NAME is missing", () => {
+            delete process.env.ATHENA_DATABASE_NAME;
             process.env.QUILT_READ_POLICY_ARN = "arn:aws:iam::123456789012:policy/test-policy";
 
             expect(() => {
                 require("../bin/titanic");
-            }).toThrow("Environment variable QUILT_DATABASE_NAME is not set");
+            }).toThrow("Environment variable ATHENA_DATABASE_NAME is not set");
         });
 
         it("should throw error when QUILT_READ_POLICY_ARN is missing", () => {
-            process.env.QUILT_DATABASE_NAME = "test-database";
+            process.env.ATHENA_DATABASE_NAME = "test-database";
             delete process.env.QUILT_READ_POLICY_ARN;
 
             expect(() => {
@@ -103,7 +103,7 @@ describe("bin/titanic", () => {
         it("should handle undefined CDK environment variables", () => {
             delete process.env.CDK_DEFAULT_ACCOUNT;
             delete process.env.CDK_DEFAULT_REGION;
-            process.env.QUILT_DATABASE_NAME = "test-database";
+            process.env.ATHENA_DATABASE_NAME = "test-database";
             process.env.QUILT_READ_POLICY_ARN = "test-arn";
 
             require("../bin/titanic");
@@ -121,7 +121,7 @@ describe("bin/titanic", () => {
         });
 
         it("should handle USE_S3_TABLE environment variable correctly", () => {
-            process.env.QUILT_DATABASE_NAME = "test-database";
+            process.env.ATHENA_DATABASE_NAME = "test-database";
             process.env.QUILT_READ_POLICY_ARN = "test-arn";
             delete process.env.USE_S3_TABLE; // Should default to false
 
@@ -137,7 +137,7 @@ describe("bin/titanic", () => {
         });
 
         it("should handle empty string environment variables", () => {
-            process.env.QUILT_DATABASE_NAME = "test-database";
+            process.env.ATHENA_DATABASE_NAME = "test-database";
             process.env.QUILT_READ_POLICY_ARN = "";
             process.env.CDK_DEFAULT_ACCOUNT = "";
             process.env.CDK_DEFAULT_REGION = "";
@@ -148,7 +148,7 @@ describe("bin/titanic", () => {
                 expect.any(cdk.App),
                 "TitanicStack",
                 expect.objectContaining({
-                    glueDatabaseName: "test-database",
+                    athenaDatabaseName: "test-database",
                     quiltReadPolicyArn: "",
                     env: {
                         account: "",
@@ -159,7 +159,7 @@ describe("bin/titanic", () => {
         });
 
         it("should preserve whitespace in environment variables", () => {
-            process.env.QUILT_DATABASE_NAME = "test-database";
+            process.env.ATHENA_DATABASE_NAME = "test-database";
             process.env.QUILT_READ_POLICY_ARN = "  arn:aws:iam::123:policy/test  ";
             process.env.CDK_DEFAULT_ACCOUNT = " 123456789012 ";
             process.env.CDK_DEFAULT_REGION = "\tus-east-1\n";
@@ -170,7 +170,7 @@ describe("bin/titanic", () => {
                 expect.any(cdk.App),
                 "TitanicStack",
                 expect.objectContaining({
-                    glueDatabaseName: "test-database",
+                    athenaDatabaseName: "test-database",
                     quiltReadPolicyArn: "  arn:aws:iam::123:policy/test  ",
                     env: {
                         account: " 123456789012 ",
@@ -181,7 +181,7 @@ describe("bin/titanic", () => {
         });
 
         it("should handle special characters in environment variables", () => {
-            process.env.QUILT_DATABASE_NAME = "test-database";
+            process.env.ATHENA_DATABASE_NAME = "test-database";
             process.env.QUILT_READ_POLICY_ARN = "arn:aws:iam::123:policy/Test-Policy_With.Special@Chars";
             process.env.CDK_DEFAULT_ACCOUNT = "123456789012";
             process.env.CDK_DEFAULT_REGION = "us-east-1";
@@ -192,7 +192,7 @@ describe("bin/titanic", () => {
                 expect.any(cdk.App),
                 "TitanicStack",
                 expect.objectContaining({
-                    glueDatabaseName: "test-database",
+                    athenaDatabaseName: "test-database",
                     quiltReadPolicyArn: "arn:aws:iam::123:policy/Test-Policy_With.Special@Chars",
                 })
             );
@@ -203,7 +203,7 @@ describe("bin/titanic", () => {
             const longAccount = "1".repeat(20);
             const longRegion = "us-".repeat(20) + "east-1";
 
-            process.env.QUILT_DATABASE_NAME = "test-database";
+            process.env.ATHENA_DATABASE_NAME = "test-database";
             process.env.QUILT_READ_POLICY_ARN = longArn;
             process.env.CDK_DEFAULT_ACCOUNT = longAccount;
             process.env.CDK_DEFAULT_REGION = longRegion;
@@ -214,7 +214,7 @@ describe("bin/titanic", () => {
                 expect.any(cdk.App),
                 "TitanicStack",
                 expect.objectContaining({
-                    glueDatabaseName: "test-database",
+                    athenaDatabaseName: "test-database",
                     quiltReadPolicyArn: longArn,
                     env: {
                         account: longAccount,
@@ -238,7 +238,7 @@ describe("bin/titanic", () => {
         });
 
         it("should propagate validation errors from TitanicStack", () => {
-            const validationError = "must set QUILT_DATABASE_NAME environment variable";
+            const validationError = "must set ATHENA_DATABASE_NAME environment variable";
             mockTitanicStack.mockImplementation(() => {
                 throw new Error(validationError);
             });
@@ -268,7 +268,7 @@ describe("bin/titanic", () => {
 
     describe("stack configuration validation", () => {
         it("should create stack with correct default values", () => {
-            process.env.QUILT_DATABASE_NAME = "test-database";
+            process.env.ATHENA_DATABASE_NAME = "test-database";
             process.env.QUILT_READ_POLICY_ARN = "test-policy-arn";
             process.env.CDK_DEFAULT_ACCOUNT = "999888777666";
             process.env.CDK_DEFAULT_REGION = "eu-west-2";
@@ -280,7 +280,7 @@ describe("bin/titanic", () => {
                 expect.any(cdk.App),
                 "TitanicStack",
                 {
-                    glueDatabaseName: "test-database",
+                    athenaDatabaseName: "test-database",
                     quiltReadPolicyArn: "test-policy-arn",
                     useS3Table: false,
                     env: {
@@ -291,8 +291,8 @@ describe("bin/titanic", () => {
             );
         });
 
-        it("should use glueDatabaseName from QUILT_DATABASE_NAME environment variable", () => {
-            process.env.QUILT_DATABASE_NAME = "my_custom_database";
+        it("should use athenaDatabaseName from ATHENA_DATABASE_NAME environment variable", () => {
+            process.env.ATHENA_DATABASE_NAME = "my_custom_database";
             process.env.QUILT_READ_POLICY_ARN = "test-policy-arn";
             process.env.DATABASE_NAME = "also_ignored";
             process.env.DB_NAME = "ignored_too";
@@ -303,14 +303,14 @@ describe("bin/titanic", () => {
                 expect.anything(),
                 expect.anything(),
                 expect.objectContaining({
-                    glueDatabaseName: "my_custom_database",
+                    athenaDatabaseName: "my_custom_database",
                 })
             );
         });
 
         it("should create exactly one CDK App instance", () => {
             const appSpy = jest.spyOn(cdk, 'App');
-            process.env.QUILT_DATABASE_NAME = "test-database";
+            process.env.ATHENA_DATABASE_NAME = "test-database";
             process.env.QUILT_READ_POLICY_ARN = "test-policy-arn";
             
             require("../bin/titanic");
@@ -322,7 +322,7 @@ describe("bin/titanic", () => {
         });
 
         it("should create exactly one TitanicStack instance", () => {
-            process.env.QUILT_DATABASE_NAME = "test-database";
+            process.env.ATHENA_DATABASE_NAME = "test-database";
             process.env.QUILT_READ_POLICY_ARN = "test-policy-arn";
             
             require("../bin/titanic");
@@ -333,7 +333,7 @@ describe("bin/titanic", () => {
 
     describe("realistic AWS environment scenarios", () => {
         it("should handle typical AWS development environment", () => {
-            process.env.QUILT_DATABASE_NAME = "quilt_dev_database";
+            process.env.ATHENA_DATABASE_NAME = "athena_dev_database";
             process.env.CDK_DEFAULT_ACCOUNT = "123456789012";
             process.env.CDK_DEFAULT_REGION = "us-east-1";
             process.env.QUILT_READ_POLICY_ARN = "arn:aws:iam::123456789012:policy/QuiltDevReadAccess";
@@ -344,7 +344,7 @@ describe("bin/titanic", () => {
                 expect.any(cdk.App),
                 "TitanicStack",
                 expect.objectContaining({
-                    glueDatabaseName: "quilt_dev_database",
+                    athenaDatabaseName: "athena_dev_database",
                     quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/QuiltDevReadAccess",
                     useS3Table: false,
                     env: {
@@ -356,7 +356,7 @@ describe("bin/titanic", () => {
         });
 
         it("should handle typical AWS production environment", () => {
-            process.env.QUILT_DATABASE_NAME = "quilt_prod_database";
+            process.env.ATHENA_DATABASE_NAME = "quilt_prod_database";
             process.env.CDK_DEFAULT_ACCOUNT = "999888777666";
             process.env.CDK_DEFAULT_REGION = "us-west-2";
             process.env.QUILT_READ_POLICY_ARN = "arn:aws:iam::999888777666:policy/QuiltProdReadAccess";
@@ -367,7 +367,7 @@ describe("bin/titanic", () => {
                 expect.any(cdk.App),
                 "TitanicStack",
                 expect.objectContaining({
-                    glueDatabaseName: "quilt_prod_database",
+                    athenaDatabaseName: "quilt_prod_database",
                     quiltReadPolicyArn: "arn:aws:iam::999888777666:policy/QuiltProdReadAccess",
                     useS3Table: false,
                     env: {
@@ -382,7 +382,7 @@ describe("bin/titanic", () => {
             // Only set what's absolutely required for basic operation
             delete process.env.CDK_DEFAULT_ACCOUNT;
             delete process.env.CDK_DEFAULT_REGION;
-            process.env.QUILT_DATABASE_NAME = "minimal_db";
+            process.env.ATHENA_DATABASE_NAME = "minimal_db";
             process.env.QUILT_READ_POLICY_ARN = "arn:aws:iam::123456789012:policy/MinimalPolicy";
 
             require("../bin/titanic");
@@ -391,7 +391,7 @@ describe("bin/titanic", () => {
                 expect.any(cdk.App),
                 "TitanicStack",
                 expect.objectContaining({
-                    glueDatabaseName: "minimal_db",
+                    athenaDatabaseName: "minimal_db",
                     quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/MinimalPolicy",
                     useS3Table: false,
                     env: {

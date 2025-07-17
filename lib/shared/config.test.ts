@@ -12,43 +12,47 @@ describe('Config', () => {
     process.env = originalEnv;
   });
 
-  describe('Config constructor with ARN inputs', () => {
-    it('should load configuration from provided ARN values', () => {
+  describe('Config constructor with bucket name inputs', () => {
+    it('should load configuration from provided bucket name values', () => {
       const config = Config.createTestInstance({
-        glueTablesBucketArn: 'arn:aws:s3:::glue-bucket',
-        s3TablesBucketArn: 'arn:aws:s3tables:us-west-2:123456789012:bucket/s3-bucket',
+        glueTablesBucketName: 'glue-bucket',
+        s3TablesBucketName: 's3-bucket',
         aws_region: 'us-west-2',
-        glueDatabaseName: 'glue_db',
+        awsAccountId: '123456789012',
+        athenaDatabaseName: 'glue_db',
         s3TableDatabaseName: 's3_db',
       });
 
-      expect(config.glueTablesBucketArn).toBe('arn:aws:s3:::glue-bucket');
-      expect(config.s3TablesBucketArn).toBe('arn:aws:s3tables:us-west-2:123456789012:bucket/s3-bucket');
+      expect(config.glueTablesBucketName).toBe('glue-bucket');
+      expect(config.s3TablesBucketName).toBe('s3-bucket');
       expect(config.getGlueTablesBucketName()).toBe('glue-bucket');
       expect(config.getS3TablesBucketName()).toBe('s3-bucket');
+      expect(config.getGlueTablesBucketArn()).toBe('arn:aws:s3:::glue-bucket');
+      expect(config.getS3TablesBucketArn()).toBe('arn:aws:s3tables:us-west-2:123456789012:bucket/s3-bucket');
       expect(config.aws_region).toBe('us-west-2');
-      expect(config.glueDatabaseName).toBe('glue_db');
+      expect(config.athenaDatabaseName).toBe('glue_db');
       expect(config.s3TableDatabaseName).toBe('s3_db');
     });
 
     it('should default to empty strings when no values provided', () => {
       const config = Config.createTestInstance();
 
-      expect(config.glueTablesBucketArn).toBe('');
-      expect(config.s3TablesBucketArn).toBe('');
+      expect(config.glueTablesBucketName).toBe('');
+      expect(config.s3TablesBucketName).toBe('');
     });
 
     it('should correctly interpret environment variables', () => {
-      process.env.GLUE_TABLES_BUCKET_ARN = 'arn:aws:s3:::env-glue-bucket';
-      process.env.S3_TABLES_BUCKET_ARN = 'arn:aws:s3tables:us-east-1:123456789012:bucket/env-s3-bucket';
-      process.env.AWS_REGION = 'env-region';
-      process.env.GLUE_DATABASE_NAME = 'env-glue-db';
+      process.env.GLUE_TABLES_BUCKET_NAME = 'env-glue-bucket';
+      process.env.S3_TABLES_BUCKET_NAME = 'env-s3-bucket';
+      process.env.CDK_DEFAULT_REGION = 'env-region';
+      process.env.AWS_ACCOUNT_ID = '123456789012';
+      process.env.ATHENA_DATABASE_NAME = 'env-glue-db';
       process.env.S3TABLE_DATABASE_NAME = 'env-s3-db';
 
       const config = Config.create();
 
-      expect(config.glueTablesBucketArn).toBe('arn:aws:s3:::env-glue-bucket');
-      expect(config.s3TablesBucketArn).toBe('arn:aws:s3tables:us-east-1:123456789012:bucket/env-s3-bucket');
+      expect(config.glueTablesBucketName).toBe('env-glue-bucket');
+      expect(config.s3TablesBucketName).toBe('env-s3-bucket');
       expect(config.getGlueTablesBucketName()).toBe('env-glue-bucket');
       expect(config.getS3TablesBucketName()).toBe('env-s3-bucket');
     });
@@ -74,8 +78,10 @@ describe('Config', () => {
   describe('Glue Config', () => {
     it('should provide correct bucket methods for Glue mode', () => {
       const config = Config.createTestInstance({
-        glueTablesBucketArn: 'arn:aws:s3:::glue-bucket',
-        s3TablesBucketArn: 'arn:aws:s3tables:us-west-2:123456789012:bucket/s3-bucket',
+        glueTablesBucketName: 'glue-bucket',
+        s3TablesBucketName: 's3-bucket',
+        aws_region: 'us-west-2',
+        awsAccountId: '123456789012',
       });
 
       // Glue config uses Glue bucket for both tables and results
@@ -93,7 +99,7 @@ describe('Config', () => {
 
     it('should use Glue database for read and write operations', () => {
       const config = Config.createTestInstance({
-        glueDatabaseName: 'my-glue-db',
+        athenaDatabaseName: 'my-glue-db',
         s3TableDatabaseName: 'my-s3-db'
       });
 
@@ -103,7 +109,7 @@ describe('Config', () => {
 
     it('should provide database-only execution context', () => {
       const config = Config.createTestInstance({
-        glueDatabaseName: 'test-db'
+        athenaDatabaseName: 'test-db'
       });
 
       const context = config.getExecutionContext();
@@ -115,8 +121,10 @@ describe('Config', () => {
   describe('S3Config', () => {
     it('should provide correct bucket methods for S3 Tables mode', () => {
       const config = new S3Config({
-        glueTablesBucketArn: 'arn:aws:s3:::glue-bucket',
-        s3TablesBucketArn: 'arn:aws:s3tables:us-west-2:123456789012:bucket/s3-bucket',
+        glueTablesBucketName: 'glue-bucket',
+        s3TablesBucketName: 's3-bucket',
+        aws_region: 'us-west-2',
+        awsAccountId: '123456789012',
         s3TableDatabaseName: 'quilt_titanic'
       });
 
@@ -127,7 +135,7 @@ describe('Config', () => {
 
     it('should use different databases for read vs write operations', () => {
       const config = new S3Config({
-        glueDatabaseName: 'source-db',
+        athenaDatabaseName: 'source-db',
         s3TableDatabaseName: 'target-db'
       });
 
@@ -137,7 +145,7 @@ describe('Config', () => {
 
     it('should format S3 Tables catalog name correctly', () => {
       const config = new S3Config({
-        s3TablesBucketArn: 'arn:aws:s3tables:us-east-1:123456789012:bucket/my-s3tables-bucket'
+        s3TablesBucketName: 'my-s3tables-bucket'
       });
 
       expect(config.getS3TableCatalogName()).toBe('s3tablescatalog/my-s3tables-bucket');
@@ -145,7 +153,7 @@ describe('Config', () => {
 
     it('should provide catalog and database execution context', () => {
       const config = new S3Config({
-        s3TablesBucketArn: 'arn:aws:s3tables:us-east-1:123456789012:bucket/my-s3tables-bucket',
+        s3TablesBucketName: 'my-s3tables-bucket',
         s3TableDatabaseName: 'quilt_titanic'
       });
 

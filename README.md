@@ -28,12 +28,11 @@ Edit `.env` with these **required** values:
 
 ```env
 # Required: Your Quilt stack configuration
-QUILT_DATABASE_NAME=your_glue_database_name
+ATHENA_DATABASE_NAME=your_ATHENA_DATABASE_NAME
 QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/STACK-BucketReadPolicy-XXXX
 
 # Optional: Advanced settings
 USE_S3_TABLE=false          # Use S3 Tables format (experimental)
-LAMBDA_TIMEOUT=900          # Lambda timeout in seconds
 AWS_DEFAULT_REGION=us-east-1
 ```
 
@@ -67,7 +66,7 @@ npm run deploy:logs recent 5 # show last 5 minutes
 
 **❌ "Table not found" errors**
 - **Cause**: Source Quilt views don't exist
-- **Solution**: Verify views exist: `aws glue get-tables --database-name $QUILT_DATABASE_NAME`
+- **Solution**: Verify views exist: `aws glue get-tables --database-name $ATHENA_DATABASE_NAME`
 
 **❌ "Missing required environment variables"**
 - **Cause**: `.env` file missing or incomplete
@@ -82,7 +81,7 @@ aws cloudformation describe-stacks --stack-name TitanicStack
 
 # Check resources
 aws s3 ls | grep titanic
-aws glue get-tables --database-name $QUILT_DATABASE_NAME
+aws glue get-tables --database-name $ATHENA_DATABASE_NAME
 
 # Monitor logs
 npm run deploy:logs recent 30      # Last 30 minutes
@@ -121,11 +120,3 @@ npm run destroy:buckets:contents    # Delete data only
 
 - **[doc/DEVELOP.md](doc/DEVELOP.md)** - Architecture, development, and building
 - **[doc/SCHEMA.md](doc/SCHEMA.md)** - Table schema design and decisions
-
-## S3 Tables Support (Experimental)
-
-Set `USE_S3_TABLE=true` to use AWS S3 Tables instead of Glue tables. This is experimental and has limited tool support.
-
-⚠️ **Warning**: Switching table modes recreates all tables, losing existing data.
-
-

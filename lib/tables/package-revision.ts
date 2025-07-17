@@ -6,32 +6,23 @@ export class PackageRevisionTable extends BaseTable {
         return "package_revision";
     }
 
-    protected getColumnDefinitions(): ColumnDefinitions {
+    public getColumnDefinitions(): ColumnDefinitions {
         return {
-            'registry': 'VARCHAR',
-            'pkg_name': 'VARCHAR',
-            'top_hash': 'VARCHAR',
+            'registry': 'STRING',
+            'pkg_name': 'STRING',
+            'top_hash': 'STRING',
             'timestamp': 'TIMESTAMP',
-            'message': 'VARCHAR',
-            'metadata': 'VARCHAR'
+            'message': 'STRING',
+            'metadata': 'STRING'
         };
     }
 
     protected getPartitioningClause(): string {
-        return `PARTITIONED BY (
-              registry,
-              bucket(8, pkg_name),
-              bucket(8, top_hash)
-            )`;
+        return `PARTITIONED BY (registry, bucket(8, pkg_name), bucket(8, top_hash))`;
     }
 
     protected generateSelectClause(registryName: string, sourceAlias: string): string {
-        return `'${registryName}' AS registry,
-              ${sourceAlias}.pkg_name,
-              ${sourceAlias}.top_hash,
-              from_unixtime(CAST(${sourceAlias}.timestamp AS bigint)) AS timestamp,
-              ${sourceAlias}.message,
-              ${sourceAlias}.user_meta AS metadata`;
+        return `'${registryName}' AS registry, ${sourceAlias}.pkg_name, ${sourceAlias}.top_hash, from_unixtime(CAST(${sourceAlias}.timestamp AS bigint)) AS timestamp, ${sourceAlias}.message, ${sourceAlias}.user_meta AS metadata`;
     }
 
     protected generateWhereClauseForCtas(sourceAlias: string): string {
@@ -43,8 +34,8 @@ export class PackageRevisionTable extends BaseTable {
         const registryName = this.extractRegistryName(packagesView);
         const selectClause = this.generateSelectClause(registryName, 's');
         
-        // Target table is SQL safe and unquoted, source table needs quoting
-        const targetTable = this.tableName;
+        // Target table uses fully-qualified name for S3 Tables, simple name for Glue
+        const targetTable = this.getTargetTableName();
         const sourceTable = `"${packagesView}"`;
         
         return `

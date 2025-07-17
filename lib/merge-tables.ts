@@ -62,10 +62,12 @@ function logContext(
     config: Config
 ): void {
     const envSummary = {
-        glueDatabaseName: process.env.GLUE_DATABASE_NAME,
+        athenaDatabaseName: process.env.ATHENA_DATABASE_NAME,
         s3TableDatabaseName: process.env.S3TABLE_DATABASE_NAME,
-        glueTablesBucketArn: process.env.GLUE_TABLES_BUCKET_ARN,
-        s3TablesBucketArn: process.env.S3_TABLES_BUCKET_ARN,
+        glueTablesBucketName: process.env.GLUE_TABLES_BUCKET_NAME,
+        s3TablesBucketName: process.env.S3_TABLES_BUCKET_NAME,
+        awsAccountId: process.env.AWS_ACCOUNT_ID,
+        awsRegion: process.env.AWS_REGION,
         configType: config.constructor.name,
         useS3Table: process.env.USE_S3_TABLE
     };

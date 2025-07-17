@@ -52,10 +52,9 @@ npm run cdk
 
 # OR deploy with parameters
 npx cdk deploy \
-  --parameters GlueDatabaseName=mydb \
+  --parameters AthenaDatabaseName=mydb \
   --parameters QuiltReadPolicyArn=arn:aws:iam::123456789012:policy/QuiltReadPolicy \
-  --parameters UseS3Table=false \
-  --parameters LambdaTimeout=900
+  --parameters UseS3Table=false
 ```
 
 ### Method 2: CloudFormation from Generated Template
@@ -71,31 +70,34 @@ cp env.example .env
 ./deploy.sh
 
 # OR deploy with parameters
-./deploy.sh --glue-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
+./deploy.sh --athena-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
 ```
 
 ## Environment Variables
 
 ### Required for Deployment
 ```bash
-QUILT_DATABASE_NAME=your_database_name           #  Stack Athena database with per-bucket package/object views
+ATHENA_DATABASE_NAME=your_database_name           #  Stack Athena database with per-bucket package/object views
 QUILT_READ_POLICY_ARN=arn:aws:iam::123:policy/X  # Stack read-only policy (so we can add access to new buckets)
 ```
 
 ### Optional Configuration
 ```bash
 USE_S3_TABLE=false          # Table format selection
-LAMBDA_TIMEOUT=900          # Lambda timeout (seconds)
 AWS_DEFAULT_REGION=us-east-1
 AWS_PROFILE=default
 ```
 
 ### Lambda Environment Variables (set by CDK stack)
 ```bash
-GLUE_TABLES_BUCKET_ARN      # S3 bucket for Glue tables
-S3_TABLES_BUCKET_ARN        # S3 Tables bucket
-GLUE_DATABASE_NAME          # Source database (and target, for Glue tables)
-S3_TABLE_DATABASE_NAME      # S3 Tables database
+GLUE_TABLES_BUCKET_NAME     # S3 bucket name for Glue tables
+S3_TABLES_BUCKET_NAME       # S3 Tables bucket name
+ATHENA_DATABASE_NAME        # Source database (and target, for Glue tables)
+S3TABLE_DATABASE_NAME       # S3 Tables database
+AWS_ACCOUNT_ID              # AWS account ID for ARN generation
+CDK_DEFAULT_REGION          # AWS region for ARN generation
+USE_S3_TABLE                # Configuration flag (true/false)
+QUILT_READ_POLICY_ARN       # ARN of the IAM policy for reading from Quilt buckets
 ```
 ## Architecture Overview
 
@@ -263,7 +265,7 @@ aws cloudformation describe-stacks --stack-name TitanicStack
 
 # Monitor resources  
 aws s3 ls | grep titanic
-aws glue get-tables --database-name $QUILT_DATABASE_NAME
+aws glue get-tables --database-name $ATHENA_DATABASE_NAME
 
 # Logs and debugging
 npm run deploy:logs recent 30
@@ -289,3 +291,48 @@ npm run deploy:logs tail
 - **Resource cleanup**: Use `npm run destroy` for complete cleanup
 - **Version management**: Use semantic versioning for releases
 - **Documentation**: Update both README.md and this file for changes
+
+### Manual Setup of S3 Tables
+
+If you prefer manual setup:
+
+1. **Create a namespace** using the [AWS Console](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-tables-namespace-create.html) or AWS CLI:
+
+```bash
+aws s3tables create-namespace \
+    --table-bucket-arn arn:aws:s3tables:us-east-1:111122223333:bucket/amzn-s3-demo-bucket1 \ 
+    --namespace preview
+```
+
+2. **Create tables** using the AWS Console or AWS CLI:
+
+```bash
+aws s3tables create-table --cli-input-json file://mytabledefinition.json
+```
+
+Example table definition:
+
+```json
+{
+    "tableBucketARN": "arn:aws:s3tables:us-east-1:111122223333:bucket/amzn-s3-demo-table-bucket",
+    "namespace": "your_namespace",
+    "name": "example_table",
+    "format": "ICEBERG",
+    "metadata": {
+        "iceberg": {
+            "schema": {
+                "fields": [
+                     {"name": "id", "type": "int","required": true},
+                     {"name": "name", "type": "string"},
+                     {"name": "value", "type": "int"}
+                ]
+            }
+        }
+    }
+}
+```
+
+
+⚠️ **Warning**: Switching table modes may drop all tables, losing existing data.
+
+

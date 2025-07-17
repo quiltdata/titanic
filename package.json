@@ -1,22 +1,22 @@
 {
   "name": "titanic",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "bin": {
     "titanic": "bin/titanic.js"
   },
   "scripts": {
     "clean:js": "rm -rf */**/{*.js,*.js.map,*.d.ts} && rm -rf bin/{*.js,*.js.map}",
     "clean": "rm -rf cdk.out test-results node_modules coverage dist",
-    "cdk": "dotenv -- npm run test && dotenv -- npx cdk deploy --app 'npx ts-node bin/titanic.ts' --require-approval never && npm run deploy:event && npm run deploy:logs:delayed",
-    "cdk:synth": "dotenv -- npx cdk synth --app 'npx ts-node bin/titanic.ts'",
-    "cdk:params": "dotenv -- npx cdk synth --app 'npx ts-node bin/titanic-params.ts'",
+    "cdk": "npm run test && npx cdk deploy --app 'npx ts-node bin/titanic.ts' --require-approval never && npm run deploy:event && npm run deploy:logs:delayed",
+    "cdk:synth": "npx cdk synth --app 'npx ts-node bin/titanic.ts'",
+    "cdk:params": "npx cdk synth --app 'npx ts-node bin/titanic-params.ts'",
     "lint": "eslint . --ext .ts --fix",
-    "deploy:event": "dotenv -- ./bin/send-event.sh",
+    "deploy:event": "dotenv -- ./bin/send-event.sh quilt-bake",
     "deploy:logs": "dotenv -- ./bin/monitor-logs.sh",
     "deploy:logs:delayed": "sleep 20 && npm run deploy:logs recent 1",
     "deploy:outputs": "dotenv -- aws cloudformation describe-stacks --stack-name TitanicStack --query 'Stacks[0].Outputs'",
     "deploy:release": "./bin/release.sh",
-    "destroy": "npm run destroy:buckets && dotenv -- npx cdk destroy --app 'npx ts-node bin/titanic.ts' --force",
+    "destroy": "npm run destroy:buckets && npx cdk destroy --app 'npx ts-node bin/titanic.ts' --force",
     "destroy:buckets": "dotenv -- ./bin/cleanup-buckets.sh",
     "destroy:buckets:contents": "dotenv -- ./bin/cleanup-buckets.sh --contents-only",
     "test": "jest --no-coverage",
@@ -24,6 +24,9 @@
     "test:fails": "jest --onlyFailures --verbose",
     "test:watch": "jest --watch --verbose",
     "test:debug": "jest --verbose --no-coverage --runInBand --detectOpenHandles",
+    "s3tables:create": "npx ts-node lib/tables/create-s3-tables.ts all",
+    "s3tables:namespace": "npx ts-node lib/tables/create-s3-tables.ts namespace",
+    "s3tables:tables": "npx ts-node lib/tables/create-s3-tables.ts tables",
     "tag:release": "git tag v$(node -p \"require('./package.json').version\") && git push origin v$(node -p \"require('./package.json').version\")",
     "tag:prerelease": "git tag v$(node -p \"require('./package.json').version\")-rc.$(date +%Y%m%d.%H%M) && git push origin v$(node -p \"require('./package.json').version\")-rc.$(date +%Y%m%d.%H%M"
   },
@@ -50,6 +53,6 @@
     "@aws-sdk/client-glue": "^3.787.0",
     "aws-cdk-lib": "2.206.0",
     "constructs": "^10.0.0",
-    "dotenv": "^17.0.0"
+    "dotenv": "^17.2.0"
   }
 }

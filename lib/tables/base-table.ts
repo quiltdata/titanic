@@ -65,7 +65,8 @@ export abstract class BaseTable {
     private generateS3TableCreateQuery(): string {
         const columnDefs = this.generateColumnList("${name} ${type}");
         const partitioning = this.getPartitioningClause();
-        return `CREATE TABLE ${this.tableName} (${columnDefs}) ${partitioning}`;
+        const fullTableName = this.config.getNamespacedTableName(this.tableName);
+        return `CREATE TABLE IF NOT EXISTS ${fullTableName} (${columnDefs}) ${partitioning} TBLPROPERTIES ('table_type' = 'ICEBERG', 'format' = 'PARQUET')`;
     }
 
     /**
@@ -79,13 +80,7 @@ export abstract class BaseTable {
             throw new Error('Target bucket is required for Glue table creation');
         }
 
-        return `CREATE TABLE ${this.tableName} WITH (
-            format = 'PARQUET',
-            write_compression = 'SNAPPY',
-            location = 's3://${targetBucket}/iceberg_catalog/${this.tableName}',
-            table_type = 'ICEBERG',
-            is_external = false
-        ) AS SELECT ${selectColumns} WHERE 1=0`;
+        return `CREATE TABLE ${this.tableName} WITH (format = 'PARQUET', write_compression = 'SNAPPY', location = 's3://${targetBucket}/iceberg_catalog/${this.tableName}', table_type = 'ICEBERG', is_external = false) AS SELECT ${selectColumns} WHERE 1=0`;
     }
 
     /**
@@ -101,7 +96,8 @@ export abstract class BaseTable {
                 }
                 return this.generateInsertQuery(packagesView || '', objectsView || '');
             case 'drop':
-                return `DROP TABLE IF EXISTS ${this.tableName}`;
+                const tableNameForDrop = this.getTargetTableName();
+                return `DROP TABLE IF EXISTS ${tableNameForDrop}`;
             default:
                 throw new Error(`Unsupported query type: ${type}`);
         }
@@ -123,6 +119,17 @@ export abstract class BaseTable {
             }
             throw err;
         }
+    }
+
+    /**
+     * Get the target table name to use in SQL queries
+     * Returns fully-qualified name for S3 Tables mode, simple name for Glue mode
+     */
+    public getTargetTableName(): string {
+        if (this.config.useS3Table) {
+            return this.config.getNamespacedTableName(this.tableName);
+        }
+        return this.tableName;
     }
 
 }

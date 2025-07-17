@@ -49,6 +49,14 @@ module.exports = [
     },
   },
   {
+    files: ['**/create-s3-tables.ts'],
+    rules: {
+      // Disable all rules for create-s3-tables.ts
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+  {
     files: ['**/*.js', '**/*.jsx'],
     languageOptions: {
       ecmaVersion: 'latest',

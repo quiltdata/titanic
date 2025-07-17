@@ -30,25 +30,27 @@ describe("merge-tables lambda", () => {
 
     beforeEach(() => {
         process.env.NODE_ENV = "test";
-        process.env.GLUE_DATABASE_NAME = "test-db";
+        process.env.ATHENA_DATABASE_NAME = "test-db";
         process.env.S3TABLE_DATABASE_NAME = "test-db";
-        process.env.GLUE_TABLES_BUCKET_ARN = "arn:aws:s3:::test-bucket";
-        process.env.S3_TABLES_BUCKET_ARN = "arn:aws:s3tables:us-east-1:123456789012:bucket/test-tables-bucket";
-        process.env.ATHENA_RESULTS_BUCKET_ARN = "arn:aws:s3:::test-bucket";
-        process.env.LAMBDA_TIMEOUT = "5000";
+        process.env.GLUE_TABLES_BUCKET_NAME = "test-bucket";
+        process.env.S3_TABLES_BUCKET_NAME = "test-tables-bucket";
+        process.env.AWS_ACCOUNT_ID = "123456789012";
+        process.env.CDK_DEFAULT_REGION = "us-east-1";
         delete process.env.USE_S3_TABLE; // Default to Glue mode
 
         // Setup test config and AthenaTest
         testConfig = Config.createTestInstance({
-            glueDatabaseName: "test-db",
-            glueTablesBucketArn: "arn:aws:s3:::test-bucket"
+            athenaDatabaseName: "test-db",
+            glueTablesBucketName: "test-bucket",
+            awsAccountId: "123456789012",
+            aws_region: "us-east-1"
         });
         athenaTest = AthenaTest.createTestInstance(testConfig);
     });
 
     describe("Mode-specific behavior", () => {
         it("should return skip message if environment variables are missing", async () => {
-            delete process.env.GLUE_DATABASE_NAME;
+            delete process.env.ATHENA_DATABASE_NAME;
             delete process.env.S3TABLE_DATABASE_NAME;
             
             athenaTest.mockTablesInDatabase([]);
@@ -63,17 +65,6 @@ describe("merge-tables lambda", () => {
                 totalQueries: 0,
             });
         });
-    });
-
-    it("should respect custom timeout configuration", async () => {
-        process.env.LAMBDA_TIMEOUT = "10000";
-
-        athenaTest.mockTablesInDatabase([]);
-        athenaTest.mockQueryResult(true);
-
-        const mockEvent = createEventBridgeEvent();
-        const result = await handler(mockEvent, {} as Context);
-        expect(result).toBeDefined();
     });
 
     describe("error handling scenarios", () => {
