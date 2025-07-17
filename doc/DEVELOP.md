@@ -34,9 +34,9 @@ npm run deploy:outputs     # Show stack outputs
 
 **Build and upload Lambda assets** (required before releases):
 ```bash
-npm run deploy:upload-dry-run        # Show what would be uploaded (preview)
-npm run deploy:upload                # Build and upload assets to public bucket (includes CDK synthesis)
-npm run deploy:upload-verify         # Check if assets exist in bucket
+npm run deploy:upload -- --dry-run       # Show what would be uploaded (preview)
+npm run deploy:upload                    # Build and upload assets to public bucket (includes CDK synthesis)
+npm run deploy:upload --  --verify-only  # Check if assets exist in bucket
 ```
 
 ## 4. Testing Release
@@ -107,13 +107,24 @@ The AWS CDK stack defines all cloud resources, including the Lambda function, IA
 The external deployment process enables packaging and distributing the Titanic application as a standalone deployment package for use outside the main repository context.
 
 #### Asset Building and Upload Process
+
+```bash
+npm run deploy:upload
+npm run deploy:verify-assets
+```
+
 - [`upload-assets.sh`](../bin/upload-assets.sh) runs CDK synthesis to compile TypeScript Lambda code into bundled JavaScript
 - Uploads the resulting ZIP file to a public S3 bucket
 - Verifies cross-account accessibility for external CloudFormation deployments
 - Separates build process from deployment, eliminating need for full development environment
 
 #### Release Package Generation
-- [`release.sh`](../bin/release.sh) generates complete standalone deployment package
+
+```bash
+npm run deploy:release
+```
+
+- [`release.sh`](../bin/release.sh) generates complete standalone deployment package in `dist`
 - Uses [`titanic-external.ts`](../bin/titanic-external.ts) to create CloudFormation template with configurable parameters
 - Includes CloudFormation template, deployment scripts, configuration examples, and documentation
 - Creates compressed archives for GitHub releases distribution

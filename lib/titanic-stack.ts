@@ -77,7 +77,20 @@ export class TitanicStack extends cdk.Stack {
                 tableBucketName: config.generateS3TablesBucketName(),
             });
             s3TablesBucketName = s3TablesBucket.tableBucketName;
-            assetsBucketName = config.generateAssetsBucketName();
+            // Create an assets bucket for deployment assets and Lambda code
+            const assetsBucket = new s3.Bucket(this, "TitanicAssetsBucket", {
+                bucketName: config.generateAssetsBucketName(),
+                removalPolicy: cdk.RemovalPolicy.DESTROY,
+                autoDeleteObjects: true,
+                publicReadAccess: true, // Make bucket objects publicly readable
+                blockPublicAccess: new s3.BlockPublicAccess({
+                    blockPublicAcls: false,
+                    blockPublicPolicy: false,
+                    ignorePublicAcls: false,
+                    restrictPublicBuckets: false,
+                }), // Allow completely open public access
+            });
+            assetsBucketName = assetsBucket.bucketName;
         }
 
         // Create Lambda environment configuration

@@ -261,8 +261,8 @@ describe("TitanicStack", () => {
         });
 
         it("should create S3 TableBucket in addition to regular S3 bucket", () => {
-            // Regular S3 bucket for Glue tables
-            template.resourceCountIs("AWS::S3::Bucket", 1);
+            // Regular S3 buckets: one for Glue tables and one for assets
+            template.resourceCountIs("AWS::S3::Bucket", 2);
             // S3 Tables bucket created for S3 Tables mode
             template.hasResourceProperties("AWS::S3Tables::TableBucket", {
                 TableBucketName: {
