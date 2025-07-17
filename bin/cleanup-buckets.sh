@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Cleanup Titanic buckets with proper cleanup options
-# This script can delete both S3 and S3 Tables buckets, with options for content-only or full deletion
+# This script can delete S3 and S3 Tables buckets, with options for content-only or full deletion
+# By default, only cleans up S3 Tables and assets buckets - use --destroy-glue-tables to also clean glue tables
 
 set -e
 
@@ -13,11 +14,10 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Default values
-DEFAULT_REGION="us-east-2"
-REGION="${CDK_DEFAULT_REGION:-$DEFAULT_REGION}"
-ACCOUNT="${CDK_DEFAULT_ACCOUNT}"
 CONTENTS_ONLY=false
 CHECK_ONLY=false
+INCLUDE_GLUE_TABLES=false
+LIST_ONLY=false
 
 # Function to show usage
 show_usage() {
@@ -26,17 +26,20 @@ show_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo
     echo "Options:"
-    echo "  --contents-only    Delete only bucket contents, keep the buckets"
-    echo "  --check-only       Only check if S3 Tables bucket is fully deleted"
-    echo "  --help            Show this help message"
+    echo "  --contents-only         Delete only bucket contents, keep the buckets"
+    echo "  --dry-run               Only check if S3 Tables bucket is fully deleted"
+    echo "  --list-only             List bucket contents without deleting anything"
+    echo "  --destroy-glue-tables   Also clean up the glue tables bucket (default: skip)"
+    echo "  --help                  Show this help message"
     echo
-    echo "Environment Variables:"
-    echo "  CDK_DEFAULT_ACCOUNT    AWS Account ID (required)"
-    echo "  CDK_DEFAULT_REGION     AWS Region (default: us-east-2)"
+    echo "Configuration:"
+    echo "  Uses deployment-config.json for bucket names and AWS configuration"
+    echo "  Run 'npm run cdk:synth' first to generate deployment-config.json"
     echo
-    echo "This script cleans up both:"
-    echo "  - Regular S3 bucket (titanic-glue-tables-*)"
+    echo "By default, this script cleans up:"
     echo "  - S3 Tables bucket (titanic-s3-tables-*)"
+    echo "  - Assets bucket (titanic-assets-*)"
+    echo "  - Skips glue tables bucket (use --destroy-glue-tables to destroy them too)"
 }
 
 # Parse command line arguments
@@ -46,8 +49,16 @@ while [[ $# -gt 0 ]]; do
             CONTENTS_ONLY=true
             shift
             ;;
-        --check-only)
+        --dry-run)
             CHECK_ONLY=true
+            shift
+            ;;
+        --list-only)
+            LIST_ONLY=true
+            shift
+            ;;
+        --destroy-glue-tables)
+            INCLUDE_GLUE_TABLES=true
             shift
             ;;
         --help)
@@ -64,27 +75,51 @@ done
 
 echo -e "${BLUE}🗑️  Titanic Bucket Cleanup Script${NC}"
 
-# Validate required environment variables
-if [ -z "$ACCOUNT" ]; then
-    echo -e "${RED}❌ Error: CDK_DEFAULT_ACCOUNT environment variable is not set${NC}"
-    echo "Please set CDK_DEFAULT_ACCOUNT to your AWS account ID"
-    echo "Example: export CDK_DEFAULT_ACCOUNT=123456789012"
+# Check for deployment-config.json
+if [ ! -f "deployment-config.json" ]; then
+    echo -e "${RED}❌ Error: deployment-config.json not found${NC}"
+    echo "Please run 'npm run cdk:synth' first to generate deployment-config.json"
     exit 1
 fi
 
-# Construct bucket names and ARNs
-S3_BUCKET_NAME="titanic-glue-tables-${ACCOUNT}-${REGION}"
-S3_TABLES_BUCKET_NAME="titanic-s3-tables-${ACCOUNT}-${REGION}"
-S3_TABLES_BUCKET_ARN="arn:aws:s3tables:${REGION}:${ACCOUNT}:bucket/${S3_TABLES_BUCKET_NAME}"
+# Load configuration from deployment-config.json
+ACCOUNT=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).account")
+REGION=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).region")
+GLUE_TABLES_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.glueTablesBucket || ''")
+S3_TABLES_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.s3TablesBucket || ''")
+ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.assetsBucket || ''")
+
+# Validate required configuration
+if [ -z "$ACCOUNT" ] || [ -z "$REGION" ]; then
+    echo -e "${RED}❌ Error: Invalid deployment-config.json - missing account or region${NC}"
+    exit 1
+fi
+
+# Generate bucket names if not provided in config
+if [ -z "$GLUE_TABLES_BUCKET" ]; then
+    GLUE_TABLES_BUCKET="titanic-glue-tables-${ACCOUNT}-${REGION}"
+fi
+if [ -z "$S3_TABLES_BUCKET" ]; then
+    S3_TABLES_BUCKET="titanic-s3-tables-${ACCOUNT}-${REGION}"
+fi
+if [ -z "$ASSETS_BUCKET" ]; then
+    ASSETS_BUCKET="titanic-assets-${ACCOUNT}-${REGION}"
+fi
+
+# Construct S3 Tables bucket ARN
+S3_TABLES_BUCKET_ARN="arn:aws:s3tables:${REGION}:${ACCOUNT}:bucket/${S3_TABLES_BUCKET}"
 
 echo -e "${BLUE}📋 Configuration:${NC}"
 echo "  Account: ${ACCOUNT}"
 echo "  Region: ${REGION}"
-echo "  S3 Bucket: ${S3_BUCKET_NAME}"
-echo "  S3 Tables Bucket: ${S3_TABLES_BUCKET_NAME}"
+echo "  Glue Tables Bucket: ${GLUE_TABLES_BUCKET} $([ "$INCLUDE_GLUE_TABLES" = true ] && echo "(will be cleaned)" || echo "(skipped)")"
+echo "  S3 Tables Bucket: ${S3_TABLES_BUCKET}"
+echo "  Assets Bucket: ${ASSETS_BUCKET}"
 echo "  S3 Tables ARN: ${S3_TABLES_BUCKET_ARN}"
 if [ "$CHECK_ONLY" = true ]; then
-    echo "  Mode: Check-only (verify S3 Tables bucket deletion)"
+    echo "  Mode: dry-run (verify S3 Tables bucket deletion)"
+elif [ "$LIST_ONLY" = true ]; then
+    echo "  Mode: List only (show bucket contents without deleting)"
 elif [ "$CONTENTS_ONLY" = true ]; then
     echo "  Mode: Contents only (buckets will be preserved)"
 else
@@ -130,7 +165,7 @@ check_s3_tables_bucket_deletion() {
         return 0
     else
         echo -e "${YELLOW}⚠️  S3 Tables bucket still exists: $bucket_name${NC}"
-        echo -e "${BLUE}ℹ️  Use --check-only to monitor deletion status${NC}"
+        echo -e "${BLUE}ℹ️  Use --dry-run to monitor deletion status${NC}"
         return 1
     fi
 }
@@ -184,6 +219,35 @@ cleanup_s3_bucket() {
     fi
 }
 
+# Function to list S3 Tables bucket contents for debugging
+list_s3_tables_bucket_contents() {
+    local bucket_arn="$1"
+    local bucket_name="$2"
+    
+    echo -e "${BLUE}🔍 Detailed S3 Tables bucket contents for: $bucket_name${NC}"
+    
+    # Get bucket info
+    echo -e "${BLUE}📊 Bucket Information:${NC}"
+    aws s3tables get-table-bucket --region "$REGION" --table-bucket-arn "$bucket_arn" --output table 2>/dev/null || echo "  Failed to get bucket info"
+    
+    # List all namespaces with detailed info
+    echo -e "${BLUE}📂 Namespaces:${NC}"
+    aws s3tables list-namespaces --region "$REGION" --table-bucket-arn "$bucket_arn" --output table 2>/dev/null || echo "  Failed to list namespaces"
+    
+    # For each namespace, list tables
+    local namespaces=$(aws s3tables list-namespaces --region "$REGION" --table-bucket-arn "$bucket_arn" --query 'namespaces[].namespace' --output text 2>/dev/null || echo "")
+    if [ -n "$namespaces" ]; then
+        for namespace in $namespaces; do
+            echo -e "${BLUE}📋 Tables in namespace '$namespace':${NC}"
+            aws s3tables list-tables --region "$REGION" --table-bucket-arn "$bucket_arn" --namespace "$namespace" --output table 2>/dev/null || echo "  Failed to list tables in $namespace"
+        done
+    fi
+    
+    # Try to check if there are any underlying S3 objects (S3 Tables may have hidden metadata)
+    echo -e "${BLUE}🪣 Checking underlying S3 objects (if accessible):${NC}"
+    aws s3 ls "s3://$bucket_name" --recursive --region "$REGION" 2>/dev/null || echo "  No direct S3 access or bucket empty"
+}
+
 # Function to clean up S3 Tables bucket
 cleanup_s3_tables_bucket() {
     local bucket_arn="$1"
@@ -201,7 +265,7 @@ cleanup_s3_tables_bucket() {
     
     # List all namespaces in the bucket
     echo -e "${BLUE}📂 Listing namespaces in the S3 Tables bucket...${NC}"
-    NAMESPACES=$(aws s3tables list-namespaces --region "$REGION" --table-bucket-arn "$bucket_arn" --query 'namespaces[].name' --output text 2>/dev/null || echo "")
+    NAMESPACES=$(aws s3tables list-namespaces --region "$REGION" --table-bucket-arn "$bucket_arn" --query 'namespaces[].namespace' --output text 2>/dev/null || echo "")
     
     if [ -n "$NAMESPACES" ]; then
         echo -e "${YELLOW}📝 Found namespaces: $NAMESPACES${NC}"
@@ -243,6 +307,20 @@ cleanup_s3_tables_bucket() {
         echo -e "${GREEN}✅ No namespaces found in the S3 Tables bucket${NC}"
     fi
     
+    # Additional cleanup attempts for stubborn buckets
+    echo -e "${BLUE}🧹 Performing additional cleanup checks...${NC}"
+    
+    # Force cleanup any remaining namespaces that might not have been listed
+    echo -e "${BLUE}🔍 Double-checking for any remaining namespaces...${NC}"
+    local remaining_namespaces=$(aws s3tables list-namespaces --region "$REGION" --table-bucket-arn "$bucket_arn" --query 'namespaces[].namespace' --output text 2>/dev/null || echo "")
+    if [ -n "$remaining_namespaces" ]; then
+        echo -e "${YELLOW}⚠️  Found remaining namespaces after cleanup: $remaining_namespaces${NC}"
+        for namespace in $remaining_namespaces; do
+            echo -e "${BLUE}🗑️  Force deleting remaining namespace: $namespace${NC}"
+            aws s3tables delete-namespace --region "$REGION" --table-bucket-arn "$bucket_arn" --namespace "$namespace" || echo "  Failed to delete $namespace"
+        done
+    fi
+    
     if [ "$CONTENTS_ONLY" = false ]; then
         # Finally, delete the bucket
         echo -e "${BLUE}🗑️  Deleting S3 Tables bucket: $bucket_name${NC}"
@@ -253,6 +331,8 @@ cleanup_s3_tables_bucket() {
             wait_for_s3_tables_bucket_deletion "$bucket_arn" "$bucket_name"
         else
             echo -e "${RED}❌ Failed to delete S3 Tables bucket: $bucket_name${NC}"
+            echo -e "${BLUE}🔍 Listing bucket contents for debugging...${NC}"
+            list_s3_tables_bucket_contents "$bucket_arn" "$bucket_name"
             return 1
         fi
     fi
@@ -262,26 +342,81 @@ cleanup_s3_tables_bucket() {
 echo -e "${BLUE}🚀 Starting cleanup process...${NC}"
 echo
 
-# Handle check-only mode
+# Handle dry-run mode
 if [ "$CHECK_ONLY" = true ]; then
-    echo -e "${BLUE}🔍 Check-only mode: Verifying S3 Tables bucket deletion status${NC}"
-    check_s3_tables_bucket_deletion "$S3_TABLES_BUCKET_ARN" "$S3_TABLES_BUCKET_NAME"
+    echo -e "${BLUE}🔍 dry-run mode: Verifying S3 Tables bucket deletion status${NC}"
+    check_s3_tables_bucket_deletion "$S3_TABLES_BUCKET_ARN" "$S3_TABLES_BUCKET"
     exit $?
 fi
 
-# Clean up regular S3 bucket
-cleanup_s3_bucket "$S3_BUCKET_NAME"
-echo
+# Handle list-only mode
+if [ "$LIST_ONLY" = true ]; then
+    echo -e "${BLUE}📋 List-only mode: Showing bucket contents${NC}"
+    
+    if [ "$INCLUDE_GLUE_TABLES" = true ] && [ -n "$GLUE_TABLES_BUCKET" ]; then
+        echo -e "${BLUE}🧹 Listing glue tables bucket contents...${NC}"
+        if aws s3api head-bucket --bucket "$GLUE_TABLES_BUCKET" --region "$REGION" >/dev/null 2>&1; then
+            echo -e "${GREEN}✅ Glue tables bucket found: $GLUE_TABLES_BUCKET${NC}"
+            aws s3 ls "s3://$GLUE_TABLES_BUCKET" --recursive --region "$REGION" --human-readable --summarize 2>/dev/null || echo "  Bucket is empty or not accessible"
+        else
+            echo -e "${YELLOW}⚠️  Glue tables bucket not found: $GLUE_TABLES_BUCKET${NC}"
+        fi
+        echo
+    fi
+    
+    if [ -n "$ASSETS_BUCKET" ]; then
+        echo -e "${BLUE}🧹 Listing assets bucket contents...${NC}"
+        if aws s3api head-bucket --bucket "$ASSETS_BUCKET" --region "$REGION" >/dev/null 2>&1; then
+            echo -e "${GREEN}✅ Assets bucket found: $ASSETS_BUCKET${NC}"
+            aws s3 ls "s3://$ASSETS_BUCKET" --recursive --region "$REGION" --human-readable --summarize 2>/dev/null || echo "  Bucket is empty or not accessible"
+        else
+            echo -e "${YELLOW}⚠️  Assets bucket not found: $ASSETS_BUCKET${NC}"
+        fi
+        echo
+    fi
+    
+    if [ -n "$S3_TABLES_BUCKET" ]; then
+        echo -e "${BLUE}🧹 Listing S3 Tables bucket contents...${NC}"
+        list_s3_tables_bucket_contents "$S3_TABLES_BUCKET_ARN" "$S3_TABLES_BUCKET"
+        echo
+    fi
+    
+    echo -e "${GREEN}🎉 Bucket listing completed!${NC}"
+    exit 0
+fi
+
+# Clean up buckets based on flags
+if [ "$INCLUDE_GLUE_TABLES" = true ]; then
+    echo -e "${BLUE}🧹 Cleaning up glue tables bucket...${NC}"
+    cleanup_s3_bucket "$GLUE_TABLES_BUCKET"
+    echo
+fi
+
+# Clean up assets bucket
+if [ -n "$ASSETS_BUCKET" ]; then
+    echo -e "${BLUE}🧹 Cleaning up assets bucket...${NC}"
+    cleanup_s3_bucket "$ASSETS_BUCKET"
+    echo
+fi
 
 # Clean up S3 Tables bucket
-cleanup_s3_tables_bucket "$S3_TABLES_BUCKET_ARN" "$S3_TABLES_BUCKET_NAME"
-echo
+if [ -n "$S3_TABLES_BUCKET" ]; then
+    echo -e "${BLUE}🧹 Cleaning up S3 Tables bucket...${NC}"
+    cleanup_s3_tables_bucket "$S3_TABLES_BUCKET_ARN" "$S3_TABLES_BUCKET"
+    echo
+fi
 
 # Summary
 if [ "$CONTENTS_ONLY" = true ]; then
     echo -e "${GREEN}🎉 Bucket contents cleanup completed successfully!${NC}"
-    echo -e "${BLUE}📝 Both buckets have been emptied but preserved for future use.${NC}"
+    echo -e "${BLUE}📝 Buckets have been emptied but preserved for future use.${NC}"
+    if [ "$INCLUDE_GLUE_TABLES" = false ]; then
+        echo -e "${BLUE}💡 Note: Glue tables bucket was skipped. Use --destroy-glue-tables to clean it.${NC}"
+    fi
 else
     echo -e "${GREEN}🎉 Full cleanup completed successfully!${NC}"
-    echo -e "${BLUE}📝 Both buckets and their contents have been completely removed.${NC}"
+    echo -e "${BLUE}📝 Buckets and their contents have been completely removed.${NC}"
+    if [ "$INCLUDE_GLUE_TABLES" = false ]; then
+        echo -e "${BLUE}💡 Note: Glue tables bucket was skipped. Use --destroy-glue-tables to clean it.${NC}"
+    fi
 fi

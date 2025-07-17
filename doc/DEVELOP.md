@@ -109,14 +109,16 @@ The external deployment process enables packaging and distributing the Titanic a
 #### Asset Building and Upload Process
 
 ```bash
+npm run cdk
 npm run deploy:upload
 npm run deploy:verify-assets
 ```
 
+- The default (local) stack creates a publicly readable assets bucket
 - [`upload-assets.sh`](../bin/upload-assets.sh) runs CDK synthesis to compile TypeScript Lambda code into bundled JavaScript
-- Uploads the resulting ZIP file to a public S3 bucket
+- Uploads the resulting ZIP file to that public S3 bucket
 - Verifies cross-account accessibility for external CloudFormation deployments
-- Separates build process from deployment, eliminating need for full development environment
+- Doing this step manually avoids the need for AWS credentials in the GitHub action
 
 #### Release Package Generation
 
