@@ -172,6 +172,14 @@ export class Config {
   }
 
   /**
+   * Generate standardized assets bucket name
+   * Used by CDK stack to ensure consistency with runtime config
+   */
+  public static generateAssetsBucketName(account: string, region: string): string {
+    return `titanic-assets-${account}-${region}`;
+  }
+
+  /**
    * Get the namespace for S3 tables (fully-qualified with prefix)
    */
   public getNamespace(): string {
@@ -206,11 +214,38 @@ export class Config {
   }
 
   /**
+   * Generate assets bucket name for this config instance  
+   */
+  public generateAssetsBucketName(): string {
+    return Config.generateAssetsBucketName(this.awsAccountId, this.aws_region);
+  }
+
+  /**
    * Generate S3 Tables bucket ARN for this config instance  
    */
   public generateS3TablesBucketArn(): string {
     const bucketName = this.generateS3TablesBucketName();
     return `arn:aws:s3tables:${this.aws_region}:${this.awsAccountId}:bucket/${bucketName}`;
+  }
+
+  /**
+   * Generate deployment configuration for the Titanic project.
+   */
+  public generateDeploymentConfig(): object {
+    return {
+      stackName: "TitanicStack",
+      account: this.awsAccountId,
+      region: this.aws_region,
+      athenaDatabaseName: this.athenaDatabaseName,
+      quiltReadPolicyArn: this.quiltReadPolicyArn,
+      useS3Table: this.useS3Table,
+      buckets: {
+        glueTablesBucket: this.glueTablesBucketName,
+        s3TablesBucket: this.s3TablesBucketName,
+        assetsBucket: Config.generateAssetsBucketName(this.awsAccountId, this.aws_region),
+      },
+      generatedAt: new Date().toISOString(),
+    };
   }
 }
 

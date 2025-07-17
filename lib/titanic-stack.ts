@@ -15,19 +15,22 @@ export interface TitanicStackProps extends cdk.StackProps {
     athenaDatabaseName?: string;
     quiltReadPolicyArn?: string;
     useS3Table?: boolean;
-    useCloudFormationParameters?: boolean;  // Flag to enable parameter mode
-    usePreBuiltAssets?: boolean;  // Flag to use pre-built assets from public bucket
+    externalDeployment?: boolean;  // Flag for third-party deployments (uses parameters and pre-built assets)
 }
 
 interface TitanicStackParameters {
     athenaDatabaseName: cdk.CfnParameter;
     quiltReadPolicyArn: cdk.CfnParameter;
     useS3Table: cdk.CfnParameter;
+    publicAssetsBucketName: cdk.CfnParameter;  // For external deployments
+    s3TablesBucketName: cdk.CfnParameter;      // For external deployments
 }
 
 export class TitanicStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props: TitanicStackProps = {}) {
         super(scope, id, props);
+
+        const isExternalDeployment = props.externalDeployment ?? false;
 
         // Create config instance that knows about account and region
         const configProps = this.resolveConfiguration(props);
@@ -37,31 +40,45 @@ export class TitanicStack extends cdk.Stack {
             account: this.account,
             region: this.region,
             athenaDatabaseName: configProps.athenaDatabaseName,
-            useS3Table: configProps.useS3Table
+            useS3Table: configProps.useS3Table,
+            externalDeployment: isExternalDeployment
         });
 
         // Get standardized names using Config class
         const s3DatabaseName = config.s3TableDatabaseName;
 
-        // Always create both buckets for maximum flexibility
+        // For external deployments, we create minimal infrastructure
+        // Third-party users should NOT create public or S3 table buckets
+        let glueTablesBucket: s3.Bucket;
+        let s3TablesBucketName: string;
+        let assetsBucketName: string;
 
-        // Regular S3 bucket for Athena results and Glue tables
-        const glueTablesBucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
-            bucketName: config.generateGlueTablesBucketName(),
-            removalPolicy: cdk.RemovalPolicy.DESTROY,
-            autoDeleteObjects: true,
-        });
+        if (isExternalDeployment) {
+            // External deployment: only create Glue tables bucket for Athena results
+            glueTablesBucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
+                bucketName: config.generateGlueTablesBucketName(),
+                removalPolicy: cdk.RemovalPolicy.DESTROY,
+                autoDeleteObjects: true,
+            });
 
-        // S3 Tables bucket for S3 Tables format
-        const s3TablesBucketName = config.generateS3TablesBucketName();
-        const s3TablesBucket = new s3tables.TableBucket(this, "TitanicS3TablesBucket", {
-            tableBucketName: s3TablesBucketName,
-        });
-
-        // Reference to pre-existing public assets bucket controlled by Quilt
-        // This bucket contains Lambda code and other deployment assets
-        const assetsBucketName = "quilt-titanic-assets";
-        const assetsBucket = s3.Bucket.fromBucketName(this, "TitanicAssetsBucket", assetsBucketName);
+            // Reference external buckets by name (these should exist already)
+            s3TablesBucketName = configProps.s3TablesBucketName || config.generateS3TablesBucketName();
+            assetsBucketName = configProps.publicAssetsBucketName || config.generateAssetsBucketName();
+            
+        } else {
+            // Internal deployment: create all buckets
+            glueTablesBucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
+                bucketName: config.generateGlueTablesBucketName(),
+                removalPolicy: cdk.RemovalPolicy.DESTROY,
+                autoDeleteObjects: true,
+            });
+            // Create an S3 Tables bucket for internal use
+            const s3TablesBucket = new s3tables.TableBucket(this, "TitanicS3TablesBucket", {
+                tableBucketName: config.generateS3TablesBucketName(),
+            });
+            s3TablesBucketName = s3TablesBucket.tableBucketName;
+            assetsBucketName = config.generateAssetsBucketName();
+        }
 
         // Create Lambda environment configuration
         const lambdaEnvironment = {
@@ -86,15 +103,14 @@ export class TitanicStack extends cdk.Stack {
         };
 
         // Create merge tables Lambda - use different approaches based on deployment mode
-        const usePreBuiltAssets = props.usePreBuiltAssets ?? false;
-        const mergeLambda = usePreBuiltAssets 
+        const mergeLambda = isExternalDeployment 
             ? new lambda.Function(this, "TitanicMergeTables", {
                 runtime: Runtime.NODEJS_18_X,
                 handler: "index.handler",
                 timeout: cdk.Duration.seconds(900),
                 code: lambda.Code.fromBucket(
-                    assetsBucket,
-                    "lambda/merge-tables.zip" // Always uses latest version
+                    s3.Bucket.fromBucketName(this, "PublicAssetsBucket", assetsBucketName),
+                    "lambda/merge-tables.zip" // Always uses latest version from public bucket
                 ),
                 environment: lambdaEnvironment,
             })
@@ -189,8 +205,8 @@ export class TitanicStack extends cdk.Stack {
                     "s3tables:ListTables",
                 ],
                 resources: [
-                    s3TablesBucket.tableBucketArn,
-                    `${s3TablesBucket.tableBucketArn}/*`,
+                    `arn:aws:s3tables:${this.region}:${this.account}:bucket/${s3TablesBucketName}`,
+                    `arn:aws:s3tables:${this.region}:${this.account}:bucket/${s3TablesBucketName}/*`,
                 ],
             }),
         );
@@ -199,7 +215,7 @@ export class TitanicStack extends cdk.Stack {
         mergeLambda.addToRolePolicy(
             new iam.PolicyStatement({
                 actions: ["s3:GetBucketLocation"],
-                resources: [s3TablesBucket.tableBucketArn],
+                resources: [`arn:aws:s3:::${s3TablesBucketName}`],
             }),
         );
 
@@ -235,12 +251,16 @@ export class TitanicStack extends cdk.Stack {
 
         new cdk.CfnOutput(this, "AssetsBucket", {
             value: assetsBucketName,
-            description: "Quilt-controlled public S3 bucket hosting deployment assets and Lambda code"
+            description: isExternalDeployment 
+                ? "S3 bucket hosting pre-built deployment assets and Lambda code (external)"
+                : "S3 bucket hosting deployment assets and Lambda code (local)"
         });
 
         new cdk.CfnOutput(this, "AssetsBucketUrl", {
             value: `https://${assetsBucketName}.s3.amazonaws.com`,
-            description: "Public URL for the assets bucket"
+            description: isExternalDeployment 
+                ? "URL for the external assets bucket with pre-built assets"
+                : "URL for the local assets bucket"
         });
 
         new cdk.CfnOutput(this, "SourceDatabaseName", {
@@ -256,21 +276,23 @@ export class TitanicStack extends cdk.Stack {
     }
 
     private resolveConfiguration(props: TitanicStackProps) {
-        const useParameters = props.useCloudFormationParameters ?? false;
-        if (useParameters) {
+        const isExternalDeployment = props.externalDeployment ?? false;
+        if (isExternalDeployment) {
             const parameters = this.createParameters();
             return {
                 athenaDatabaseName: parameters.athenaDatabaseName.valueAsString,
                 quiltReadPolicyArn: parameters.quiltReadPolicyArn.valueAsString,
                 useS3Table: parameters.useS3Table.valueAsString === "true",
+                s3TablesBucketName: parameters.s3TablesBucketName.valueAsString,
+                publicAssetsBucketName: parameters.publicAssetsBucketName.valueAsString,
             };
         } else {
-            // Validate required props when not using parameters
+            // Validate required props when not using external deployment
             if (!props.athenaDatabaseName) {
-                throw new Error("athenaDatabaseName is required when useCloudFormationParameters is false");
+                throw new Error("athenaDatabaseName is required when externalDeployment is false");
             }
             if (!props.quiltReadPolicyArn) {
-                throw new Error("quiltReadPolicyArn is required when useCloudFormationParameters is false");
+                throw new Error("quiltReadPolicyArn is required when externalDeployment is false");
             }
             
             return {
@@ -300,6 +322,18 @@ export class TitanicStack extends cdk.Stack {
                 description: "Whether to use S3 Tables format (true/false)",
                 default: process.env.USE_S3_TABLE || "false",
                 allowedValues: ["true", "false"],
+            }),
+
+            publicAssetsBucketName: new cdk.CfnParameter(this, "PublicAssetsBucketName", {
+                type: "String",
+                description: "Name of the S3 bucket containing pre-built deployment assets",
+                default: process.env.PUBLIC_ASSETS_BUCKET_NAME || "",
+            }),
+
+            s3TablesBucketName: new cdk.CfnParameter(this, "S3TablesBucketName", {
+                type: "String",
+                description: "Name of the S3 Tables bucket (must exist already)",
+                default: process.env.S3_TABLES_BUCKET_NAME || "",
             }),
         };
     }

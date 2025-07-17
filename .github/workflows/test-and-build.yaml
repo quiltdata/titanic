@@ -44,7 +44,7 @@ jobs:
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
         echo "Building release package version: $VERSION"
-        npm run deploy:release -- --version "$VERSION" --use-prebuilt-assets
+        npm run deploy:release -- --version "$VERSION"
       env:
         CDK_DEFAULT_ACCOUNT: "123456789012"
         CDK_DEFAULT_REGION: "us-east-1"
@@ -67,39 +67,20 @@ jobs:
         path: dist/release-*/
         retention-days: 90
 
-    # Create GitHub Release for tags only
+    # Create GitHub Release for tags onlycd
     - name: Create GitHub Release
       if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ github.ref_name }}
         name: Release ${{ github.ref_name }}
-        body: |
-          ## Titanic Stack Release
-          
-          Standalone deployment package for the Titanic Data Lake Table Merger.
-          
-          ### 📦 Package Contents
-          - CloudFormation template with parameterized deployment
-          - Deployment script with automatic environment loading
-          - Lambda function assets
-          - Configuration templates
-          
-          ### 🚀 Quick Deploy
-          1. Download and extract the release archive
-          2. Copy `env.example` to `.env` and edit with your values
-          3. Run `./deploy.sh`
-          
-          ### 📋 Requirements
-          - AWS CLI configured with deployment permissions
-          - `zip` utility for Lambda packaging
-          
-          Built from commit: ${{ github.sha }}
+        body_path: bin/README.md
         files: |
           dist/artifacts/*.tar.gz
           dist/artifacts/*.zip
         prerelease: ${{ contains(github.ref_name, '-') }}  # Pre-release if tag contains hyphen (e.g., v1.0.0-beta)
         generate_release_notes: true
+        append_body: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -116,9 +97,9 @@ jobs:
           echo "- **GitHub Release**: ✅ Created from tag (${GITHUB_REF_NAME})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Asset Details" >> $GITHUB_STEP_SUMMARY
-          echo "- **Assets Bucket**: \`quilt-titanic-assets\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Assets Bucket**: Generated deterministically based on account/region" >> $GITHUB_STEP_SUMMARY
           echo "- **Lambda Code**: \`lambda/merge-tables.zip\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Verification**: Assets verified in \`release.sh\` before template generation" >> $GITHUB_STEP_SUMMARY
+          echo "- **Asset Management**: Lambda assets are uploaded manually using \`npm run deploy:upload\`" >> $GITHUB_STEP_SUMMARY
         else
           echo "- **Release**: ⏭️ Skipped (only created for version tags)" >> $GITHUB_STEP_SUMMARY
         fi
@@ -128,3 +109,4 @@ jobs:
         echo "- **Branch pushes** → Tests + Linting only" >> $GITHUB_STEP_SUMMARY
         echo "- **Version tags (v*)** → Tests + Linting + Asset Verification + GitHub Release" >> $GITHUB_STEP_SUMMARY
         echo "- **Pre-release tags** → Use hyphen in tag (e.g., v1.0.0-beta)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Asset Upload** → Manual process using \`npm run deploy:upload\` before releasing" >> $GITHUB_STEP_SUMMARY

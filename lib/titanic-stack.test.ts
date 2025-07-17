@@ -11,6 +11,8 @@ const createStackTemplate = (
     return Template.fromStack(stack);
 };
 
+const _createExternalStackTemplate = require('../bin/titanic-external');
+
 const findLambdaPolicy = (template: Template, actionToFind: string) => {
     const policies = template.findResources("AWS::IAM::Policy");
     return Object.values(policies).find((policy: any) =>
@@ -134,7 +136,7 @@ describe("TitanicStack", () => {
         athenaDatabaseName: "test-database-env",
         quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
         useS3Table: false,
-        useCloudFormationParameters: true, // Enable CF parameters for tests that expect them
+        externalDeployment: true, // Enable external deployment for tests that expect CF parameters
     };
 
     describe("Shared functionality (mode-independent)", () => {
@@ -197,8 +199,8 @@ describe("TitanicStack", () => {
         });
 
         it("should create both regular S3 bucket and S3 Tables bucket", () => {
-            template.resourceCountIs("AWS::S3::Bucket", 1); // Regular bucket
-            template.resourceCountIs("AWS::S3Tables::TableBucket", 1); // S3 Tables bucket
+            template.resourceCountIs("AWS::S3::Bucket", 1); // Only Glue tables bucket for external deployment
+            template.resourceCountIs("AWS::S3Tables::TableBucket", 0); // No S3 Tables bucket created for external deployment
         });
 
         it("should not create Glue database (assumes database already exists)", () => {
@@ -259,6 +261,9 @@ describe("TitanicStack", () => {
         });
 
         it("should create S3 TableBucket in addition to regular S3 bucket", () => {
+            // Regular S3 bucket for Glue tables
+            template.resourceCountIs("AWS::S3::Bucket", 1);
+            // S3 Tables bucket created for S3 Tables mode
             template.hasResourceProperties("AWS::S3Tables::TableBucket", {
                 TableBucketName: {
                     "Fn::Join": ["", ["titanic-s3-tables-", { "Ref": "AWS::AccountId" }, "-", { "Ref": "AWS::Region" }]]
@@ -580,7 +585,7 @@ describe("TitanicStack", () => {
                 // useCloudFormationParameters not specified - should default to false
             });
 
-            // Should not have our custom parameters (indicates CF params mode is disabled)
+            // Should not have our custom parameters (indicates CF exterrnal mode is disabled)
             const parameters = template.toJSON().Parameters;
             expect(parameters).not.toHaveProperty("athenaDatabaseName");
             expect(parameters).not.toHaveProperty("QuiltReadPolicyArn");

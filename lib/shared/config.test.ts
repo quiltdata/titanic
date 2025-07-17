@@ -193,4 +193,35 @@ describe('Config', () => {
       expect(Config.sourceBucketFromTableName('my-registry_packages-view')).toBe('my-registry');
     });
   });
+
+  describe('generateDeploymentConfig', () => {
+    it('should generate deployment configuration correctly', () => {
+      const config = Config.createTestInstance({
+        awsAccountId: '123456789012',
+        aws_region: 'us-west-2',
+        athenaDatabaseName: 'test-db',
+        quiltReadPolicyArn: 'arn:aws:iam::123456789012:policy/test-policy',
+        useS3Table: true,
+        glueTablesBucketName: 'glue-bucket',
+        s3TablesBucketName: 's3-bucket',
+      });
+
+      const deploymentConfig = config.generateDeploymentConfig();
+
+      expect(deploymentConfig).toEqual({
+        stackName: 'TitanicStack',
+        account: '123456789012',
+        region: 'us-west-2',
+        athenaDatabaseName: 'test-db',
+        quiltReadPolicyArn: 'arn:aws:iam::123456789012:policy/test-policy',
+        useS3Table: true,
+        buckets: {
+          glueTablesBucket: 'glue-bucket',
+          s3TablesBucket: 's3-bucket',
+          assetsBucket: Config.generateAssetsBucketName('123456789012', 'us-west-2'),
+        },
+        generatedAt: expect.any(String),
+      });
+    });
+  });
 });

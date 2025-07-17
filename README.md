@@ -118,5 +118,5 @@ npm run destroy:buckets:contents    # Delete data only
 
 ## Documentation
 
-- **[doc/DEVELOP.md](doc/DEVELOP.md)** - Architecture, development, and building
+- **[doc/DEVELOP.md](doc/DEVELOP.md)** - Architecture, development, asset management, and building
 - **[doc/SCHEMA.md](doc/SCHEMA.md)** - Table schema design and decisions

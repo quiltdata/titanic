@@ -25,6 +25,7 @@ STACK_NAME="TitanicStack"
 REGION="${AWS_DEFAULT_REGION:-${CDK_DEFAULT_REGION:-us-east-1}}"
 PROFILE=""
 TEMPLATE_FILE="template.json"
+EVENT_FILE="initial-event.json"
 
 # Initialize parameter values (CLI args will override these later)
 # Use environment variables if set, otherwise use defaults
@@ -219,6 +220,17 @@ aws cloudformation describe-stacks \
     --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue,Description]' \
     --output table \
     $AWS_OPTS
+
+# Send initialization event
+echo -e "${YELLOW}Sending initialization event to populate tables...${NC}"
+if [[ -f "$EVENT_FILE" ]]; then
+    echo "Sending event to EventBridge..."
+    EVENT_ENTRY=$(cat "$EVENT_FILE" | jq -c '.[]')
+    aws events put-events --entries "$EVENT_ENTRY" $AWS_OPTS
+    echo -e "${GREEN}✅ Initialization event sent successfully!${NC}"
+else
+    echo -e "${YELLOW}Warning: Failed to find event file: $EVENT_FILE${NC}"
+fi
 
 # Clean up temporary files
 if [[ -f "template-packaged.yaml" ]]; then

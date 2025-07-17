@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 import "dotenv/config";
 import * as cdk from "aws-cdk-lib";
+import * as fs from "fs";
+import * as path from "path";
 import { TitanicStack } from "../lib/titanic-stack";
+import { Config } from "../lib/shared/config";
 
 const app = new cdk.App();
 
@@ -14,15 +17,36 @@ if (!process.env.QUILT_READ_POLICY_ARN) {
 }
 
 const useS3Table = process.env.USE_S3_TABLE === "true";
-new TitanicStack(app, "TitanicStack", {
+
+// Get account and region from environment or CDK context
+const account = process.env.CDK_DEFAULT_ACCOUNT || app.account;
+const region = process.env.CDK_DEFAULT_REGION || app.region || 'us-east-1';
+
+// Create the stack
+const _stack = new TitanicStack(app, "TitanicStack", {
     athenaDatabaseName: process.env.ATHENA_DATABASE_NAME,
     quiltReadPolicyArn: process.env.QUILT_READ_POLICY_ARN,
     useS3Table: useS3Table,
     env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: process.env.CDK_DEFAULT_REGION,
+        account: account,
+        region: region,
     },
 });
+
+// Write deployment configuration for other scripts to use
+const config = new Config({
+  awsAccountId: account,
+  aws_region: region,
+  athenaDatabaseName: process.env.ATHENA_DATABASE_NAME!,
+  quiltReadPolicyArn: process.env.QUILT_READ_POLICY_ARN!,
+  useS3Table: useS3Table,
+});
+
+const deploymentConfig = config.generateDeploymentConfig();
+const configPath = path.join(process.cwd(), 'deployment-config.json');
+fs.writeFileSync(configPath, JSON.stringify(deploymentConfig, null, 2));
+console.log(`📄 Deployment configuration written to: ${configPath}`);
+
 // if (useS3Table), explain how to call npm run create-s3-tables to create the namespace and tables
 if (useS3Table) {
     console.log("⚠️  USE_S3_TABLE is set to true. After deployment, run 'npm run create-s3-tables' to create the S3 Tables namespace and tables.");

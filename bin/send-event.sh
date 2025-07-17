@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # send-event.sh - Script to send Quilt package-revision events
-# Usage: ./send-event.sh [bucket_name]
+# Usage: ./send-event.sh [--write filename] [bucket_name]
 # If bucket_name is provided, it will be included in the event detail
+# If --write is provided, saves event to file instead of sending
 
 set -e
 
@@ -26,6 +27,13 @@ fi
 if [ -z "$CDK_DEFAULT_REGION" ]; then
   echo "Error: CDK_DEFAULT_REGION environment variable is not set." >&2
   exit 1
+fi
+
+# Parse options
+WRITE_FILE=""
+if [[ "$1" == "--write" ]]; then
+    WRITE_FILE="$2"
+    shift 2
 fi
 
 BUCKET_NAME="$1"
@@ -75,6 +83,13 @@ EVENTBRIDGE_JSON=$(jq -n \
     Detail: ($detail | tostring),
     EventBusName: "default"
   }]')
+
+# If writing to file, save and exit
+if [[ -n "$WRITE_FILE" ]]; then
+    echo "$EVENTBRIDGE_JSON" > "$WRITE_FILE"
+    echo "Event written to $WRITE_FILE"
+    exit 0
+fi
 
 echo "Generated event (full format):"
 echo "$EVENT_JSON" | jq '.'
