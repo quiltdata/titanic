@@ -132,6 +132,13 @@ npm run deploy:release
 - Creates compressed archives for GitHub releases distribution
 
 #### End-User Deployment
+
+```bash
+cd dist/release
+cp ../../.env.staging .env
+sh -x deploy.sh
+```
+
 - [`deploy.sh`](../bin/deploy.sh) validates user configuration and deploys CloudFormation stack
 - Sends initialization event to populate catalog tables
 - Supports configuration via environment variables or command-line parameters

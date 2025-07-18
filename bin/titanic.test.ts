@@ -82,6 +82,7 @@ describe("bin/titanic", () => {
         process.env.CDK_DEFAULT_ACCOUNT = "123456789012";
         process.env.CDK_DEFAULT_REGION = "us-east-1";
         process.env.QUILT_READ_POLICY_ARN = "arn:aws:iam::123456789012:policy/test-policy";
+        process.env.ATHENA_DATABASE_NAME = "custom_database_name";
 
         // Import and execute the bin file
         require("../bin/titanic");
