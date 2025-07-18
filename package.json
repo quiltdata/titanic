@@ -10,7 +10,7 @@
     "cdk": "npm run test && npm run deploy:cdk && npm run deploy:event && npm run deploy:logs:delayed",
     "cdk:synth": "rm -rf cdk.out && npx cdk synth --app 'npx ts-node bin/titanic.ts'",
     "cdk:external": "rm -rf cdk.out && npx cdk synth --app 'npx ts-node bin/titanic-external.ts' --quiet",
-    "lint": "eslint . --ext .ts --fix",
+    "lint": "eslint bin lib --ext .ts --fix",
     "deploy:cdk": "npx cdk deploy --app 'npx ts-node bin/titanic.ts' --require-approval never",
     "deploy:event": "./bin/send-event.sh",
     "deploy:logs": "./bin/monitor-logs.sh",

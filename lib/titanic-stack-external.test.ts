@@ -103,6 +103,13 @@ describe("TitanicStackExternal", () => {
                 Default: "false",
                 AllowedValues: ["true", "false"]
             });
+
+            // Check PublicAssetsBucketName parameter (external deployment only)
+            template.hasParameter("PublicAssetsBucketName", {
+                Type: "String",
+                Description: "Name of the public S3 bucket containing pre-built Lambda deployment assets",
+                Default: ""
+            });
         });
 
         it("should set externalDeployment flag to true", () => {
@@ -110,10 +117,11 @@ describe("TitanicStackExternal", () => {
             // External deployment creates parameters, internal deployment does not
             expect(template.toJSON().Parameters).toBeDefined();
             const parameterNames = Object.keys(template.toJSON().Parameters);
-            // Should have our 3 required parameters (CDK may add additional ones like BootstrapVersion)
+            // Should have our 4 required parameters (CDK may add additional ones like BootstrapVersion)
             expect(parameterNames).toContain("AthenaDatabaseName");
             expect(parameterNames).toContain("QuiltReadPolicyArn");
             expect(parameterNames).toContain("UseS3Table");
+            expect(parameterNames).toContain("PublicAssetsBucketName");
         });
     });
 
@@ -202,7 +210,7 @@ describe("TitanicStackExternal", () => {
                 Timeout: 900,
                 Code: {
                     S3Bucket: {
-                        "Fn::Join": ["", ["titanic-assets-", { "Ref": "AWS::AccountId" }, "-", { "Ref": "AWS::Region" }]]
+                        "Ref": "PublicAssetsBucketName"
                     },
                     S3Key: "lambda/merge-tables.zip"
                 }
@@ -224,7 +232,6 @@ describe("TitanicStackExternal", () => {
                 ATHENA_DATABASE_NAME: { "Ref": "AthenaDatabaseName" },
                 QUILT_READ_POLICY_ARN: { "Ref": "QuiltReadPolicyArn" },
                 AWS_ACCOUNT_ID: { "Ref": "AWS::AccountId" },
-                CDK_DEFAULT_REGION: { "Ref": "AWS::Region" },
                 LAMBDA_TIMEOUT: "900",
                 S3TABLE_DATABASE_NAME: "quilt_titanic"
             });
@@ -478,7 +485,6 @@ describe("TitanicStackExternal", () => {
             // Note: PublicAssetsBucketName parameter should not exist in external deployment
             // Bucket names are generated deterministically from account/region
             const parameterNames = Object.keys(template.toJSON().Parameters);
-            expect(parameterNames).not.toContain("PublicAssetsBucketName");
             expect(parameterNames).not.toContain("S3TablesBucketName");
             expect(parameterNames).not.toContain("GlueTablesBucketName");
         });

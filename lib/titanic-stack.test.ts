@@ -150,6 +150,53 @@ describe("TitanicStack", () => {
             template.resourceCountIs("AWS::S3Tables::TableBucket", 1); // S3 Tables bucket created for internal deployment
         });
 
+        it("should create all buckets with parametrized names", () => {
+            // Test Glue tables bucket name generation
+            template.hasResourceProperties("AWS::S3::Bucket", {
+                BucketName: {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "titanic-glue-tables-",
+                            { "Ref": "AWS::AccountId" },
+                            "-",
+                            { "Ref": "AWS::Region" }
+                        ]
+                    ]
+                }
+            });
+
+            // Test assets bucket name generation  
+            template.hasResourceProperties("AWS::S3::Bucket", {
+                BucketName: {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "titanic-assets-",
+                            { "Ref": "AWS::AccountId" },
+                            "-",
+                            { "Ref": "AWS::Region" }
+                        ]
+                    ]
+                }
+            });
+
+            // Test S3 Tables bucket name generation
+            template.hasResourceProperties("AWS::S3Tables::TableBucket", {
+                TableBucketName: {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "titanic-s3-tables-",
+                            { "Ref": "AWS::AccountId" },
+                            "-",
+                            { "Ref": "AWS::Region" }
+                        ]
+                    ]
+                }
+            });
+        });
+
         it("should not create Glue database (assumes database already exists)", () => {
             template.resourceCountIs("AWS::Glue::Database", 0);
         });
@@ -164,7 +211,6 @@ describe("TitanicStack", () => {
                         GLUE_TABLES_BUCKET_NAME: Match.anyValue(),
                         S3_TABLES_BUCKET_NAME: Match.anyValue(),
                         AWS_ACCOUNT_ID: Match.anyValue(),
-                        CDK_DEFAULT_REGION: Match.anyValue(),
                         S3TABLE_DATABASE_NAME: "quilt_titanic",
                         LAMBDA_TIMEOUT: "900",
                     },
@@ -207,6 +253,38 @@ describe("TitanicStack", () => {
             });
         });
 
+        it("should create regular S3 buckets with parametrized names", () => {
+            // Test Glue tables bucket name generation
+            template.hasResourceProperties("AWS::S3::Bucket", {
+                BucketName: {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "titanic-glue-tables-",
+                            { "Ref": "AWS::AccountId" },
+                            "-",
+                            { "Ref": "AWS::Region" }
+                        ]
+                    ]
+                }
+            });
+
+            // Test assets bucket name generation  
+            template.hasResourceProperties("AWS::S3::Bucket", {
+                BucketName: {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "titanic-assets-",
+                            { "Ref": "AWS::AccountId" },
+                            "-",
+                            { "Ref": "AWS::Region" }
+                        ]
+                    ]
+                }
+            });
+        });
+
         it("should configure Lambda function with S3 Tables-specific settings", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
@@ -218,7 +296,6 @@ describe("TitanicStack", () => {
                         GLUE_TABLES_BUCKET_NAME: Match.anyValue(),
                         S3_TABLES_BUCKET_NAME: Match.anyValue(),
                         AWS_ACCOUNT_ID: Match.anyValue(),
-                        CDK_DEFAULT_REGION: Match.anyValue(),
                         LAMBDA_TIMEOUT: "900",
                     },
                 },
@@ -293,7 +370,6 @@ describe("TitanicStack", () => {
                             GLUE_TABLES_BUCKET_NAME: Match.anyValue(),
                             S3_TABLES_BUCKET_NAME: Match.anyValue(),
                             AWS_ACCOUNT_ID: Match.anyValue(),
-                            CDK_DEFAULT_REGION: Match.anyValue(),
                             LAMBDA_TIMEOUT: "900",
                         },
                     },
@@ -395,7 +471,6 @@ describe("TitanicStack", () => {
                         GLUE_TABLES_BUCKET_NAME: Match.anyValue(),
                         S3_TABLES_BUCKET_NAME: Match.anyValue(),
                         AWS_ACCOUNT_ID: Match.anyValue(),
-                        CDK_DEFAULT_REGION: Match.anyValue(),
                         LAMBDA_TIMEOUT: "900",
                     },
                 },

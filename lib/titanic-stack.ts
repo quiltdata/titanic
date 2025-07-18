@@ -20,10 +20,11 @@ export interface TitanicStackProps extends cdk.StackProps {
     externalDeployment?: boolean;  // Flag for third-party deployments (uses parameters and pre-built assets)
 }
 
-interface TitanicStackParameters {
+export interface TitanicStackParameters {
     athenaDatabaseName: cdk.CfnParameter;
     quiltReadPolicyArn: cdk.CfnParameter;
     useS3Table: cdk.CfnParameter;
+    publicAssetsBucketName?: cdk.CfnParameter; // Optional for external deployments
 }
 
 export class TitanicStack extends cdk.Stack {
@@ -76,7 +77,6 @@ export class TitanicStack extends cdk.Stack {
 
             // AWS context for ARN generation
             AWS_ACCOUNT_ID: this.account,
-            CDK_DEFAULT_REGION: this.region,
 
             // Configuration
             LAMBDA_TIMEOUT: "900",
@@ -115,7 +115,7 @@ export class TitanicStack extends cdk.Stack {
         assetsBucketName: string; 
     } {
         // Generate bucket names using ConfigStack
-        const glueTablesBucketName = this.config.generateGlueTablesBucketNameRef();
+        const glueTablesBucketName = this.config.generateGlueTablesBucketNameRef() as string;
         
         // Internal deployment: create all buckets
         const glueTablesBucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
@@ -125,7 +125,7 @@ export class TitanicStack extends cdk.Stack {
         });
         
         // Generate S3 Tables bucket name using ConfigStack
-        const s3TablesBucketName = this.config.generateS3TablesBucketNameRef();
+        const s3TablesBucketName = this.config.generateS3TablesBucketNameRef() as string;
         
         // Create an S3 Tables bucket for internal use
         const _s3TablesBucket = new s3tables.TableBucket(this, "TitanicS3TablesBucket", {
@@ -133,7 +133,7 @@ export class TitanicStack extends cdk.Stack {
         });
         
         // Generate assets bucket name using ConfigStack
-        const assetsBucketName = this.config.generateAssetsBucketNameRef();
+        const assetsBucketName = this.config.generateAssetsBucketNameRef() as string;
         
         // Create an assets bucket for deployment assets and Lambda code
         const _assetsBucket = new s3.Bucket(this, "TitanicAssetsBucket", {
@@ -174,6 +174,16 @@ export class TitanicStack extends cdk.Stack {
         return { mergeLambda: nodejsLambda, lambdaRole: nodejsLambda.role! };
     }
 
+    private localPolicy(prefix: string, suffix: string): string {
+        return cdk.Fn.join(":", [
+            "arn:aws",
+            prefix,
+            cdk.Aws.REGION,
+            cdk.Aws.ACCOUNT_ID,
+            suffix
+        ]);
+    }
+
     private grantLambdaPermissions(
         lambdaRole: iam.IRole, 
         config: ConfigStack, 
@@ -195,11 +205,11 @@ export class TitanicStack extends cdk.Stack {
                     "glue:UpdateTable",
                 ],
                 resources: [
-                    `arn:aws:glue:${this.region}:${this.account}:catalog`,
-                    `arn:aws:glue:${this.region}:${this.account}:database/${config.athenaDatabaseName}`,
-                    `arn:aws:glue:${this.region}:${this.account}:database/${s3DatabaseName}`,
-                    `arn:aws:glue:${this.region}:${this.account}:table/${config.athenaDatabaseName}/*`,
-                    `arn:aws:glue:${this.region}:${this.account}:table/${s3DatabaseName}/*`,
+                    this.localPolicy("glue", "catalog"),
+                    this.localPolicy("glue", `database/${config.athenaDatabaseName}`),
+                    this.localPolicy("glue", `database/${s3DatabaseName}`),
+                    this.localPolicy("glue", `table/${config.athenaDatabaseName}/*`),
+                    this.localPolicy("glue", `table/${s3DatabaseName}/*`),
                 ],
             }),
         );
@@ -213,7 +223,7 @@ export class TitanicStack extends cdk.Stack {
                     "athena:BatchGetQueryExecution"
                 ],
                 resources: [
-                    `arn:aws:athena:${this.region}:${this.account}:workgroup/primary`,
+                    this.localPolicy("athena", "workgroup/primary"),
                 ],
             }),
         );
@@ -242,8 +252,8 @@ export class TitanicStack extends cdk.Stack {
                     "s3tables:ListTables",
                 ],
                 resources: [
-                    `arn:aws:s3tables:${this.region}:${this.account}:bucket/${s3TablesBucketName}`,
-                    `arn:aws:s3tables:${this.region}:${this.account}:bucket/${s3TablesBucketName}/*`,
+                    this.localPolicy("s3tables", `bucket/${s3TablesBucketName}`),
+                    this.localPolicy("s3tables", `bucket/${s3TablesBucketName}/*`),
                 ],
             }),
         );
@@ -322,8 +332,8 @@ export class TitanicStack extends cdk.Stack {
         });
     }
 
-    private createParameters(parameterDefaults?: TitanicStackProps['parameterDefaults']): TitanicStackParameters {
-        return {
+    protected createParameters(parameterDefaults?: TitanicStackProps['parameterDefaults'], includePublicAssetsBucket?: boolean): TitanicStackParameters {
+        const baseParameters = {
             athenaDatabaseName: new cdk.CfnParameter(this, "AthenaDatabaseName", {
                 type: "String",
                 description: "Name of the Athena database containing the source views",
@@ -343,5 +353,18 @@ export class TitanicStack extends cdk.Stack {
                 allowedValues: ["true", "false"],
             }),
         };
+
+        if (includePublicAssetsBucket) {
+            return {
+                ...baseParameters,
+                publicAssetsBucketName: new cdk.CfnParameter(this, "PublicAssetsBucketName", {
+                    type: "String",
+                    description: "Name of the public S3 bucket containing pre-built Lambda deployment assets",
+                    default: "",
+                }),
+            };
+        }
+
+        return baseParameters;
     }
 }

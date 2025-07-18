@@ -52,7 +52,7 @@ describe('ConfigStack', () => {
             expect(cdk.Token.isUnresolved(ref)).toBe(true);
             
             // Test that it resolves correctly in a stack context
-            new cdk.CfnOutput(stack, 'TestRef', { value: ref });
+            new cdk.CfnOutput(stack, 'TestRef', { value: ref as string });
             const template = Template.fromStack(stack);
             
             template.hasOutput('TestRef', {
@@ -75,7 +75,7 @@ describe('ConfigStack', () => {
             
             expect(cdk.Token.isUnresolved(ref)).toBe(true);
             
-            new cdk.CfnOutput(stack, 'TestRef', { value: ref });
+            new cdk.CfnOutput(stack, 'TestRef', { value: ref as string });
             const template = Template.fromStack(stack);
             
             template.hasOutput('TestRef', {
@@ -98,7 +98,7 @@ describe('ConfigStack', () => {
             
             expect(cdk.Token.isUnresolved(ref)).toBe(true);
             
-            new cdk.CfnOutput(stack, 'TestRef', { value: ref });
+            new cdk.CfnOutput(stack, 'TestRef', { value: ref as string });
             const template = Template.fromStack(stack);
             
             template.hasOutput('TestRef', {

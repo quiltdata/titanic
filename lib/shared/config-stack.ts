@@ -29,7 +29,7 @@ export class ConfigStack extends Config {
    * Generate CloudFormation reference for Glue tables bucket name
    * Returns Fn::Join with AWS::AccountId and AWS::Region parameters
    */
-  public generateGlueTablesBucketNameRef(): any {
+  public generateGlueTablesBucketNameRef(): unknown {
     const { Fn } = require('aws-cdk-lib');
     return Fn.join('', [
       'titanic-glue-tables-',
@@ -43,7 +43,7 @@ export class ConfigStack extends Config {
    * Generate CloudFormation reference for S3 Tables bucket name
    * Returns Fn::Join with AWS::AccountId and AWS::Region parameters
    */
-  public generateS3TablesBucketNameRef(): any {
+  public generateS3TablesBucketNameRef(): unknown {
     const { Fn } = require('aws-cdk-lib');
     return Fn.join('', [
       'titanic-s3-tables-',
@@ -57,7 +57,7 @@ export class ConfigStack extends Config {
    * Generate CloudFormation reference for assets bucket name
    * Returns Fn::Join with AWS::AccountId and AWS::Region parameters
    */
-  public generateAssetsBucketNameRef(): any {
+  public generateAssetsBucketNameRef(): unknown {
     const { Fn } = require('aws-cdk-lib');
     return Fn.join('', [
       'titanic-assets-',
