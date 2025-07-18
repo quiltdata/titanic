@@ -194,6 +194,8 @@ describe('Config', () => {
     });
   });
 
+  // NOTE: This should render actual bucket names for testing,
+  // NOT parameter references
   describe('generateDeploymentConfig', () => {
     it('should generate deployment configuration correctly', () => {
       const config = Config.createTestInstance({
@@ -222,6 +224,56 @@ describe('Config', () => {
         },
         generatedAt: expect.any(String),
       });
+    });
+  });
+
+  describe('CloudFormation reference methods', () => {
+    it('should generate CloudFormation references for bucket names', () => {
+      const config = Config.createTestInstance({
+        awsAccountId: '123456789012',
+        aws_region: 'us-west-2',
+      });
+
+      const glueRef = config.generateGlueTablesBucketNameRef();
+      const s3Ref = config.generateS3TablesBucketNameRef();
+      const assetsRef = config.generateAssetsBucketNameRef();
+
+      // Check that these return CDK tokens (which resolve to CloudFormation functions)
+      expect(typeof glueRef).toBe('string');
+      expect(typeof s3Ref).toBe('string');
+      expect(typeof assetsRef).toBe('string');
+
+      // Check that they contain the CDK token pattern
+      expect(glueRef).toMatch(/\${Token\[Fn::Join\.\d+\]}/);
+      expect(s3Ref).toMatch(/\${Token\[Fn::Join\.\d+\]}/);
+      expect(assetsRef).toMatch(/\${Token\[Fn::Join\.\d+\]}/);
+    });
+
+    it('should generate different output types for name vs nameRef methods', () => {
+      const config = Config.createTestInstance({
+        awsAccountId: '123456789012',
+        aws_region: 'us-west-2',
+      });
+
+      // Regular methods return strings
+      expect(typeof config.generateGlueTablesBucketName()).toBe('string');
+      expect(typeof config.generateS3TablesBucketName()).toBe('string');
+      expect(typeof config.generateAssetsBucketName()).toBe('string');
+
+      // Ref methods return CDK tokens (as strings)
+      expect(typeof config.generateGlueTablesBucketNameRef()).toBe('string');
+      expect(typeof config.generateS3TablesBucketNameRef()).toBe('string');
+      expect(typeof config.generateAssetsBucketNameRef()).toBe('string');
+
+      // Regular methods return actual bucket names
+      expect(config.generateGlueTablesBucketName()).toBe('titanic-glue-tables-123456789012-us-west-2');
+      expect(config.generateS3TablesBucketName()).toBe('titanic-s3-tables-123456789012-us-west-2');
+      expect(config.generateAssetsBucketName()).toBe('titanic-assets-123456789012-us-west-2');
+
+      // Ref methods return different (token) values
+      expect(config.generateGlueTablesBucketNameRef()).not.toBe('titanic-glue-tables-123456789012-us-west-2');
+      expect(config.generateS3TablesBucketNameRef()).not.toBe('titanic-s3-tables-123456789012-us-west-2');
+      expect(config.generateAssetsBucketNameRef()).not.toBe('titanic-assets-123456789012-us-west-2');
     });
   });
 });

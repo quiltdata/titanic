@@ -93,7 +93,7 @@ describe("TitanicStackExternal", () => {
             template.hasParameter("QuiltReadPolicyArn", {
                 Type: "String",
                 Description: "ARN of the IAM policy for reading from Quilt buckets",
-                Default: process.env.QUILT_READ_POLICY_ARN || ""
+                Default: ""
             });
 
             // Check UseS3Table parameter
@@ -441,7 +441,7 @@ describe("TitanicStackExternal", () => {
             process.env = originalEnv;
         });
 
-        it("should use environment variables as parameter defaults", () => {
+        it("should NOT use environment variables as parameter defaults", () => {
             process.env = {
                 ...originalEnv,
                 ATHENA_DATABASE_NAME: "env-test-db",
@@ -453,24 +453,25 @@ describe("TitanicStackExternal", () => {
 
             const template = createExternalStackTemplate("EnvTestStack");
 
+            // External stack should have empty defaults, not environment variable values
             template.hasParameter("AthenaDatabaseName", {
-                Default: "env-test-db"
+                Default: ""
             });
 
             template.hasParameter("QuiltReadPolicyArn", {
-                Default: "arn:aws:iam::123456789012:policy/env-test-policy"
+                Default: ""
             });
 
             template.hasParameter("UseS3Table", {
-                Default: "true"
+                Default: "false"
             });
 
             template.hasParameter("PublicAssetsBucketName", {
-                Default: "env-test-assets-bucket"
+                Default: ""
             });
 
             template.hasParameter("S3TablesBucketName", {
-                Default: "env-test-s3-tables-bucket"
+                Default: ""
             });
         });
 

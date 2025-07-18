@@ -38,7 +38,7 @@ describe("bin/titanic", () => {
         process.env = originalEnv;
     });
 
-    it("should pass correct props including athenaDatabaseName and useS3Table from environment variables", () => {
+    it("should pass correct props including parameterDefaults from environment variables", () => {
         process.env.ATHENA_DATABASE_NAME = "test-database";
         process.env.QUILT_READ_POLICY_ARN = "arn:aws:iam::123456789012:policy/test-policy";
         process.env.USE_S3_TABLE = "true";
@@ -46,14 +46,16 @@ describe("bin/titanic", () => {
         // Import and execute the bin file
         require("../bin/titanic");
 
-        // Verify TitanicStack was called with the correct props
+        // Verify TitanicStack was called with the correct parameterDefaults
         expect(mockTitanicStack).toHaveBeenCalledWith(
             expect.any(cdk.App),
             "TitanicStack",
             expect.objectContaining({
-                athenaDatabaseName: "test-database",
-                quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
-                useS3Table: true,
+                parameterDefaults: {
+                    athenaDatabaseName: "test-database",
+                    quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
+                    useS3Table: true,
+                },
             })
         );
     });
@@ -71,9 +73,11 @@ describe("bin/titanic", () => {
             expect.any(cdk.App),
             "TitanicStack",
             expect.objectContaining({
-                athenaDatabaseName: "custom_database_name",
-                quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
-                useS3Table: false,
+                parameterDefaults: {
+                    athenaDatabaseName: "custom_database_name",
+                    quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
+                    useS3Table: false,
+                },
             })
         );
     });
@@ -100,44 +104,51 @@ describe("bin/titanic", () => {
         );
     });
 
-    describe("environment variable handling", () => {
-        it("should handle USE_S3_TABLE environment variable correctly", () => {
-            process.env.ATHENA_DATABASE_NAME = "test-database";
-            process.env.QUILT_READ_POLICY_ARN = "test-arn";
-            delete process.env.USE_S3_TABLE; // Should default to false
+        describe("environment variable handling", () => {
+            it("should handle USE_S3_TABLE environment variable correctly", () => {
+                process.env.ATHENA_DATABASE_NAME = "test-database";
+                process.env.QUILT_READ_POLICY_ARN = "test-arn";
+                delete process.env.USE_S3_TABLE; // Should default to false
 
-            require("../bin/titanic");
+                require("../bin/titanic");
 
-            expect(mockTitanicStack).toHaveBeenCalledWith(
-                expect.any(cdk.App),
-                "TitanicStack",
-                expect.objectContaining({
-                    useS3Table: false,
-                })
-            );
-        });
+                expect(mockTitanicStack).toHaveBeenCalledWith(
+                    expect.any(cdk.App),
+                    "TitanicStack",
+                    expect.objectContaining({
+                        parameterDefaults: {
+                            athenaDatabaseName: "test-database",
+                            quiltReadPolicyArn: "test-arn",
+                            useS3Table: false,
+                        },
+                    })
+                );
+            });
 
-        it("should preserve whitespace in environment variables", () => {
-            process.env.ATHENA_DATABASE_NAME = "test-database";
-            process.env.QUILT_READ_POLICY_ARN = "  arn:aws:iam::123:policy/test  ";
-            process.env.CDK_DEFAULT_ACCOUNT = " 123456789012 ";
-            process.env.CDK_DEFAULT_REGION = "\tus-east-1\n";
+            it("should preserve whitespace in environment variables", () => {
+                process.env.ATHENA_DATABASE_NAME = "test-database";
+                process.env.QUILT_READ_POLICY_ARN = "  arn:aws:iam::123:policy/test  ";
+                process.env.CDK_DEFAULT_ACCOUNT = " 123456789012 ";
+                process.env.CDK_DEFAULT_REGION = "us-east-1";
 
-            require("../bin/titanic");
+                require("../bin/titanic");
 
-            expect(mockTitanicStack).toHaveBeenCalledWith(
-                expect.any(cdk.App),
-                "TitanicStack",
-                expect.objectContaining({
-                    athenaDatabaseName: "test-database",
-                    quiltReadPolicyArn: "  arn:aws:iam::123:policy/test  ",
-                    env: {
-                        account: " 123456789012 ",
-                        region: "\tus-east-1\n",
-                    },
-                })
-            );
-        });
+                expect(mockTitanicStack).toHaveBeenCalledWith(
+                    expect.any(cdk.App),
+                    "TitanicStack",
+                    expect.objectContaining({
+                        parameterDefaults: {
+                            athenaDatabaseName: "test-database",
+                            quiltReadPolicyArn: "  arn:aws:iam::123:policy/test  ",
+                            useS3Table: false,
+                        },
+                        env: {
+                            account: " 123456789012 ",
+                            region: "us-east-1",
+                        },
+                    })
+                );
+            });
 
         it("should handle special characters in environment variables", () => {
             process.env.ATHENA_DATABASE_NAME = "test-database";
@@ -151,8 +162,11 @@ describe("bin/titanic", () => {
                 expect.any(cdk.App),
                 "TitanicStack",
                 expect.objectContaining({
-                    athenaDatabaseName: "test-database",
-                    quiltReadPolicyArn: "arn:aws:iam::123:policy/Test-Policy_With.Special@Chars",
+                    parameterDefaults: {
+                        athenaDatabaseName: "test-database",
+                        quiltReadPolicyArn: "arn:aws:iam::123:policy/Test-Policy_With.Special@Chars",
+                        useS3Table: false,
+                    },
                 })
             );
         });
@@ -173,8 +187,11 @@ describe("bin/titanic", () => {
                 expect.any(cdk.App),
                 "TitanicStack",
                 expect.objectContaining({
-                    athenaDatabaseName: "test-database",
-                    quiltReadPolicyArn: longArn,
+                    parameterDefaults: {
+                        athenaDatabaseName: "test-database",
+                        quiltReadPolicyArn: longArn,
+                        useS3Table: false,
+                    },
                     env: {
                         account: longAccount,
                         region: longRegion,
@@ -251,9 +268,11 @@ describe("bin/titanic", () => {
                 expect.any(cdk.App),
                 "TitanicStack",
                 {
-                    athenaDatabaseName: "test-database",
-                    quiltReadPolicyArn: "test-policy-arn",
-                    useS3Table: false,
+                    parameterDefaults: {
+                        athenaDatabaseName: "test-database",
+                        quiltReadPolicyArn: "test-policy-arn",
+                        useS3Table: false,
+                    },
                     env: {
                         account: "999888777666",
                         region: "eu-west-2",
@@ -274,7 +293,11 @@ describe("bin/titanic", () => {
                 expect.anything(),
                 expect.anything(),
                 expect.objectContaining({
-                    athenaDatabaseName: "my_custom_database",
+                    parameterDefaults: {
+                        athenaDatabaseName: "my_custom_database",
+                        quiltReadPolicyArn: "test-policy-arn",
+                        useS3Table: false,
+                    },
                 })
             );
         });

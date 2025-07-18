@@ -74,9 +74,11 @@ const expectAthenaPermissions = (template: Template) => {
 
 describe("TitanicStack", () => {
     const defaultStackProps = {
-        athenaDatabaseName: "test-database-env",
-        quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
-        useS3Table: false,
+        parameterDefaults: {
+            athenaDatabaseName: "test-database-env",
+            quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
+            useS3Table: false,
+        },
     };
 
     describe("Shared functionality (mode-independent)", () => {
@@ -88,9 +90,11 @@ describe("TitanicStack", () => {
 
             beforeAll(() => {
                 const stackProps = {
-                    ...defaultStackProps,
-                    useS3Table,
-                    athenaDatabaseName: dbName
+                    parameterDefaults: {
+                        ...defaultStackProps.parameterDefaults,
+                        useS3Table,
+                        athenaDatabaseName: dbName
+                    },
                 };
                     
                 template = createStackTemplate(stackId, stackProps);
@@ -133,7 +137,12 @@ describe("TitanicStack", () => {
         let template: Template;
 
         beforeAll(() => {
-            template = createStackTemplate("GlueStack", { ...defaultStackProps, athenaDatabaseName: "test-database" });
+            template = createStackTemplate("GlueStack", { 
+                parameterDefaults: {
+                    ...defaultStackProps.parameterDefaults,
+                    athenaDatabaseName: "test-database"
+                }
+            });
         });
 
         it("should create regular S3 bucket, S3 Tables bucket, and assets bucket", () => {
@@ -149,13 +158,15 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        ATHENA_DATABASE_NAME: "test-database",
-                        USE_S3_TABLE: "false",
-                        QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
+                        ATHENA_DATABASE_NAME: { "Ref": "AthenaDatabaseName" },
+                        USE_S3_TABLE: { "Ref": "UseS3Table" },
+                        QUILT_READ_POLICY_ARN: { "Ref": "QuiltReadPolicyArn" },
                         GLUE_TABLES_BUCKET_NAME: Match.anyValue(),
                         S3_TABLES_BUCKET_NAME: Match.anyValue(),
                         AWS_ACCOUNT_ID: Match.anyValue(),
                         CDK_DEFAULT_REGION: Match.anyValue(),
+                        S3TABLE_DATABASE_NAME: "quilt_titanic",
+                        LAMBDA_TIMEOUT: "900",
                     },
                 },
             });
@@ -168,23 +179,21 @@ describe("TitanicStack", () => {
         let template: Template;
 
         beforeAll(() => {
-            // Use props mode for this test to ensure useS3Table: true is properly set
             template = createStackTemplate("S3TablesStack", { 
-                athenaDatabaseName: "test-database-env",
-                quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
-                useS3Table: true,
-                useCloudFormationParameters: false
+                parameterDefaults: {
+                    athenaDatabaseName: "test-database-env",
+                    quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
+                    useS3Table: true,
+                }
             });
         });
 
         it("should create S3 TableBucket in addition to regular S3 bucket", () => {
             // Regular S3 buckets: one for Glue tables and one for assets
             template.resourceCountIs("AWS::S3::Bucket", 2);
-            // S3 Tables bucket created for S3 Tables mode
+            // S3 Tables bucket created for S3 Tables mode - now uses parameter reference
             template.hasResourceProperties("AWS::S3Tables::TableBucket", {
-                TableBucketName: {
-                    "Fn::Join": ["", ["titanic-s3-tables-", { "Ref": "AWS::AccountId" }, "-", { "Ref": "AWS::Region" }]]
-                }
+                TableBucketName: { "Ref": "S3TablesBucketName" }
             });
         });
 
@@ -192,14 +201,15 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        ATHENA_DATABASE_NAME: "test-database-env",
+                        ATHENA_DATABASE_NAME: { "Ref": "AthenaDatabaseName" },
                         S3TABLE_DATABASE_NAME: "quilt_titanic", // This is the hardcoded constant
-                        USE_S3_TABLE: "true",
-                        QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
+                        USE_S3_TABLE: { "Ref": "UseS3Table" },
+                        QUILT_READ_POLICY_ARN: { "Ref": "QuiltReadPolicyArn" },
                         GLUE_TABLES_BUCKET_NAME: Match.anyValue(),
                         S3_TABLES_BUCKET_NAME: Match.anyValue(),
                         AWS_ACCOUNT_ID: Match.anyValue(),
                         CDK_DEFAULT_REGION: Match.anyValue(),
+                        LAMBDA_TIMEOUT: "900",
                     },
                 },
             });
@@ -227,293 +237,160 @@ describe("TitanicStack", () => {
         });
     });
 
-    describe("Props mode (useCloudFormationParameters: false)", () => {
-        const propsMode = {
-            athenaDatabaseName: "test-athena-database",
-            quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/TestQuiltReadPolicy",
-            useS3Table: false,
-            useCloudFormationParameters: false
-        };
-
-        describe("Basic configuration", () => {
+    describe("CloudFormation Parameters", () => {
+        describe("With parameter defaults", () => {
             let template: Template;
 
             beforeAll(() => {
-                template = createStackTemplate("PropsBasicStack", propsMode);
-            });
-
-            it("should not create CloudFormation parameters", () => {
-                // Should only have CDK bootstrap parameter, not our custom parameters
-                const parameters = template.toJSON().Parameters;
-                expect(parameters).not.toHaveProperty("athenaDatabaseName");
-                expect(parameters).not.toHaveProperty("QuiltReadPolicyArn");
-                expect(parameters).not.toHaveProperty("UseS3Table");
-            });
-
-            it("should create both S3 bucket types", () => {
-                template.hasResourceProperties("AWS::S3::Bucket", {
-                    BucketName: {
-                        "Fn::Join": [
-                            "",
-                            [
-                                "titanic-glue-tables-",
-                                { "Ref": "AWS::AccountId" },
-                                "-",
-                                { "Ref": "AWS::Region" }
-                            ]
-                        ]
-                    }
-                });
-
-                template.hasResourceProperties("AWS::S3Tables::TableBucket", {
-                    TableBucketName: {
-                        "Fn::Join": [
-                            "",
-                            [
-                                "titanic-s3-tables-",
-                                { "Ref": "AWS::AccountId" },
-                                "-",
-                                { "Ref": "AWS::Region" }
-                            ]
-                        ]
+                template = createStackTemplate("ParameterDefaultsStack", {
+                    parameterDefaults: {
+                        athenaDatabaseName: "test-athena-database",
+                        quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/TestQuiltReadPolicy",
+                        useS3Table: false,
                     }
                 });
             });
 
-            it("should create Lambda function with correct configuration from props", () => {
+            it("should create CloudFormation parameters with defaults", () => {
+                template.hasParameter("AthenaDatabaseName", {
+                    Type: "String",
+                    Description: "Name of the Athena database containing the source views",
+                    Default: "test-athena-database"
+                });
+
+                template.hasParameter("QuiltReadPolicyArn", {
+                    Type: "String", 
+                    Description: "ARN of the IAM policy for reading from Quilt buckets",
+                    Default: "arn:aws:iam::123456789012:policy/TestQuiltReadPolicy"
+                });
+
+                template.hasParameter("UseS3Table", {
+                    Type: "String",
+                    Description: "Whether to use S3 Tables format (true/false)",
+                    Default: "false",
+                    AllowedValues: ["true", "false"]
+                });
+            });
+
+            it("should create Lambda function with parameter references", () => {
                 template.hasResourceProperties("AWS::Lambda::Function", {
                     Environment: {
                         Variables: {
-                            ATHENA_DATABASE_NAME: "test-athena-database",
+                            ATHENA_DATABASE_NAME: { "Ref": "AthenaDatabaseName" },
                             S3TABLE_DATABASE_NAME: "quilt_titanic",
-                            QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/TestQuiltReadPolicy",
-                            USE_S3_TABLE: "false",
+                            QUILT_READ_POLICY_ARN: { "Ref": "QuiltReadPolicyArn" },
+                            USE_S3_TABLE: { "Ref": "UseS3Table" },
                             GLUE_TABLES_BUCKET_NAME: Match.anyValue(),
                             S3_TABLES_BUCKET_NAME: Match.anyValue(),
                             AWS_ACCOUNT_ID: Match.anyValue(),
                             CDK_DEFAULT_REGION: Match.anyValue(),
+                            LAMBDA_TIMEOUT: "900",
                         },
                     },
                     Timeout: 900,
                 });
             });
-
-            it("should create EventBridge rule with correct pattern", () => {
-                template.hasResourceProperties("AWS::Events::Rule", {
-                    EventPattern: {
-                        source: ["com.quiltdata"],
-                        "detail-type": ["package-revision", "package-tag", "package-entry"],
-                        detail: {
-                            type: ["created", "updated"],
-                        }
-                    },
-                });
-            });
-
-            it("should grant Glue permissions for source and target databases", () => {
-                const policy = findLambdaPolicyByKey(template, "MergeTables");
-                expect(policy).toBeDefined();
-                const statements = policy.Properties.PolicyDocument.Statement;
-                
-                const glueStatement = statements.find((statement: any) => 
-                    Array.isArray(statement.Action) && 
-                    statement.Action.includes("glue:GetTables")
-                );
-                
-                expect(glueStatement).toBeDefined();
-                expect(glueStatement.Effect).toBe("Allow");
-                
-                // Check that the resources include both source and target databases (direct values, not refs)
-                const resources = glueStatement.Resource;
-                expect(resources).toEqual(expect.arrayContaining([
-                    expect.objectContaining({
-                        "Fn::Join": ["", expect.arrayContaining([":catalog"])]
-                    }),
-                    expect.objectContaining({
-                        "Fn::Join": ["", expect.arrayContaining([":database/test-athena-database"])]
-                    }),
-                    expect.objectContaining({
-                        "Fn::Join": ["", expect.arrayContaining([":table/test-athena-database/*"])]
-                    }),
-                    expect.objectContaining({
-                        "Fn::Join": ["", expect.arrayContaining([":database/quilt_titanic"])]
-                    }),
-                    expect.objectContaining({
-                        "Fn::Join": ["", expect.arrayContaining([":table/quilt_titanic/*"])]
-                    })
-                ]));
-            });
-
-            it("should grant Athena permissions", () => {
-                expectAthenaPermissions(template);
-            });
-
-            it("should grant S3 bucket location permissions for both buckets", () => {
-                expectS3BucketLocationPermissions(template);
-            });
-
-            it("should attach the Quilt read policy to Lambda role", () => {
-                template.hasResourceProperties("AWS::IAM::Role", {
-                    ManagedPolicyArns: [
-                        {
-                            "Fn::Join": [
-                                "",
-                                [
-                                    "arn:",
-                                    { "Ref": "AWS::Partition" },
-                                    ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-                                ]
-                            ]
-                        },
-                        "arn:aws:iam::123456789012:policy/TestQuiltReadPolicy"
-                    ]
-                });
-            });
-
-            it("should create stack outputs", () => {
-                const outputs = template.toJSON().Outputs;
-                expect(outputs).toHaveProperty("LambdaFunctionName");
-                expect(outputs).toHaveProperty("LambdaLogGroupName");
-                expect(outputs).toHaveProperty("GlueTablesBucket");
-                expect(outputs).toHaveProperty("S3TablesBucket");
-                expect(outputs).toHaveProperty("SourceDatabaseName");
-                expect(outputs).toHaveProperty("TargetDatabaseName");
-            });
         });
 
-        describe("With S3 Tables enabled", () => {
+        describe("Without parameter defaults (external deployment)", () => {
             let template: Template;
 
             beforeAll(() => {
-                template = createStackTemplate("PropsS3TablesStack", {
-                    ...propsMode,
-                    useS3Table: true
+                template = createStackTemplate("NoParameterDefaultsStack", {
+                    // No parameterDefaults - pure CloudFormation parameters
                 });
             });
 
-            it("should configure Lambda for S3 Tables mode", () => {
-                template.hasResourceProperties("AWS::Lambda::Function", {
-                    Environment: {
-                        Variables: {
-                            USE_S3_TABLE: "true",
-                            ATHENA_DATABASE_NAME: "test-athena-database",
-                            S3TABLE_DATABASE_NAME: "quilt_titanic",
-                        },
-                    },
+            it("should create CloudFormation parameters with empty defaults", () => {
+                template.hasParameter("AthenaDatabaseName", {
+                    Type: "String",
+                    Description: "Name of the Athena database containing the source views",
+                    Default: ""
+                });
+
+                template.hasParameter("QuiltReadPolicyArn", {
+                    Type: "String",
+                    Description: "ARN of the IAM policy for reading from Quilt buckets", 
+                    Default: ""
+                });
+
+                template.hasParameter("UseS3Table", {
+                    Type: "String",
+                    Description: "Whether to use S3 Tables format (true/false)",
+                    Default: "false",
+                    AllowedValues: ["true", "false"]
                 });
             });
 
-            it("should grant S3 Tables permissions", () => {
-                const policy = findLambdaPolicyByKey(template, "MergeTables");
-                expect(policy).toBeDefined();
-                const statements = policy.Properties.PolicyDocument.Statement;
-
-                expect(statements).toContainEqual(
-                    expect.objectContaining({
-                        Action: expect.arrayContaining([
-                            "s3tables:GetTable",
-                            "s3tables:CreateTable",
-                            "s3tables:PutTableData",
-                            "s3tables:GetTableData",
-                            "s3tables:UpdateTable",
-                            "s3tables:DeleteTable",
-                            "s3tables:ListTables",
-                        ]),
-                        Effect: "Allow"
-                    })
-                );
-            });
-        });
-
-        describe("Default values", () => {
-            it("should handle minimal props configuration", () => {
-                const minimalTemplate = createStackTemplate("PropsMinimalStack", {
-                    athenaDatabaseName: "minimal-db",
-                    quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/MinimalPolicy",
-                    useCloudFormationParameters: false
+            it("should create bucket name parameters", () => {
+                template.hasParameter("PublicAssetsBucketName", {
+                    Type: "String",
+                    Description: "Name of the S3 bucket containing pre-built deployment assets",
+                    Default: ""
                 });
 
-                minimalTemplate.hasResourceProperties("AWS::Lambda::Function", {
-                    Environment: {
-                        Variables: {
-                            ATHENA_DATABASE_NAME: "minimal-db",
-                            QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/MinimalPolicy",
-                            USE_S3_TABLE: "false",
-                        },
-                    },
-                    Timeout: 900,
-                });
-            });
-
-            it("should default useS3Table to false when not specified", () => {
-                const template = createStackTemplate("PropsDefaultS3TableStack", {
-                    athenaDatabaseName: "test-db",
-                    quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/TestPolicy",
-                    useCloudFormationParameters: false
+                template.hasParameter("S3TablesBucketName", {
+                    Type: "String", 
+                    Description: "Name of the S3 Tables bucket (must exist already)",
+                    Default: ""
                 });
 
-                template.hasResourceProperties("AWS::Lambda::Function", {
-                    Environment: {
-                        Variables: {
-                            USE_S3_TABLE: "false",
-                        },
-                    },
+                template.hasParameter("GlueTablesBucketName", {
+                    Type: "String",
+                    Description: "Name of the Glue tables bucket (will be created if not specified)",
+                    Default: ""
                 });
-            });
-        });
-
-        describe("Stack props inheritance", () => {
-            it("should inherit standard CDK stack properties", () => {
-                const app = new cdk.App();
-                const stack = new TitanicStack(app, "InheritanceTestStack", {
-                    ...propsMode,
-                    env: {
-                        account: "123456789012",
-                        region: "us-east-1"
-                    },
-                    description: "Test stack description"
-                });
-
-                expect(stack.account).toBe("123456789012");
-                expect(stack.region).toBe("us-east-1");
-                
-                const template = Template.fromStack(stack);
-                const templateJson = template.toJSON();
-                expect(templateJson.Description).toBe("Test stack description");
             });
         });
     });
 
     describe("Edge cases and error handling", () => {
-        it("should handle empty stack props", () => {
+        it("should handle empty stack props (no parameter defaults)", () => {
             const app = new cdk.App();
             
-            // This should work because useCloudFormationParameters defaults to false
-            // and the non-CloudFormation path requires the props to be set
+            // This should work - it will create CFN parameters with empty defaults
             expect(() => {
                 new TitanicStack(app, "EmptyPropsStack", {});
-            }).toThrow(); // Should throw because required props are missing
+            }).not.toThrow();
         });
 
-        it("should default useCloudFormationParameters to false", () => {
-            const template = createStackTemplate("DefaultCFParamsStack", {
-                athenaDatabaseName: "test-db",
-                quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/TestPolicy",
-                // useCloudFormationParameters not specified - should default to false
+        it("should always create CloudFormation parameters", () => {
+            const template = createStackTemplate("AlwaysParametersStack", {
+                parameterDefaults: {
+                    athenaDatabaseName: "test-db",
+                    quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/TestPolicy",
+                }
             });
 
-            // Should not have our custom parameters (indicates CF exterrnal mode is disabled)
-            const parameters = template.toJSON().Parameters;
-            expect(parameters).not.toHaveProperty("athenaDatabaseName");
-            expect(parameters).not.toHaveProperty("QuiltReadPolicyArn");
-            expect(parameters).not.toHaveProperty("UseS3Table");
+            // Should always have our custom parameters
+            template.hasParameter("AthenaDatabaseName", {
+                Type: "String",
+                Default: "test-db"
+            });
+            
+            template.hasParameter("QuiltReadPolicyArn", {
+                Type: "String",
+                Default: "arn:aws:iam::123456789012:policy/TestPolicy"
+            });
+            
+            template.hasParameter("UseS3Table", {
+                Type: "String",
+                Default: "false"
+            });
 
-            // Should use props directly in environment variables
+            // Should use parameter references in environment variables
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        ATHENA_DATABASE_NAME: "test-db",
-                        QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/TestPolicy",
+                        ATHENA_DATABASE_NAME: { "Ref": "AthenaDatabaseName" },
+                        QUILT_READ_POLICY_ARN: { "Ref": "QuiltReadPolicyArn" },
+                        USE_S3_TABLE: { "Ref": "UseS3Table" },
+                        S3TABLE_DATABASE_NAME: "quilt_titanic",
+                        GLUE_TABLES_BUCKET_NAME: Match.anyValue(),
+                        S3_TABLES_BUCKET_NAME: Match.anyValue(),
+                        AWS_ACCOUNT_ID: Match.anyValue(),
+                        CDK_DEFAULT_REGION: Match.anyValue(),
+                        LAMBDA_TIMEOUT: "900",
                     },
                 },
             });

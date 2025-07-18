@@ -7,39 +7,16 @@ import { Runtime } from "aws-cdk-lib/aws-lambda";
 import { TitanicStack, TitanicStackProps } from "./titanic-stack";
 import { Config } from "./shared/config";
 
-export type TitanicStackExternalProps = Omit<TitanicStackProps, 'athenaDatabaseName' | 'quiltReadPolicyArn' | 'useS3Table' | 'externalDeployment'>;
-
-interface TitanicStackExternalParameters {
-    athenaDatabaseName: cdk.CfnParameter;
-    quiltReadPolicyArn: cdk.CfnParameter;
-    useS3Table: cdk.CfnParameter;
-    publicAssetsBucketName: cdk.CfnParameter;
-    s3TablesBucketName: cdk.CfnParameter;
-}
+export type TitanicStackExternalProps = Omit<TitanicStackProps, 'parameterDefaults' | 'externalDeployment'>;
 
 export class TitanicStackExternal extends TitanicStack {
-    private parameters: TitanicStackExternalParameters;
-
     constructor(scope: Construct, id: string, props: TitanicStackExternalProps = {}) {
-        // Call super constructor with external deployment flag
+        // Call super constructor without parameter defaults (external deployment)
         super(scope, id, {
             ...props,
+            // No parameterDefaults - pure CloudFormation parameters
             externalDeployment: true,
         });
-        
-        // Parameters are created during parent construction, so we can access them now
-        this.parameters = this.getParametersFromStack();
-    }
-
-    private getParametersFromStack(): TitanicStackExternalParameters {
-        // Find the parameters that were created during parent construction
-        return {
-            athenaDatabaseName: this.node.tryFindChild("AthenaDatabaseName") as cdk.CfnParameter,
-            quiltReadPolicyArn: this.node.tryFindChild("QuiltReadPolicyArn") as cdk.CfnParameter,
-            useS3Table: this.node.tryFindChild("UseS3Table") as cdk.CfnParameter,
-            publicAssetsBucketName: this.node.tryFindChild("PublicAssetsBucketName") as cdk.CfnParameter,
-            s3TablesBucketName: this.node.tryFindChild("S3TablesBucketName") as cdk.CfnParameter,
-        };
     }
 
     protected createBuckets(config: Config): { 
@@ -48,19 +25,18 @@ export class TitanicStackExternal extends TitanicStack {
         assetsBucketName: string; 
     } {
         // External deployment: only create Glue tables bucket for Athena results
+        // Use Config method to generate CloudFormation reference for consistency
+        const glueTablesBucketName = config.generateGlueTablesBucketNameRef();
+        
         const glueTablesBucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
-            bucketName: config.generateGlueTablesBucketName(),
+            bucketName: glueTablesBucketName,
             removalPolicy: cdk.RemovalPolicy.DESTROY,
             autoDeleteObjects: true,
         });
 
-        // Reference external buckets by name (these should exist already)
-        // Use node.tryFindChild to get parameters if they exist, otherwise use defaults
-        const s3TablesBucketParam = this.node.tryFindChild("S3TablesBucketName") as cdk.CfnParameter;
-        const assetsBucketParam = this.node.tryFindChild("PublicAssetsBucketName") as cdk.CfnParameter;
-        
-        const s3TablesBucketName = s3TablesBucketParam?.valueAsString || config.generateS3TablesBucketName();
-        const assetsBucketName = assetsBucketParam?.valueAsString || config.generateAssetsBucketName();
+        // Reference external buckets by parameter values (these should exist already)
+        const s3TablesBucketName = this.parameters.s3TablesBucketName.valueAsString;
+        const assetsBucketName = this.parameters.publicAssetsBucketName.valueAsString;
 
         return { glueTablesBucket, s3TablesBucketName, assetsBucketName };
     }

@@ -24,12 +24,15 @@ const region = process.env.CDK_DEFAULT_REGION || app.region || 'us-east-1';
 
 // Create the stack
 const _stack = new TitanicStack(app, "TitanicStack", {
-    athenaDatabaseName: process.env.ATHENA_DATABASE_NAME,
-    quiltReadPolicyArn: process.env.QUILT_READ_POLICY_ARN,
-    useS3Table: useS3Table,
     env: {
         account: account,
         region: region,
+    },
+    parameterDefaults: {
+        athenaDatabaseName: process.env.ATHENA_DATABASE_NAME,
+        quiltReadPolicyArn: process.env.QUILT_READ_POLICY_ARN,
+        useS3Table: useS3Table,
+        // Let other bucket names be generated dynamically
     },
 });
 
