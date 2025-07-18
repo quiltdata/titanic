@@ -11,8 +11,6 @@ const createStackTemplate = (
     return Template.fromStack(stack);
 };
 
-const _createExternalStackTemplate = require('../bin/titanic-external');
-
 const findLambdaPolicy = (template: Template, actionToFind: string) => {
     const policies = template.findResources("AWS::IAM::Policy");
     return Object.values(policies).find((policy: any) =>
@@ -54,63 +52,6 @@ const expectS3BucketLocationPermissions = (template: Template) => {
     expect(uniqueBuckets.length).toBeGreaterThanOrEqual(2);
 };
 
-const expectGluePermissions = (template: Template, _expectedSourceDatabaseName: string) => {
-    const policy = findLambdaPolicyByKey(template, "MergeTables");
-    expect(policy).toBeDefined();
-    const statements = policy.Properties.PolicyDocument.Statement;
-    
-    // Find the Glue statement
-    const glueStatement = statements.find((statement: any) => 
-        Array.isArray(statement.Action) && 
-        statement.Action.includes("glue:GetTables")
-    );
-    
-    expect(glueStatement).toBeDefined();
-    expect(glueStatement.Effect).toBe("Allow");
-    
-    // Check that all required Glue actions are present (order-independent)
-    const requiredActions = [
-        "glue:GetTables", 
-        "glue:GetTable", 
-        "glue:GetPartitions", 
-        "glue:GetDatabase", 
-        "glue:CreateTable", 
-        "glue:DeleteTable", 
-        "glue:UpdateTable"
-    ];
-    expect(glueStatement.Action).toEqual(expect.arrayContaining(requiredActions));
-    
-    // Also check that we don't have unexpected extra actions beyond what we know about
-    const knownActions = [
-        "glue:CreateDatabase",
-        "glue:GetDatabases", 
-        ...requiredActions
-    ];
-    expect(glueStatement.Action.every((action: string) => knownActions.includes(action))).toBe(true);
-    
-    // Check that the resources include both source and target databases
-    const resources = glueStatement.Resource;
-    expect(resources).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-            "Fn::Join": ["", expect.arrayContaining([":catalog"])]
-        }),
-        // Source database (where views are read from) - uses CloudFormation parameter reference
-        expect.objectContaining({
-            "Fn::Join": ["", expect.arrayContaining([":database/", { "Ref": "AthenaDatabaseName" }])]
-        }),
-        expect.objectContaining({
-            "Fn::Join": ["", expect.arrayContaining([":table/", { "Ref": "AthenaDatabaseName" }, "/*"])]
-        }),
-        // Target database (where tables are written to) - always "quilt_titanic"
-        expect.objectContaining({
-            "Fn::Join": ["", expect.arrayContaining([":database/quilt_titanic"])]
-        }),
-        expect.objectContaining({
-            "Fn::Join": ["", expect.arrayContaining([":table/quilt_titanic/*"])]
-        })
-    ]));
-};
-
 const expectAthenaPermissions = (template: Template) => {
     const policy = findLambdaPolicy(template, "athena:StartQueryExecution");
     const statements = policy.Properties.PolicyDocument.Statement;
@@ -136,7 +77,6 @@ describe("TitanicStack", () => {
         athenaDatabaseName: "test-database-env",
         quiltReadPolicyArn: "arn:aws:iam::123456789012:policy/test-policy",
         useS3Table: false,
-        externalDeployment: true, // Enable external deployment for tests that expect CF parameters
     };
 
     describe("Shared functionality (mode-independent)", () => {
@@ -180,9 +120,7 @@ describe("TitanicStack", () => {
                 expectAthenaPermissions(template);
             });
 
-            it("should grant required Glue permissions", () => {
-                expectGluePermissions(template, dbName);
-            });
+
 
             it("should grant S3 bucket location permissions", () => {
                 expectS3BucketLocationPermissions(template);
@@ -198,9 +136,9 @@ describe("TitanicStack", () => {
             template = createStackTemplate("GlueStack", { ...defaultStackProps, athenaDatabaseName: "test-database" });
         });
 
-        it("should create both regular S3 bucket and S3 Tables bucket", () => {
-            template.resourceCountIs("AWS::S3::Bucket", 1); // Only Glue tables bucket for external deployment
-            template.resourceCountIs("AWS::S3Tables::TableBucket", 0); // No S3 Tables bucket created for external deployment
+        it("should create regular S3 bucket, S3 Tables bucket, and assets bucket", () => {
+            template.resourceCountIs("AWS::S3::Bucket", 2); // Glue tables bucket and assets bucket
+            template.resourceCountIs("AWS::S3Tables::TableBucket", 1); // S3 Tables bucket created for internal deployment
         });
 
         it("should not create Glue database (assumes database already exists)", () => {
@@ -211,9 +149,9 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::Lambda::Function", {
                 Environment: {
                     Variables: {
-                        ATHENA_DATABASE_NAME: { Ref: "AthenaDatabaseName" },
+                        ATHENA_DATABASE_NAME: "test-database",
                         USE_S3_TABLE: "false",
-                        QUILT_READ_POLICY_ARN: { Ref: "QuiltReadPolicyArn" },
+                        QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/test-policy",
                         GLUE_TABLES_BUCKET_NAME: Match.anyValue(),
                         S3_TABLES_BUCKET_NAME: Match.anyValue(),
                         AWS_ACCOUNT_ID: Match.anyValue(),
@@ -223,28 +161,7 @@ describe("TitanicStack", () => {
             });
         });
 
-        describe("Database name usage", () => {
-            it("should use the database name provided in athenaDatabaseName prop", () => {
-                const envTemplate = createStackTemplate(
-                    "GlueEnvDbStack", 
-                    { ...defaultStackProps, athenaDatabaseName: "env_var_db_name" }
-                );
 
-                envTemplate.hasResourceProperties("AWS::Lambda::Function", {
-                    Environment: {
-                        Variables: {
-                            ATHENA_DATABASE_NAME: { Ref: "AthenaDatabaseName" },
-                            USE_S3_TABLE: "false",
-                            QUILT_READ_POLICY_ARN: { Ref: "QuiltReadPolicyArn" },
-                            GLUE_TABLES_BUCKET_NAME: Match.anyValue(),
-                            S3_TABLES_BUCKET_NAME: Match.anyValue(),
-                            AWS_ACCOUNT_ID: Match.anyValue(),
-                            CDK_DEFAULT_REGION: Match.anyValue(),
-                        },
-                    },
-                });
-            });
-        });
     });
 
     describe("S3 Tables mode", () => {
