@@ -66,7 +66,7 @@ const expectAthenaPermissions = (template: Template) => {
             ],
             Effect: "Allow",
             Resource: {
-                "Fn::Join": ["", ["arn:aws:athena:", { "Ref": "AWS::Region" }, ":", { "Ref": "AWS::AccountId" }, ":workgroup/primary"]]
+                "Fn::Join": [":", ["arn:aws:athena", { "Ref": "AWS::Region" }, { "Ref": "AWS::AccountId" }, "workgroup/primary"]]
             }
         })
     );
