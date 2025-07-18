@@ -5,7 +5,7 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import { TitanicStack, TitanicStackProps } from "./titanic-stack";
-import { Config } from "./shared/config";
+import { ConfigStack } from "./shared/config-stack";
 
 export type TitanicStackExternalProps = Omit<TitanicStackProps, 'parameterDefaults' | 'externalDeployment'>;
 
@@ -19,14 +19,14 @@ export class TitanicStackExternal extends TitanicStack {
         });
     }
 
-    protected createBuckets(config: Config): { 
+    protected createBuckets(): { 
         glueTablesBucket: s3.Bucket; 
         s3TablesBucketName: string; 
         assetsBucketName: string; 
     } {
         // External deployment: only create Glue tables bucket for Athena results
-        // Use Config method to generate CloudFormation reference for consistency
-        const glueTablesBucketName = config.generateGlueTablesBucketNameRef();
+        // Use ConfigStack method to generate CloudFormation reference for consistency
+        const glueTablesBucketName = this.config.generateGlueTablesBucketNameRef();
         
         const glueTablesBucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
             bucketName: glueTablesBucketName,
@@ -34,9 +34,9 @@ export class TitanicStackExternal extends TitanicStack {
             autoDeleteObjects: true,
         });
 
-        // Reference external buckets by parameter values (these should exist already)
-        const s3TablesBucketName = this.parameters.s3TablesBucketName.valueAsString;
-        const assetsBucketName = this.parameters.publicAssetsBucketName.valueAsString;
+        // Generate bucket names deterministically (these should exist already for external deployment)
+        const s3TablesBucketName = this.config.generateS3TablesBucketNameRef();
+        const assetsBucketName = this.config.generateAssetsBucketNameRef();
 
         return { glueTablesBucket, s3TablesBucketName, assetsBucketName };
     }

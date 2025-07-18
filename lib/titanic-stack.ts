@@ -9,16 +9,13 @@ import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import * as path from "path";
-import { Config } from "./shared/config";
+import { ConfigStack, S3StackConfig } from "./shared/config-stack";
 
 export interface TitanicStackProps extends cdk.StackProps {
     parameterDefaults?: {
         athenaDatabaseName?: string;
         quiltReadPolicyArn?: string;
         useS3Table?: boolean;
-        publicAssetsBucketName?: string;
-        s3TablesBucketName?: string;
-        glueTablesBucketName?: string;
     };
     externalDeployment?: boolean;  // Flag for third-party deployments (uses parameters and pre-built assets)
 }
@@ -27,13 +24,11 @@ interface TitanicStackParameters {
     athenaDatabaseName: cdk.CfnParameter;
     quiltReadPolicyArn: cdk.CfnParameter;
     useS3Table: cdk.CfnParameter;
-    publicAssetsBucketName: cdk.CfnParameter;
-    s3TablesBucketName: cdk.CfnParameter;
-    glueTablesBucketName: cdk.CfnParameter;
 }
 
 export class TitanicStack extends cdk.Stack {
     protected parameters: TitanicStackParameters;
+    protected config: ConfigStack;
 
     constructor(scope: Construct, id: string, props: TitanicStackProps = {}) {
         super(scope, id, props);
@@ -41,26 +36,31 @@ export class TitanicStack extends cdk.Stack {
         // Always create CloudFormation parameters
         this.parameters = this.createParameters(props.parameterDefaults);
 
-        // Create config instance using parameter values
-        const config = Config.createFromStack(this.account, this.region, {
-            athenaDatabaseName: this.parameters.athenaDatabaseName.valueAsString,
-            quiltReadPolicyArn: this.parameters.quiltReadPolicyArn.valueAsString,
-            useS3Table: this.parameters.useS3Table.valueAsString === "true",
-        });
+        // Create config instance using parameter values and account/region
+        this.config = props.parameterDefaults?.useS3Table
+            ? new S3StackConfig(this.account, this.region, {
+                athenaDatabaseName: this.parameters.athenaDatabaseName.valueAsString,
+                quiltReadPolicyArn: this.parameters.quiltReadPolicyArn.valueAsString,
+            })
+            : new ConfigStack(this.account, this.region, {
+                athenaDatabaseName: this.parameters.athenaDatabaseName.valueAsString,
+                quiltReadPolicyArn: this.parameters.quiltReadPolicyArn.valueAsString,
+                useS3Table: this.parameters.useS3Table.valueAsString === "true",
+            });
         
         console.log("TitanicStack configuration:", {
             account: this.account,
             region: this.region,
-            athenaDatabaseName: config.athenaDatabaseName,
-            useS3Table: config.useS3Table,
+            athenaDatabaseName: this.config.athenaDatabaseName,
+            useS3Table: this.config.useS3Table,
             externalDeployment: props.externalDeployment ?? false
         });
 
-        // Get standardized names using Config class
-        const s3DatabaseName = config.s3TableDatabaseName;
+        // Get standardized names using ConfigStack class
+        const s3DatabaseName = this.config.s3TableDatabaseName;
 
         // Create buckets using overridable method
-        const { glueTablesBucket, s3TablesBucketName, assetsBucketName } = this.createBuckets(config);
+        const { glueTablesBucket, s3TablesBucketName, assetsBucketName } = this.createBuckets();
 
         // Create Lambda environment configuration
         const lambdaEnvironment = {
@@ -103,20 +103,19 @@ export class TitanicStack extends cdk.Stack {
         packageEventRule.addTarget(new targets.LambdaFunction(mergeLambda));
 
         // Grant Lambda permissions
-        this.grantLambdaPermissions(lambdaRole, config, s3DatabaseName, glueTablesBucket, s3TablesBucketName);
+        this.grantLambdaPermissions(lambdaRole, this.config, s3DatabaseName, glueTablesBucket, s3TablesBucketName);
 
         // Add stack outputs
-        this.addStackOutputs(mergeLambda, glueTablesBucket, s3TablesBucketName, assetsBucketName, config);
+        this.addStackOutputs(mergeLambda, glueTablesBucket, s3TablesBucketName, assetsBucketName, this.config);
     }
 
-    protected createBuckets(config: Config): { 
+    protected createBuckets(): { 
         glueTablesBucket: s3.Bucket; 
         s3TablesBucketName: string; 
         assetsBucketName: string; 
     } {
-        // Use parameter value for bucket name if provided, otherwise generate dynamically
-        const glueTablesBucketName = this.parameters.glueTablesBucketName.valueAsString || 
-                                   config.generateGlueTablesBucketNameRef();
+        // Generate bucket names using ConfigStack
+        const glueTablesBucketName = this.config.generateGlueTablesBucketNameRef();
         
         // Internal deployment: create all buckets
         const glueTablesBucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
@@ -125,18 +124,16 @@ export class TitanicStack extends cdk.Stack {
             autoDeleteObjects: true,
         });
         
-        // Use parameter value for S3 Tables bucket name if provided, otherwise generate dynamically
-        const s3TablesBucketName = this.parameters.s3TablesBucketName.valueAsString || 
-                                 config.generateS3TablesBucketNameRef();
+        // Generate S3 Tables bucket name using ConfigStack
+        const s3TablesBucketName = this.config.generateS3TablesBucketNameRef();
         
         // Create an S3 Tables bucket for internal use
         const _s3TablesBucket = new s3tables.TableBucket(this, "TitanicS3TablesBucket", {
             tableBucketName: s3TablesBucketName,
         });
         
-        // Use parameter value for assets bucket name if provided, otherwise generate dynamically
-        const assetsBucketName = this.parameters.publicAssetsBucketName.valueAsString || 
-                               config.generateAssetsBucketNameRef();
+        // Generate assets bucket name using ConfigStack
+        const assetsBucketName = this.config.generateAssetsBucketNameRef();
         
         // Create an assets bucket for deployment assets and Lambda code
         const _assetsBucket = new s3.Bucket(this, "TitanicAssetsBucket", {
@@ -179,7 +176,7 @@ export class TitanicStack extends cdk.Stack {
 
     private grantLambdaPermissions(
         lambdaRole: iam.IRole, 
-        config: Config, 
+        config: ConfigStack, 
         s3DatabaseName: string, 
         glueTablesBucket: s3.Bucket, 
         s3TablesBucketName: string
@@ -282,7 +279,7 @@ export class TitanicStack extends cdk.Stack {
         glueTablesBucket: s3.Bucket, 
         s3TablesBucketName: string, 
         assetsBucketName: string, 
-        config: Config
+        config: ConfigStack
     ) {
         new cdk.CfnOutput(this, "LambdaFunctionName", {
             value: mergeLambda.functionName,
@@ -344,24 +341,6 @@ export class TitanicStack extends cdk.Stack {
                 description: "Whether to use S3 Tables format (true/false)",
                 default: (parameterDefaults?.useS3Table ?? false).toString(),
                 allowedValues: ["true", "false"],
-            }),
-
-            publicAssetsBucketName: new cdk.CfnParameter(this, "PublicAssetsBucketName", {
-                type: "String",
-                description: "Name of the S3 bucket containing pre-built deployment assets",
-                default: parameterDefaults?.publicAssetsBucketName || "",
-            }),
-
-            s3TablesBucketName: new cdk.CfnParameter(this, "S3TablesBucketName", {
-                type: "String",
-                description: "Name of the S3 Tables bucket (must exist already)",
-                default: parameterDefaults?.s3TablesBucketName || "",
-            }),
-
-            glueTablesBucketName: new cdk.CfnParameter(this, "GlueTablesBucketName", {
-                type: "String",
-                description: "Name of the Glue tables bucket (will be created if not specified)",
-                default: parameterDefaults?.glueTablesBucketName || "",
             }),
         };
     }

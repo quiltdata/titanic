@@ -33,20 +33,20 @@ const expectS3BucketLocationPermissions = (template: Template) => {
     const policy = findLambdaPolicyByKey(template, "MergeTables");
     expect(policy).toBeDefined();
     const statements = policy.Properties.PolicyDocument.Statement;
-    
+
     // Find all statements that grant s3:GetBucketLocation
-    const s3BucketLocationStatements = statements.filter((statement: any) => 
-        statement.Action === "s3:GetBucketLocation" || 
+    const s3BucketLocationStatements = statements.filter((statement: any) =>
+        statement.Action === "s3:GetBucketLocation" ||
         (Array.isArray(statement.Action) && statement.Action.includes("s3:GetBucketLocation"))
     );
-    
+
     expect(s3BucketLocationStatements.length).toBeGreaterThanOrEqual(2); // Should have at least 2 statements for both buckets
-    
+
     // Check that we have permissions for both bucket types
-    const allResources = s3BucketLocationStatements.flatMap((stmt: any) => 
+    const allResources = s3BucketLocationStatements.flatMap((stmt: any) =>
         Array.isArray(stmt.Resource) ? stmt.Resource : [stmt.Resource]
     );
-    
+
     // Should have bucket location permissions for both the Glue tables bucket and S3 tables bucket
     // The exact ARNs will be generated dynamically, but we should have at least 2 different bucket ARNs
     const uniqueBuckets = [...new Set(allResources)];
@@ -56,7 +56,7 @@ const expectS3BucketLocationPermissions = (template: Template) => {
 const expectAthenaPermissions = (template: Template) => {
     const policy = findLambdaPolicy(template, "athena:StartQueryExecution");
     const statements = policy.Properties.PolicyDocument.Statement;
-    
+
     expect(statements).toContainEqual(
         expect.objectContaining({
             Action: [
@@ -103,20 +103,6 @@ describe("TitanicStackExternal", () => {
                 Default: "false",
                 AllowedValues: ["true", "false"]
             });
-
-            // Check PublicAssetsBucketName parameter
-            template.hasParameter("PublicAssetsBucketName", {
-                Type: "String",
-                Description: "Name of the S3 bucket containing pre-built deployment assets",
-                Default: ""
-            });
-
-            // Check S3TablesBucketName parameter
-            template.hasParameter("S3TablesBucketName", {
-                Type: "String",
-                Description: "Name of the S3 Tables bucket (must exist already)",
-                Default: ""
-            });
         });
 
         it("should set externalDeployment flag to true", () => {
@@ -124,12 +110,10 @@ describe("TitanicStackExternal", () => {
             // External deployment creates parameters, internal deployment does not
             expect(template.toJSON().Parameters).toBeDefined();
             const parameterNames = Object.keys(template.toJSON().Parameters);
-            // Should have our 5 required parameters (CDK may add additional ones like BootstrapVersion)
+            // Should have our 3 required parameters (CDK may add additional ones like BootstrapVersion)
             expect(parameterNames).toContain("AthenaDatabaseName");
             expect(parameterNames).toContain("QuiltReadPolicyArn");
             expect(parameterNames).toContain("UseS3Table");
-            expect(parameterNames).toContain("PublicAssetsBucketName");
-            expect(parameterNames).toContain("S3TablesBucketName");
         });
     });
 
@@ -144,7 +128,7 @@ describe("TitanicStackExternal", () => {
             // External deployment should only create the Glue tables bucket
             // Other buckets are referenced by name from parameters
             template.resourceCountIs("AWS::S3::Bucket", 1);
-            
+
             template.hasResourceProperties("AWS::S3::Bucket", {
                 BucketName: {
                     "Fn::Join": ["", ["titanic-glue-tables-", { "Ref": "AWS::AccountId" }, "-", { "Ref": "AWS::Region" }]]
@@ -161,10 +145,10 @@ describe("TitanicStackExternal", () => {
             // External deployment should not create assets bucket
             // It references an existing one via parameter
             const buckets = template.findResources("AWS::S3::Bucket");
-            const bucketNames = Object.values(buckets).map((bucket: any) => 
+            const bucketNames = Object.values(buckets).map((bucket: any) =>
                 bucket.Properties.BucketName
             );
-            
+
             // Should only have the Glue tables bucket
             expect(bucketNames).toHaveLength(1);
             expect(bucketNames[0]).toEqual({
@@ -217,7 +201,9 @@ describe("TitanicStackExternal", () => {
                 Handler: "index.handler",
                 Timeout: 900,
                 Code: {
-                    S3Bucket: { "Ref": "PublicAssetsBucketName" },
+                    S3Bucket: {
+                        "Fn::Join": ["", ["titanic-assets-", { "Ref": "AWS::AccountId" }, "-", { "Ref": "AWS::Region" }]]
+                    },
                     S3Key: "lambda/merge-tables.zip"
                 }
             });
@@ -228,12 +214,12 @@ describe("TitanicStackExternal", () => {
             const template = createExternalStackTemplate("LambdaEnvVarsStack");
             const functions = template.findResources("AWS::Lambda::Function");
             const mergeTablesFunction = functions["TitanicMergeTables"];
-            
+
             expect(mergeTablesFunction).toBeDefined();
-            
+
             // Check the environment variables
             const envVars = mergeTablesFunction.Properties.Environment.Variables;
-            
+
             expect(envVars).toMatchObject({
                 ATHENA_DATABASE_NAME: { "Ref": "AthenaDatabaseName" },
                 QUILT_READ_POLICY_ARN: { "Ref": "QuiltReadPolicyArn" },
@@ -242,7 +228,7 @@ describe("TitanicStackExternal", () => {
                 LAMBDA_TIMEOUT: "900",
                 S3TABLE_DATABASE_NAME: "quilt_titanic"
             });
-            
+
             // USE_S3_TABLE should be present (either as parameter reference or string)
             expect(envVars.USE_S3_TABLE).toBeDefined();
         });
@@ -251,15 +237,15 @@ describe("TitanicStackExternal", () => {
             // External deployment should not create NodejsFunction
             // It should use CfnFunction with pre-built code from S3
             const functions = template.findResources("AWS::Lambda::Function");
-            
+
             // Should have the main function plus any helper functions CDK creates
             expect(Object.keys(functions).length).toBeGreaterThanOrEqual(1);
-            
+
             // Find the main function (our merge tables function)
-            const mainFunction = Object.values(functions).find((func: any) => 
+            const mainFunction = Object.values(functions).find((func: any) =>
                 func.Properties.Code && func.Properties.Code.S3Bucket && func.Properties.Code.S3Key
             ) as any;
-            
+
             expect(mainFunction).toBeDefined();
             expect(mainFunction.Properties.Code.S3Bucket).toBeDefined();
             // The S3Key could be "lambda/merge-tables.zip" or a hash-based key
@@ -281,12 +267,12 @@ describe("TitanicStackExternal", () => {
         it("should grant Glue permissions", () => {
             const policy = findLambdaPolicy(template, "glue:CreateDatabase");
             const statements = policy.Properties.PolicyDocument.Statement;
-            
+
             // Find the statement that contains Glue permissions
-            const glueStatement = statements.find((stmt: any) => 
+            const glueStatement = statements.find((stmt: any) =>
                 Array.isArray(stmt.Action) && stmt.Action.includes("glue:CreateDatabase")
             );
-            
+
             expect(glueStatement).toBeDefined();
             expect(glueStatement.Action).toEqual(expect.arrayContaining([
                 "glue:CreateDatabase",
@@ -304,7 +290,7 @@ describe("TitanicStackExternal", () => {
         it("should grant S3 Tables permissions", () => {
             const policy = findLambdaPolicy(template, "s3tables:GetTable");
             const statements = policy.Properties.PolicyDocument.Statement;
-            
+
             expect(statements).toContainEqual(
                 expect.objectContaining({
                     Action: [
@@ -336,7 +322,7 @@ describe("TitanicStackExternal", () => {
             ) as any;
 
             expect(lambdaRole).toBeDefined();
-            
+
             // The policy should be attached directly to the role's ManagedPolicyArns
             expect(lambdaRole.Properties.ManagedPolicyArns).toContainEqual({ "Ref": "QuiltReadPolicyArn" });
         });
@@ -465,14 +451,6 @@ describe("TitanicStackExternal", () => {
             template.hasParameter("UseS3Table", {
                 Default: "false"
             });
-
-            template.hasParameter("PublicAssetsBucketName", {
-                Default: ""
-            });
-
-            template.hasParameter("S3TablesBucketName", {
-                Default: ""
-            });
         });
 
         it("should use empty string defaults when environment variables are not set", () => {
@@ -481,8 +459,6 @@ describe("TitanicStackExternal", () => {
                 ATHENA_DATABASE_NAME: undefined,
                 QUILT_READ_POLICY_ARN: undefined,
                 USE_S3_TABLE: undefined,
-                PUBLIC_ASSETS_BUCKET_NAME: undefined,
-                S3_TABLES_BUCKET_NAME: undefined
             };
 
             const template = createExternalStackTemplate("NoEnvTestStack");
@@ -499,76 +475,73 @@ describe("TitanicStackExternal", () => {
                 Default: "false"
             });
 
-            template.hasParameter("PublicAssetsBucketName", {
-                Default: ""
-            });
+            // Note: PublicAssetsBucketName parameter should not exist in external deployment
+            // Bucket names are generated deterministically from account/region
+            const parameterNames = Object.keys(template.toJSON().Parameters);
+            expect(parameterNames).not.toContain("PublicAssetsBucketName");
+            expect(parameterNames).not.toContain("S3TablesBucketName");
+            expect(parameterNames).not.toContain("GlueTablesBucketName");
+        });
+    });
+});
 
-            template.hasParameter("S3TablesBucketName", {
-                Default: ""
-            });
+describe("Override Methods", () => {
+    let template: Template;
+
+    beforeAll(() => {
+        template = createExternalStackTemplate("OverrideTestStack");
+    });
+
+    it("should override getAssetsBucketDescription method", () => {
+        template.hasOutput("AssetsBucket", {
+            Description: "S3 bucket hosting pre-built deployment assets and Lambda code (external)"
         });
     });
 
-    describe("Override Methods", () => {
-        let template: Template;
-
-        beforeAll(() => {
-            template = createExternalStackTemplate("OverrideTestStack");
-        });
-
-        it("should override getAssetsBucketDescription method", () => {
-            template.hasOutput("AssetsBucket", {
-                Description: "S3 bucket hosting pre-built deployment assets and Lambda code (external)"
-            });
-        });
-
-        it("should override getAssetsBucketUrlDescription method", () => {
-            template.hasOutput("AssetsBucketUrl", {
-                Description: "URL for the external assets bucket with pre-built assets"
-            });
+    it("should override getAssetsBucketUrlDescription method", () => {
+        template.hasOutput("AssetsBucketUrl", {
+            Description: "URL for the external assets bucket with pre-built assets"
         });
     });
+});
 
-    describe("Error Handling", () => {
-        it("should handle missing environment variables gracefully", () => {
-            // This test ensures that the stack can be created even when environment variables are not set
-            expect(() => {
-                createExternalStackTemplate("ErrorHandlingStack");
-            }).not.toThrow();
-        });
+describe("Error Handling", () => {
+    it("should handle missing environment variables gracefully", () => {
+        // This test ensures that the stack can be created even when environment variables are not set
+        expect(() => {
+            createExternalStackTemplate("ErrorHandlingStack");
+        }).not.toThrow();
+    });
 
-        it("should create valid CloudFormation template", () => {
-            const template = createExternalStackTemplate("ValidTemplateStack");
-            const json = template.toJSON();
-            
-            expect(json.Parameters).toBeDefined();
-            expect(json.Resources).toBeDefined();
-            expect(json.Outputs).toBeDefined();
-            
-            // Should have our required parameters (CDK may add additional ones)
-            const parameterNames = Object.keys(json.Parameters);
-            expect(parameterNames).toContain("AthenaDatabaseName");
-            expect(parameterNames).toContain("QuiltReadPolicyArn");
-            expect(parameterNames).toContain("UseS3Table");
-            expect(parameterNames).toContain("PublicAssetsBucketName");
-            expect(parameterNames).toContain("S3TablesBucketName");
-            
-            // Should have resources for Lambda, IAM, S3, and EventBridge
-            const resourceNames = Object.keys(json.Resources);
-            
-            // Check for Lambda function
-            expect(resourceNames.some(name => 
-                name.toLowerCase().includes("lambda") || 
-                name.toLowerCase().includes("function") || 
-                name.includes("mergeTablesFunction") ||
-                name.includes("MergeTablesFunction") ||
-                name.includes("TitanicMergeTables") ||
-                name.includes("MergeTables")
-            )).toBe(true);
-            
-            expect(resourceNames.some(name => name.includes("Role"))).toBe(true);
-            expect(resourceNames.some(name => name.includes("Bucket"))).toBe(true);
-            expect(resourceNames.some(name => name.includes("Rule"))).toBe(true);
-        });
+    it("should create valid CloudFormation template", () => {
+        const template = createExternalStackTemplate("ValidTemplateStack");
+        const json = template.toJSON();
+
+        expect(json.Parameters).toBeDefined();
+        expect(json.Resources).toBeDefined();
+        expect(json.Outputs).toBeDefined();
+
+        // Should have our required parameters (CDK may add additional ones)
+        const parameterNames = Object.keys(json.Parameters);
+        expect(parameterNames).toContain("AthenaDatabaseName");
+        expect(parameterNames).toContain("QuiltReadPolicyArn");
+        expect(parameterNames).toContain("UseS3Table");
+
+        // Should have resources for Lambda, IAM, S3, and EventBridge
+        const resourceNames = Object.keys(json.Resources);
+
+        // Check for Lambda function
+        expect(resourceNames.some(name =>
+            name.toLowerCase().includes("lambda") ||
+            name.toLowerCase().includes("function") ||
+            name.includes("mergeTablesFunction") ||
+            name.includes("MergeTablesFunction") ||
+            name.includes("TitanicMergeTables") ||
+            name.includes("MergeTables")
+        )).toBe(true);
+
+        expect(resourceNames.some(name => name.includes("Role"))).toBe(true);
+        expect(resourceNames.some(name => name.includes("Bucket"))).toBe(true);
+        expect(resourceNames.some(name => name.includes("Rule"))).toBe(true);
     });
 });

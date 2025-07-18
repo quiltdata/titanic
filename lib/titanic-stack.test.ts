@@ -191,9 +191,19 @@ describe("TitanicStack", () => {
         it("should create S3 TableBucket in addition to regular S3 bucket", () => {
             // Regular S3 buckets: one for Glue tables and one for assets
             template.resourceCountIs("AWS::S3::Bucket", 2);
-            // S3 Tables bucket created for S3 Tables mode - now uses parameter reference
+            // S3 Tables bucket created for S3 Tables mode - uses generated name with CloudFormation references
             template.hasResourceProperties("AWS::S3Tables::TableBucket", {
-                TableBucketName: { "Ref": "S3TablesBucketName" }
+                TableBucketName: {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "titanic-s3-tables-",
+                            { "Ref": "AWS::AccountId" },
+                            "-",
+                            { "Ref": "AWS::Region" }
+                        ]
+                    ]
+                }
             });
         });
 
@@ -322,24 +332,20 @@ describe("TitanicStack", () => {
                 });
             });
 
-            it("should create bucket name parameters", () => {
-                template.hasParameter("PublicAssetsBucketName", {
-                    Type: "String",
-                    Description: "Name of the S3 bucket containing pre-built deployment assets",
-                    Default: ""
-                });
-
-                template.hasParameter("S3TablesBucketName", {
-                    Type: "String", 
-                    Description: "Name of the S3 Tables bucket (must exist already)",
-                    Default: ""
-                });
-
-                template.hasParameter("GlueTablesBucketName", {
-                    Type: "String",
-                    Description: "Name of the Glue tables bucket (will be created if not specified)",
-                    Default: ""
-                });
+            it("should NOT create bucket name parameters (buckets generated from account/region)", () => {
+                // According to the refactoring plan, bucket names are generated deterministically
+                // from AWS::AccountId and AWS::Region, so no bucket name parameters should exist
+                const parameterNames = Object.keys(template.toJSON().Parameters);
+                expect(parameterNames).not.toContain("PublicAssetsBucketName");
+                expect(parameterNames).not.toContain("S3TablesBucketName");
+                expect(parameterNames).not.toContain("GlueTablesBucketName");
+                
+                // Only these three parameters should exist (plus CDK's BootstrapVersion)
+                expect(parameterNames).toContain("AthenaDatabaseName");
+                expect(parameterNames).toContain("QuiltReadPolicyArn");
+                expect(parameterNames).toContain("UseS3Table");
+                expect(parameterNames).toContain("BootstrapVersion"); // CDK automatically adds this
+                expect(parameterNames).toHaveLength(4);
             });
         });
     });

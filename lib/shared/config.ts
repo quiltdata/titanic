@@ -1,6 +1,6 @@
 /**
- * Centralized configuration management for the Titanic project.
- * Defaults to Glue configuration with S3Config subclass for S3 tables.
+ * Base configuration class for Lambda runtime usage.
+ * Works with environment variables and resolved string values.
  */
 export class Config {
   public static readonly S3_TABLES_PREFIX = 's3tablesbucket';
@@ -40,7 +40,7 @@ export class Config {
   }
   
   /**
-   * Create config instance from CDK stack context
+   * Create config instance from resolved values (for Lambda runtime)
    */
   public static createFromStack(
     account: string, 
@@ -228,54 +228,6 @@ export class Config {
     return `arn:aws:s3tables:${this.aws_region}:${this.awsAccountId}:bucket/${bucketName}`;
   }
 
-  // CloudFormation reference methods for CDK Stack construction
-  // These return CloudFormation parameter references instead of resolved strings
-
-  /**
-   * Generate CloudFormation reference for Glue tables bucket name
-   * Returns Fn::Join with AWS::AccountId and AWS::Region parameters
-   */
-  public generateGlueTablesBucketNameRef(): string {
-    // Import cdk dynamically to avoid circular dependency
-    const cdk = require('aws-cdk-lib');
-    return cdk.Fn.join('', [
-      'titanic-glue-tables-',
-      cdk.Fn.ref('AWS::AccountId'),
-      '-',
-      cdk.Fn.ref('AWS::Region')
-    ]);
-  }
-
-  /**
-   * Generate CloudFormation reference for S3 Tables bucket name
-   * Returns Fn::Join with AWS::AccountId and AWS::Region parameters
-   */
-  public generateS3TablesBucketNameRef(): string {
-    // Import cdk dynamically to avoid circular dependency
-    const cdk = require('aws-cdk-lib');
-    return cdk.Fn.join('', [
-      'titanic-s3-tables-',
-      cdk.Fn.ref('AWS::AccountId'),
-      '-',
-      cdk.Fn.ref('AWS::Region')
-    ]);
-  }
-
-  /**
-   * Generate CloudFormation reference for assets bucket name
-   * Returns Fn::Join with AWS::AccountId and AWS::Region parameters
-   */
-  public generateAssetsBucketNameRef(): string {
-    // Import cdk dynamically to avoid circular dependency
-    const cdk = require('aws-cdk-lib');
-    return cdk.Fn.join('', [
-      'titanic-assets-',
-      cdk.Fn.ref('AWS::AccountId'),
-      '-',
-      cdk.Fn.ref('AWS::Region')
-    ]);
-  }
-
   /**
    * Generate deployment configuration for the Titanic project.
    */
@@ -343,3 +295,4 @@ export class S3Config extends Config {
     };
   }
 }
+
