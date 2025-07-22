@@ -1,9 +1,11 @@
 # Developer Guide - Titanic Data Lake Table Merger
+
 This guide covers the complete development workflow from local development to releasing.
 
 ## 1. Local Development
 
 **Setup**:
+
 ```bash
 git clone https://github.com/quiltdata/titanic
 cd titanic
@@ -13,6 +15,7 @@ npm install
 ```
 
 **Testing and Development**:
+
 ```bash
 npm run test               # Run tests without coverage
 npm run test:coverage      # Run tests with coverage report
@@ -23,6 +26,7 @@ npm run test:watch         # Run tests in watch mode
 ## 2. Local Deployment
 
 **Deploy to AWS for testing**:
+
 ```bash
 npm run cdk                # Full deploy (test + deploy + event + logs)
 npm run deploy:event       # Send manual merge event
@@ -33,6 +37,7 @@ npm run deploy:outputs     # Show stack outputs
 ## 3. Uploading Assets
 
 **Build and upload Lambda assets** (required before releases):
+
 ```bash
 npm run deploy:upload -- --dry-run       # Show what would be uploaded (preview)
 npm run deploy:upload                    # Build and upload assets to public bucket (includes CDK synthesis)
@@ -42,6 +47,7 @@ npm run deploy:upload --  --verify-only  # Check if assets exist in bucket
 ## 4. Testing Release
 
 **Generate and test release packages**:
+
 ```bash
 npm run deploy:release  # Generate standalone package
 cd dist/release/
@@ -55,12 +61,14 @@ cp env.example .env
 ## 5. Tagging a (Pre)Release
 
 **Production Release**:
+
 ```bash
 git checkout main
 npm run deploy:tag
 ```
 
 **Pre-Release for Testing**:
+
 ```bash
 git checkout feature-branch
 npm run deploy:tag:prerelease
@@ -145,6 +153,7 @@ sh -x deploy.sh
 - Requires no knowledge of underlying CDK infrastructure
 
 #### Release Tagging and GitHub Actions
+
 - Git tags trigger automated GitHub Actions workflow for release builds
 - Production releases use `npm run deploy:tag` on main branch to create and push version tags
 - Pre-releases use `npm run deploy:tag:prerelease` on feature branches for testing

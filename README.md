@@ -52,23 +52,27 @@ npm run deploy:logs recent 5 # show last 5 minutes
 
 ### Common Issues
 
-**❌ "Cannot find or access the specified bucket"**
+#### ❌ "Cannot find or access the specified bucket"
+
 - **Cause**: CDK stack didn't deploy properly or missing S3 bucket
-- **Solution**: 
+- **Solution**:
   1. Check deployment: `npm run deploy:outputs`
   2. Redeploy if needed: `npm run cdk`
 
-**❌ "User is not authorized" / Permission denied**
+#### ❌ "User is not authorized" / Permission denied
+
 - **Cause**: Wrong policy ARN or insufficient permissions
-- **Solution**: 
+- **Solution**:
   1. Verify `QUILT_READ_POLICY_ARN` is correct
   2. Check AWS credentials: `aws sts get-caller-identity`
 
-**❌ "Table not found" errors**
+#### ❌ "Table not found" errors
+
 - **Cause**: Source Quilt views don't exist
 - **Solution**: Verify views exist: `aws glue get-tables --database-name $ATHENA_DATABASE_NAME`
 
-**❌ "Missing required environment variables"**
+#### ❌ "Missing required environment variables"
+
 - **Cause**: `.env` file missing or incomplete
 - **Solution**: Copy `env.example` to `.env` and edit with your values
 
@@ -91,11 +95,13 @@ npm run deploy:logs errors         # Only errors
 ### When to Redeploy
 
 **Full redeploy needed**:
+
 - First deployment failed
 - Changing `USE_S3_TABLE` setting
 - Missing AWS resources
 
 **Simple restart sufficient**:
+
 - Lambda code changes only
 - Temporary AWS API issues
 
@@ -104,7 +110,7 @@ npm run deploy:logs errors         # Only errors
 The system creates three normalized Iceberg tables:
 
 - **Package Revisions** (`package_revision`): Specific versions of packages
-- **Package Tags** (`package_tag`): Named versions (like `latest`) 
+- **Package Tags** (`package_tag`): Named versions (like `latest`)
 - **Package Entries** (`package_entry`): Individual files within packages
 
 See [doc/SCHEMA.md](doc/SCHEMA.md) for detailed schema design.

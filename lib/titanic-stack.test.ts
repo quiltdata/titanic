@@ -28,30 +28,6 @@ const findLambdaPolicyByKey = (template: Template, _keyPattern: string) => {
     return lambdaPolicyEntry ? lambdaPolicyEntry[1] : Object.values(policies)[0];
 };
 
-const expectS3BucketLocationPermissions = (template: Template) => {
-    const policy = findLambdaPolicyByKey(template, "MergeTables");
-    expect(policy).toBeDefined();
-    const statements = policy.Properties.PolicyDocument.Statement;
-    
-    // Find all statements that grant s3:GetBucketLocation
-    const s3BucketLocationStatements = statements.filter((statement: any) => 
-        statement.Action === "s3:GetBucketLocation" || 
-        (Array.isArray(statement.Action) && statement.Action.includes("s3:GetBucketLocation"))
-    );
-    
-    expect(s3BucketLocationStatements.length).toBeGreaterThanOrEqual(2); // Should have at least 2 statements for both buckets
-    
-    // Check that we have permissions for both bucket types
-    const allResources = s3BucketLocationStatements.flatMap((stmt: any) => 
-        Array.isArray(stmt.Resource) ? stmt.Resource : [stmt.Resource]
-    );
-    
-    // Should have bucket location permissions for both the Glue tables bucket and S3 tables bucket
-    // The exact ARNs will be generated dynamically, but we should have at least 2 different bucket ARNs
-    const uniqueBuckets = [...new Set(allResources)];
-    expect(uniqueBuckets.length).toBeGreaterThanOrEqual(2);
-};
-
 const expectAthenaPermissions = (template: Template) => {
     const policy = findLambdaPolicy(template, "athena:StartQueryExecution");
     const statements = policy.Properties.PolicyDocument.Statement;
@@ -123,12 +99,6 @@ describe("TitanicStack", () => {
             it("should grant required Athena permissions", () => {
                 expectAthenaPermissions(template);
             });
-
-
-
-            it("should grant S3 bucket location permissions", () => {
-                expectS3BucketLocationPermissions(template);
-            });
         });
 
     });
@@ -145,9 +115,9 @@ describe("TitanicStack", () => {
             });
         });
 
-        it("should create regular S3 bucket, S3 Tables bucket, and assets bucket", () => {
+        it("should create regular S3 buckets and reference S3 Tables bucket", () => {
             template.resourceCountIs("AWS::S3::Bucket", 2); // Glue tables bucket and assets bucket
-            template.resourceCountIs("AWS::S3Tables::TableBucket", 1); // S3 Tables bucket created for internal deployment
+            template.resourceCountIs("AWS::S3Tables::TableBucket", 0); // S3 Tables bucket not created in Glue mode, only referenced
         });
 
         it("should create all buckets with parametrized names", () => {
@@ -180,21 +150,6 @@ describe("TitanicStack", () => {
                     ]
                 }
             });
-
-            // Test S3 Tables bucket name generation
-            template.hasResourceProperties("AWS::S3Tables::TableBucket", {
-                TableBucketName: {
-                    "Fn::Join": [
-                        "",
-                        [
-                            "titanic-s3-tables-",
-                            { "Ref": "AWS::AccountId" },
-                            "-",
-                            { "Ref": "AWS::Region" }
-                        ]
-                    ]
-                }
-            });
         });
 
         it("should not create Glue database (assumes database already exists)", () => {
@@ -218,6 +173,22 @@ describe("TitanicStack", () => {
             });
         });
 
+        it("should grant S3 bucket location permissions for Glue bucket only", () => {
+            const policy = findLambdaPolicyByKey(template, "MergeTables");
+            expect(policy).toBeDefined();
+            const statements = policy.Properties.PolicyDocument.Statement;
+            
+            // Find all statements that grant s3:GetBucketLocation
+            const s3BucketLocationStatements = statements.filter((statement: any) => 
+                statement.Action === "s3:GetBucketLocation" || 
+                (Array.isArray(statement.Action) && statement.Action.includes("s3:GetBucketLocation"))
+            );
+            
+            // In Glue mode, only the Glue tables bucket gets s3:GetBucketLocation permission
+            // The S3 Tables bucket is only referenced, not created, so no permissions are granted for it
+            expect(s3BucketLocationStatements.length).toBeGreaterThanOrEqual(1);
+        });
+
 
     });
 
@@ -234,10 +205,12 @@ describe("TitanicStack", () => {
             });
         });
 
-        it("should create S3 TableBucket in addition to regular S3 bucket", () => {
+        it("should create S3 TableBucket when in S3 Tables mode", () => {
             // Regular S3 buckets: one for Glue tables and one for assets
             template.resourceCountIs("AWS::S3::Bucket", 2);
-            // S3 Tables bucket created for S3 Tables mode - uses generated name with CloudFormation references
+            // S3 Tables bucket created when useS3Table is true
+            template.resourceCountIs("AWS::S3Tables::TableBucket", 1);
+            // S3 Tables bucket uses generated name with CloudFormation references
             template.hasResourceProperties("AWS::S3Tables::TableBucket", {
                 TableBucketName: {
                     "Fn::Join": [
@@ -321,6 +294,30 @@ describe("TitanicStack", () => {
                     Effect: "Allow"
                 })
             );
+        });
+
+        it("should grant S3 bucket location permissions for both buckets", () => {
+            const policy = findLambdaPolicyByKey(template, "MergeTables");
+            expect(policy).toBeDefined();
+            const statements = policy.Properties.PolicyDocument.Statement;
+            
+            // Find all statements that grant s3:GetBucketLocation
+            const s3BucketLocationStatements = statements.filter((statement: any) => 
+                statement.Action === "s3:GetBucketLocation" || 
+                (Array.isArray(statement.Action) && statement.Action.includes("s3:GetBucketLocation"))
+            );
+            
+            // In S3 Tables mode, both the Glue tables bucket and S3 Tables bucket get s3:GetBucketLocation permissions
+            expect(s3BucketLocationStatements.length).toBeGreaterThanOrEqual(2);
+            
+            // Check that we have permissions for both bucket types
+            const allResources = s3BucketLocationStatements.flatMap((stmt: any) => 
+                Array.isArray(stmt.Resource) ? stmt.Resource : [stmt.Resource]
+            );
+            
+            // Should have bucket location permissions for both the Glue tables bucket and S3 tables bucket
+            const uniqueBuckets = [...new Set(allResources)];
+            expect(uniqueBuckets.length).toBeGreaterThanOrEqual(2);
         });
     });
 

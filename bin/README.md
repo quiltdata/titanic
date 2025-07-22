@@ -6,7 +6,8 @@ This technology preview creates an Iceberg catalog with tables that mirrors the 
 - package_tag
 - package_entry
 
-You can query it from the Queries tab or the Athena console.
+You can query it from the Athena console
+(or the Queries tab, **if** you add the Titanic bucket to your stack).
 It includes an EventBridge rule that will update the catalog as new packages are created,
 which is also used to initialize the catalog.
 
@@ -82,17 +83,21 @@ The deployment script will:
 
 ### Common Issues
 
-**Template not found**
+#### Template not found
+
 - Ensure you're running `./deploy.sh` from the package directory
 
-**Missing required parameters**
+### Missing Required Parameters
+
 - Set `ATHENA_DATABASE_NAME` and `QUILT_READ_POLICY_ARN` in `.env` or via command line
 
-**AWS permissions errors**
+### AWS Permissions Errors
+
 - Verify your AWS credentials have necessary permissions
 - Check that your IAM user/role can create CloudFormation stacks
 
-**Stack deployment fails**
+### Stack Deployment Fails
+
 - Review CloudFormation events in AWS Console
 - Check the deployment output for specific error messages
 - Ensure the Quilt read policy ARN exists and is accessible
@@ -100,16 +105,19 @@ The deployment script will:
 ### Getting Help
 
 **View stack status:**
+
 ```bash
 aws cloudformation describe-stacks --stack-name TitanicStack
 ```
 
 **View deployment events:**
+
 ```bash
 aws cloudformation describe-stack-events --stack-name TitanicStack
 ```
 
 **Delete stack (if needed):**
+
 ```bash
 aws cloudformation delete-stack --stack-name TitanicStack
 ```
@@ -133,6 +141,7 @@ The Titanic Stack creates a data lake table merger that:
 ## Version Information
 
 This package uses pre-built Lambda assets from the public S3 bucket:
+
 - **Assets bucket**: Generated deterministically as `titanic-assets-{account}-{region}`
 - **Lambda code**: `lambda/merge-tables.zip`
 - **Strategy**: Always uses the latest available version

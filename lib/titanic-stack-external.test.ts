@@ -40,17 +40,17 @@ const expectS3BucketLocationPermissions = (template: Template) => {
         (Array.isArray(statement.Action) && statement.Action.includes("s3:GetBucketLocation"))
     );
 
-    expect(s3BucketLocationStatements.length).toBeGreaterThanOrEqual(2); // Should have at least 2 statements for both buckets
+    expect(s3BucketLocationStatements.length).toBeGreaterThanOrEqual(1); // Should have at least 1 statement for Glue tables bucket
 
-    // Check that we have permissions for both bucket types
+    // Check that we have permissions for the Glue tables bucket
     const allResources = s3BucketLocationStatements.flatMap((stmt: any) =>
         Array.isArray(stmt.Resource) ? stmt.Resource : [stmt.Resource]
     );
 
-    // Should have bucket location permissions for both the Glue tables bucket and S3 tables bucket
-    // The exact ARNs will be generated dynamically, but we should have at least 2 different bucket ARNs
+    // External deployment should only have bucket location permissions for the Glue tables bucket
+    // (not the S3 Tables bucket since it doesn't create it)
     const uniqueBuckets = [...new Set(allResources)];
-    expect(uniqueBuckets.length).toBeGreaterThanOrEqual(2);
+    expect(uniqueBuckets.length).toBeGreaterThanOrEqual(1);
 };
 
 const expectAthenaPermissions = (template: Template) => {
@@ -294,24 +294,18 @@ describe("TitanicStackExternal", () => {
             ]));
         });
 
-        it("should grant S3 Tables permissions", () => {
-            const policy = findLambdaPolicy(template, "s3tables:GetTable");
-            const statements = policy.Properties.PolicyDocument.Statement;
-
-            expect(statements).toContainEqual(
-                expect.objectContaining({
-                    Action: [
-                        "s3tables:GetTable",
-                        "s3tables:CreateTable",
-                        "s3tables:PutTableData",
-                        "s3tables:GetTableData",
-                        "s3tables:UpdateTable",
-                        "s3tables:DeleteTable",
-                        "s3tables:ListTables"
-                    ],
-                    Effect: "Allow"
-                })
+        it("should NOT grant S3 Tables permissions (external deployment)", () => {
+            const policies = template.findResources("AWS::IAM::Policy");
+            const allStatements = Object.values(policies).flatMap((policy: any) =>
+                policy.Properties.PolicyDocument.Statement
             );
+
+            // External deployment should not have S3 Tables permissions since it doesn't create the S3 Tables bucket
+            const s3TablesStatements = allStatements.filter((stmt: any) =>
+                Array.isArray(stmt.Action) && stmt.Action.some((action: string) => action.startsWith("s3tables:"))
+            );
+
+            expect(s3TablesStatements).toHaveLength(0);
         });
 
         it("should grant S3 bucket location permissions", () => {

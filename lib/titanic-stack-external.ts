@@ -1,10 +1,8 @@
-import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
-import * as s3 from "aws-cdk-lib/aws-s3";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
-import { TitanicStack, TitanicStackProps, TitanicStackParameters } from "./titanic-stack";
+import { TitanicStack, TitanicStackProps } from "./titanic-stack";
 
 export type TitanicStackExternalProps = Omit<TitanicStackProps, 'parameterDefaults' | 'externalDeployment'>;
 
@@ -18,47 +16,19 @@ export class TitanicStackExternal extends TitanicStack {
         });
     }
 
-    protected createParameters(parameterDefaults?: TitanicStackProps['parameterDefaults']): TitanicStackParameters {
-        // External deployments need the public assets bucket parameter
-        return super.createParameters(parameterDefaults, true);
+    protected createOrReferenceAssetsBucket(): string {
+        // External deployment: use public assets bucket parameter
+        return this.config.getPublicAssetsBucketName() || 
+               this.config.generateAssetsBucketNameRef() as string;
     }
 
-    protected createBuckets(): { 
-        glueTablesBucket: s3.Bucket; 
-        s3TablesBucketName: string; 
-        assetsBucketName: string; 
-    } {
-        // External deployment: only create Glue tables bucket for Athena results
-        // Use ConfigStack method to generate CloudFormation reference for consistency
-        const glueTablesBucketName = this.config.generateGlueTablesBucketNameRef() as string;
-        
-        const glueTablesBucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
-            bucketName: glueTablesBucketName,
-            removalPolicy: cdk.RemovalPolicy.DESTROY,
-            autoDeleteObjects: true,
-        });
-
-        // Generate bucket names deterministically (these should exist already for external deployment)
-        const s3TablesBucketName = this.config.generateS3TablesBucketNameRef() as string;
-        const assetsBucketName = this.config.generateAssetsBucketNameRef() as string;
-
-        return { glueTablesBucket, s3TablesBucketName, assetsBucketName };
-    }
-
-    protected createLambda(
+    protected createLambdaFunction(
         assetsBucketName: string, 
-        lambdaEnvironment: Record<string, string>
-    ): { mergeLambda: lambda.IFunction; lambdaRole: iam.IRole } {
-        // Create role first for external deployment
-        const lambdaRole = new iam.Role(this, "TitanicMergeTablesRole", {
-            assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
-            managedPolicies: [
-                iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")
-            ],
-        });
-
+        lambdaEnvironment: Record<string, string>,
+        lambdaRole: iam.IRole
+    ): lambda.IFunction {
         // Use the public assets bucket parameter for Lambda code location
-        const publicAssetsBucketName = this.parameters.publicAssetsBucketName?.valueAsString || assetsBucketName;
+        const publicAssetsBucketName = this.config.getPublicAssetsBucketName() || assetsBucketName;
 
         // Create Lambda using CfnFunction with parameter references
         const cfnLambda = new lambda.CfnFunction(this, "TitanicMergeTables", {
@@ -66,7 +36,7 @@ export class TitanicStackExternal extends TitanicStack {
             handler: "index.handler",
             timeout: 900,
             code: {
-                s3Bucket: publicAssetsBucketName, // This will be the public bucket parameter
+                s3Bucket: publicAssetsBucketName,
                 s3Key: "lambda/merge-tables.zip"
             },
             environment: {
@@ -76,12 +46,10 @@ export class TitanicStackExternal extends TitanicStack {
         });
         
         // Wrap CfnFunction as IFunction for compatibility
-        const mergeLambda = lambda.Function.fromFunctionAttributes(this, "TitanicMergeTablesRef", {
+        return lambda.Function.fromFunctionAttributes(this, "TitanicMergeTablesRef", {
             functionArn: cfnLambda.attrArn,
             role: lambdaRole,
         });
-
-        return { mergeLambda, lambdaRole };
     }
 
     protected getAssetsBucketDescription(): string {

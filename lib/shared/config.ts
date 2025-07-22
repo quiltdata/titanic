@@ -29,8 +29,9 @@ export class Config {
   }
   
   // Factory method to create appropriate config type based on environment
-  public static create(config?: Partial<Config>): Config {
-    return process.env.USE_S3_TABLE === 'true' 
+  public static create(config?: Partial<Config>, useS3Table?: boolean): Config {
+    const shouldUseS3Table = useS3Table ?? (process.env.USE_S3_TABLE === 'true');
+    return shouldUseS3Table
       ? new S3Config(config) 
       : new Config(config);
   }
