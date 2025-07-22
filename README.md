@@ -2,39 +2,7 @@
 
 Automatically merges the packages and objects views from every bucket into a single queryable Iceberg catalog while maintaining data consistency and avoiding duplicates.
 
-**🚀 Quick Start**: Download the [latest release](https://github.com/quiltdata/titanic/releases/latest) and follow the deployment steps below.
-
-## Installation
-
-Download and deploy a pre-built package:
-
-```bash
-# Download latest release
-curl -L -o titanic-release.tar.gz https://github.com/quiltdata/titanic/releases/latest/download/release-*.tar.gz
-tar -xzf titanic-release.tar.gz
-cd release-*/
-
-# Configure
-cp env.example .env
-# Edit .env with your required values (see Configuration below)
-
-# Deploy
-./deploy.sh
-```
-
-### Configuration
-
-Edit `.env` with these **required** values:
-
-```env
-# Required: Your Quilt stack configuration
-ATHENA_DATABASE_NAME=your_ATHENA_DATABASE_NAME
-QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/STACK-BucketReadPolicy-XXXX
-
-# Optional: Advanced settings
-USE_S3_TABLE=false          # Use S3 Tables format (experimental)
-AWS_DEFAULT_REGION=us-east-1
-```
+**🚀 Quick Start**: Download the [latest release](https://github.com/quiltdata/titanic/releases/latest) and follow the deployment steps in [the deployment README](bin/README.md).
 
 ## Usage
 
