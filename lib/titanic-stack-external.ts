@@ -1,3 +1,4 @@
+import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
@@ -8,11 +9,15 @@ export type TitanicStackExternalProps = Omit<TitanicStackProps, 'parameterDefaul
 
 export class TitanicStackExternal extends TitanicStack {
     constructor(scope: Construct, id: string, props: TitanicStackExternalProps = {}) {
-        // Call super constructor without parameter defaults (external deployment)
+        // Call super constructor with CliCredentialsStackSynthesizer to eliminate bootstrap dependencies
         super(scope, id, {
             ...props,
             // No parameterDefaults - pure CloudFormation parameters
             externalDeployment: true,
+            // Use CliCredentialsStackSynthesizer for standalone templates
+            synthesizer: new cdk.CliCredentialsStackSynthesizer({
+                bucketPrefix: 'lambda/',
+            }),
         });
     }
 

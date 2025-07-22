@@ -98,7 +98,7 @@ export class TitanicStack extends cdk.Stack {
         const bucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
             bucketName,
             removalPolicy: cdk.RemovalPolicy.DESTROY,
-            autoDeleteObjects: true,
+            autoDeleteObjects: false,
         });
 
         // Grant bucket permissions immediately
@@ -164,7 +164,7 @@ export class TitanicStack extends cdk.Stack {
         const _assetsBucket = new s3.Bucket(this, "TitanicAssetsBucket", {
             bucketName,
             removalPolicy: cdk.RemovalPolicy.DESTROY,
-            autoDeleteObjects: true,
+            autoDeleteObjects: false,
             publicReadAccess: true, // Make bucket objects publicly readable
             blockPublicAccess: new s3.BlockPublicAccess({
                 blockPublicAcls: false,
