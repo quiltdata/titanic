@@ -44,6 +44,14 @@ export async function handler(
     const results = await tableManager.createTables();
     console.log("TableManager createTables results:", results);
 
+    // Fail fast if table creation failed completely
+    if (results.failedTables > 0 && results.successfulTables === 0) {
+        throw new Error(
+            `Table creation failed completely: ${results.failedTables} tables failed to create. ` +
+            `Cannot proceed with merge operations without properly initialized tables.`
+        );
+    }
+
     const allTables = await athenaUtils.getAllTables(sourceDatabaseName);
     const buckets = selectBuckets(allTables, sourceBucket);
 

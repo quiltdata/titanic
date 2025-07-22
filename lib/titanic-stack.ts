@@ -3,92 +3,50 @@ import { Construct } from "constructs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3tables from "@aws-cdk/aws-s3tables-alpha";
 import * as iam from "aws-cdk-lib/aws-iam";
-import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as lambdaNodejs from "aws-cdk-lib/aws-lambda-nodejs";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import * as path from "path";
-import { Config } from "./shared/config";
+import { ConfigStack, TitanicStackProps } from "./shared/config-stack";
 
-export interface TitanicStackProps extends cdk.StackProps {
-    athenaDatabaseName?: string;
-    quiltReadPolicyArn?: string;
-    useS3Table?: boolean;
-    useCloudFormationParameters?: boolean;  // Flag to enable parameter mode
-}
-
-interface TitanicStackParameters {
-    athenaDatabaseName: cdk.CfnParameter;
-    quiltReadPolicyArn: cdk.CfnParameter;
-    useS3Table: cdk.CfnParameter;
-}
+export type { TitanicStackProps } from "./shared/config-stack";
 
 export class TitanicStack extends cdk.Stack {
+    protected config: ConfigStack;
+
     constructor(scope: Construct, id: string, props: TitanicStackProps = {}) {
         super(scope, id, props);
 
-        // Create config instance that knows about account and region
-        const configProps = this.resolveConfiguration(props);
-        const config = Config.createFromStack(this.account, this.region, configProps);
-        
+        // Create ConfigStack which handles parameters internally
+        this.config = ConfigStack.createForStack(this, props);
+
         console.log("TitanicStack configuration:", {
             account: this.account,
             region: this.region,
-            athenaDatabaseName: configProps.athenaDatabaseName,
-            useS3Table: configProps.useS3Table
+            athenaDatabaseName: this.config.athenaDatabaseName,
+            useS3Table: this.config.useS3Table,
+            externalDeployment: props.externalDeployment ?? false
         });
 
-        // Get standardized names using Config class
-        const s3DatabaseName = config.s3TableDatabaseName;
+        // Get standardized names using ConfigStack class
+        const s3DatabaseName = this.config.s3TableDatabaseName;
 
-        // Always create both buckets for maximum flexibility
+        // Create Lambda role first to make dependencies explicit
+        const lambdaRole = this.createLambdaRole();
 
-        // Regular S3 bucket for Athena results and Glue tables
-        const glueTablesBucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
-            bucketName: config.generateGlueTablesBucketName(),
-            removalPolicy: cdk.RemovalPolicy.DESTROY,
-            autoDeleteObjects: true,
-        });
+        // Create buckets and grant permissions immediately (passing role explicitly)
+        const { glueTablesBucket, s3TablesBucketName, assetsBucketName } = this.createBuckets(lambdaRole);
 
-        // S3 Tables bucket for S3 Tables format
-        const s3TablesBucketName = config.generateS3TablesBucketName();
-        const s3TablesBucket = new s3tables.TableBucket(this, "TitanicS3TablesBucket", {
-            tableBucketName: s3TablesBucketName,
-        });
+        // Generate Lambda environment configuration using ConfigStack
+        const lambdaEnvironment = this.config.generateLambdaEnvironment(
+            glueTablesBucket.bucketName,
+            s3TablesBucketName
+        );
 
-        // Create merge tables Lambda
-        const mergeLambda = new lambda.NodejsFunction(this, "TitanicMergeTables", {
-            entry: path.join(__dirname, "merge-tables.ts"),
-            handler: "handler",
-            runtime: Runtime.NODEJS_18_X,
-            timeout: cdk.Duration.seconds(900),
-            bundling: {
-                externalModules: [
-                    "@aws-sdk/client-glue",
-                    "@aws-sdk/client-athena",
-                ],
-            },
-            environment: {
-                // Source database to read from (always the same, where views are)
-                ATHENA_DATABASE_NAME: config.athenaDatabaseName,
-
-                // Target database to write to (changes based on USE_S3_TABLE)
-                S3TABLE_DATABASE_NAME: s3DatabaseName,
-
-                // Target buckets - Pass bucket names instead of ARNs
-                GLUE_TABLES_BUCKET_NAME: glueTablesBucket.bucketName,
-                S3_TABLES_BUCKET_NAME: s3TablesBucketName,
-
-                // AWS context for ARN generation
-                AWS_ACCOUNT_ID: this.account,
-                CDK_DEFAULT_REGION: this.region,
-
-                // Configuration
-                LAMBDA_TIMEOUT: "900",
-                QUILT_READ_POLICY_ARN: config.quiltReadPolicyArn,
-                USE_S3_TABLE: config.useS3Table.toString(),
-            },
-        });
+        // Create Lambda function with existing role (passing role explicitly)
+        const mergeLambda = this.createLambdaFunction(assetsBucketName, lambdaEnvironment, lambdaRole);
 
         // Create EventBridge rule to route package events to Lambda
         const packageEventRule = new events.Rule(this, "TitanicUpdateEventRule", {
@@ -105,8 +63,159 @@ export class TitanicStack extends cdk.Stack {
         // Add Lambda as target for EventBridge rule
         packageEventRule.addTarget(new targets.LambdaFunction(mergeLambda));
 
-        // Grant Lambda permissions
-        mergeLambda.addToRolePolicy(
+        // Grant non-bucket Lambda permissions (bucket permissions handled during bucket creation)
+        this.grantNonBucketLambdaPermissions(lambdaRole, this.config, s3DatabaseName);
+
+        // Add stack outputs
+        this.addStackOutputs(mergeLambda, glueTablesBucket, s3TablesBucketName, assetsBucketName, this.config);
+    }
+
+    protected createLambdaRole(): iam.Role {
+        return new iam.Role(this, "TitanicLambdaRole", {
+            assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+            managedPolicies: [
+                iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
+            ],
+        });
+    }
+
+    protected createBuckets(lambdaRole: iam.IRole): { 
+        glueTablesBucket: s3.Bucket; 
+        s3TablesBucketName: string; 
+        assetsBucketName: string; 
+    } {
+        const glueTablesBucket = this.createGlueTablesBucket(lambdaRole);
+        const s3TablesBucketName = this.config.useS3Table
+            ? this.createS3TablesBucket(lambdaRole)
+            : this.referenceS3TablesBucket(lambdaRole);
+        const assetsBucketName = this.createOrReferenceAssetsBucket();
+
+        return { glueTablesBucket, s3TablesBucketName, assetsBucketName };
+    }
+
+    protected createGlueTablesBucket(lambdaRole: iam.IRole): s3.Bucket {
+        const bucketName = this.config.generateGlueTablesBucketNameRef() as string;
+        const bucket = new s3.Bucket(this, "TitanicGlueTablesBucket", {
+            bucketName,
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+            autoDeleteObjects: false,
+        });
+
+        // Grant bucket permissions immediately
+        bucket.grantReadWrite(lambdaRole);
+        lambdaRole.addToPrincipalPolicy(
+            new iam.PolicyStatement({
+                actions: ["s3:GetBucketLocation"],
+                resources: [bucket.bucketArn],
+            }),
+        );
+
+        return bucket;
+    }
+
+    protected referenceS3TablesBucket(_lambdaRole: iam.IRole): string {
+        // External deployment: only generate bucket name reference (don't create bucket)
+        const bucketName = this.config.generateS3TablesBucketNameRef() as string;
+        return bucketName;
+    }
+
+    protected createS3TablesBucket(lambdaRole: iam.IRole): string {
+        const bucketName = this.config.generateS3TablesBucketNameRef() as string;
+        
+        // Create an S3 Tables bucket for internal use
+        const _s3TablesBucket = new s3tables.TableBucket(this, "TitanicS3TablesBucket", {
+            tableBucketName: bucketName,
+        });
+
+        // Grant S3 Tables permissions immediately
+        lambdaRole.addToPrincipalPolicy(
+            new iam.PolicyStatement({
+                actions: [
+                    "s3tables:GetTable",
+                    "s3tables:CreateTable",
+                    "s3tables:PutTableData",
+                    "s3tables:GetTableData",
+                    "s3tables:UpdateTable",
+                    "s3tables:DeleteTable",
+                    "s3tables:ListTables",
+                ],
+                resources: [
+                    this.localPolicy("s3tables", `bucket/${bucketName}`),
+                    this.localPolicy("s3tables", `bucket/${bucketName}/*`),
+                ],
+            }),
+        );
+
+        // Grant S3 bucket location permission for S3 Tables bucket
+        lambdaRole.addToPrincipalPolicy(
+            new iam.PolicyStatement({
+                actions: ["s3:GetBucketLocation"],
+                resources: [`arn:aws:s3:::${bucketName}`],
+            }),
+        );
+        
+        return bucketName;
+    }
+
+    protected createOrReferenceAssetsBucket(): string {
+        const bucketName = this.config.generateAssetsBucketNameRef() as string;
+        
+        // Create an assets bucket for deployment assets and Lambda code
+        const _assetsBucket = new s3.Bucket(this, "TitanicAssetsBucket", {
+            bucketName,
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+            autoDeleteObjects: false,
+            publicReadAccess: true, // Make bucket objects publicly readable
+            blockPublicAccess: new s3.BlockPublicAccess({
+                blockPublicAcls: false,
+                blockPublicPolicy: false,
+                ignorePublicAcls: false,
+                restrictPublicBuckets: false,
+            }), // Allow completely open public access
+        });
+
+        return bucketName;
+    }
+
+    protected createLambdaFunction(
+        assetsBucketName: string, 
+        lambdaEnvironment: Record<string, string>,
+        lambdaRole: iam.IRole
+    ): lambda.IFunction {
+        // Internal deployment uses NodejsFunction with explicit role
+        return new lambdaNodejs.NodejsFunction(this, "TitanicMergeTables", {
+            entry: path.join(__dirname, "merge-tables.ts"),
+            handler: "handler",
+            runtime: Runtime.NODEJS_18_X,
+            timeout: cdk.Duration.seconds(900),
+            role: lambdaRole, // Use the explicitly passed role
+            bundling: {
+                externalModules: [
+                    "@aws-sdk/client-glue",
+                    "@aws-sdk/client-athena",
+                ],
+            },
+            environment: lambdaEnvironment,
+        });
+    }
+
+    protected localPolicy(prefix: string, suffix: string): string {
+        return cdk.Fn.join(":", [
+            "arn:aws",
+            prefix,
+            cdk.Aws.REGION,
+            cdk.Aws.ACCOUNT_ID,
+            suffix
+        ]);
+    }
+
+    private grantNonBucketLambdaPermissions(
+        lambdaRole: iam.IRole, 
+        config: ConfigStack, 
+        s3DatabaseName: string
+    ) {
+        // Grant Glue permissions
+        lambdaRole.addToPrincipalPolicy(
             new iam.PolicyStatement({
                 actions: [
                     "glue:CreateDatabase",
@@ -120,16 +229,17 @@ export class TitanicStack extends cdk.Stack {
                     "glue:UpdateTable",
                 ],
                 resources: [
-                    `arn:aws:glue:${this.region}:${this.account}:catalog`,
-                    `arn:aws:glue:${this.region}:${this.account}:database/${config.athenaDatabaseName}`,
-                    `arn:aws:glue:${this.region}:${this.account}:database/${s3DatabaseName}`,
-                    `arn:aws:glue:${this.region}:${this.account}:table/${config.athenaDatabaseName}/*`,
-                    `arn:aws:glue:${this.region}:${this.account}:table/${s3DatabaseName}/*`,
+                    this.localPolicy("glue", "catalog"),
+                    this.localPolicy("glue", `database/${config.athenaDatabaseName}`),
+                    this.localPolicy("glue", `database/${s3DatabaseName}`),
+                    this.localPolicy("glue", `table/${config.athenaDatabaseName}/*`),
+                    this.localPolicy("glue", `table/${s3DatabaseName}/*`),
                 ],
             }),
         );
 
-        mergeLambda.addToRolePolicy(
+        // Grant Athena permissions
+        lambdaRole.addToPrincipalPolicy(
             new iam.PolicyStatement({
                 actions: [
                     "athena:StartQueryExecution",
@@ -138,59 +248,36 @@ export class TitanicStack extends cdk.Stack {
                     "athena:BatchGetQueryExecution"
                 ],
                 resources: [
-                    `arn:aws:athena:${this.region}:${this.account}:workgroup/primary`,
+                    this.localPolicy("athena", "workgroup/primary"),
                 ],
-            }),
-        );
-
-        // Always grant permissions to both buckets since Lambda decides which to use
-
-        // Regular S3 bucket permissions (always used for Athena results, also for Glue tables)
-        glueTablesBucket.grantReadWrite(mergeLambda);
-        mergeLambda.addToRolePolicy(
-            new iam.PolicyStatement({
-                actions: ["s3:GetBucketLocation"],
-                resources: [glueTablesBucket.bucketArn],
-            }),
-        );
-
-        // S3 Tables bucket permissions (used when USE_S3_TABLE=true)
-        mergeLambda.addToRolePolicy(
-            new iam.PolicyStatement({
-                actions: [
-                    "s3tables:GetTable",
-                    "s3tables:CreateTable",
-                    "s3tables:PutTableData",
-                    "s3tables:GetTableData",
-                    "s3tables:UpdateTable",
-                    "s3tables:DeleteTable",
-                    "s3tables:ListTables",
-                ],
-                resources: [
-                    s3TablesBucket.tableBucketArn,
-                    `${s3TablesBucket.tableBucketArn}/*`,
-                ],
-            }),
-        );
-
-        // Grant S3 bucket location permission for S3 Tables bucket separately
-        mergeLambda.addToRolePolicy(
-            new iam.PolicyStatement({
-                actions: ["s3:GetBucketLocation"],
-                resources: [s3TablesBucket.tableBucketArn],
             }),
         );
 
         // Grant read access to source buckets via the provided policy
-        mergeLambda.role?.addManagedPolicy(
+        lambdaRole.addManagedPolicy(
             iam.ManagedPolicy.fromManagedPolicyArn(
                 this,
                 "TitanicGrantQuiltReadPolicy",
-                config.quiltReadPolicyArn
+                config.getQuiltReadPolicyArn()
             )
         );
+    }
 
-        // Add stack outputs for easy access
+    protected getAssetsBucketDescription(): string {
+        return "S3 bucket hosting deployment assets and Lambda code (local)";
+    }
+
+    protected getAssetsBucketUrlDescription(): string {
+        return "URL for the local assets bucket";
+    }
+
+    private addStackOutputs(
+        mergeLambda: lambda.IFunction, 
+        glueTablesBucket: s3.Bucket, 
+        s3TablesBucketName: string, 
+        assetsBucketName: string, 
+        config: ConfigStack
+    ) {
         new cdk.CfnOutput(this, "LambdaFunctionName", {
             value: mergeLambda.functionName,
             description: "Name of the Titanic merge tables Lambda function"
@@ -211,6 +298,16 @@ export class TitanicStack extends cdk.Stack {
             description: "S3 Tables bucket name"
         });
 
+        new cdk.CfnOutput(this, "AssetsBucket", {
+            value: assetsBucketName,
+            description: this.getAssetsBucketDescription()
+        });
+
+        new cdk.CfnOutput(this, "AssetsBucketUrl", {
+            value: `https://${assetsBucketName}.s3.amazonaws.com`,
+            description: this.getAssetsBucketUrlDescription()
+        });
+
         new cdk.CfnOutput(this, "SourceDatabaseName", {
             value: config.athenaDatabaseName,
             description: "Source Glue database name (where views are read from)"
@@ -220,55 +317,5 @@ export class TitanicStack extends cdk.Stack {
             value: config.useS3Table ? config.s3TableDatabaseName : config.athenaDatabaseName,
             description: "Target database name (where tables are written to)"
         });
-
-    }
-
-    private resolveConfiguration(props: TitanicStackProps) {
-        const useParameters = props.useCloudFormationParameters ?? false;
-        if (useParameters) {
-            const parameters = this.createParameters();
-            return {
-                athenaDatabaseName: parameters.athenaDatabaseName.valueAsString,
-                quiltReadPolicyArn: parameters.quiltReadPolicyArn.valueAsString,
-                useS3Table: parameters.useS3Table.valueAsString === "true",
-            };
-        } else {
-            // Validate required props when not using parameters
-            if (!props.athenaDatabaseName) {
-                throw new Error("athenaDatabaseName is required when useCloudFormationParameters is false");
-            }
-            if (!props.quiltReadPolicyArn) {
-                throw new Error("quiltReadPolicyArn is required when useCloudFormationParameters is false");
-            }
-            
-            return {
-                athenaDatabaseName: props.athenaDatabaseName,
-                quiltReadPolicyArn: props.quiltReadPolicyArn,
-                useS3Table: props.useS3Table ?? false,
-            };
-        }
-    }
-
-    private createParameters(): TitanicStackParameters {
-        return {
-            athenaDatabaseName: new cdk.CfnParameter(this, "AthenaDatabaseName", {
-                type: "String",
-                description: "Name of the Athena database containing the source views",
-                default: process.env.ATHENA_DATABASE_NAME || "",
-            }),
-
-            quiltReadPolicyArn: new cdk.CfnParameter(this, "QuiltReadPolicyArn", {
-                type: "String",
-                description: "ARN of the IAM policy for reading from Quilt buckets",
-                default: process.env.QUILT_READ_POLICY_ARN || "",
-            }),
-
-            useS3Table: new cdk.CfnParameter(this, "UseS3Table", {
-                type: "String",
-                description: "Whether to use S3 Tables format (true/false)",
-                default: process.env.USE_S3_TABLE || "false",
-                allowedValues: ["true", "false"],
-            }),
-        };
     }
 }

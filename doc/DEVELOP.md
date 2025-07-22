@@ -1,11 +1,10 @@
 # Developer Guide - Titanic Data Lake Table Merger
 
-This guide covers architecture, development workflow, testing, and deployment for developers.
+This guide covers the complete development workflow from local development to releasing.
 
+## 1. Local Development
 
-## Development Workflow
-
-### Setup
+**Setup**:
 
 ```bash
 git clone https://github.com/quiltdata/titanic
@@ -15,17 +14,18 @@ cp env.example .env
 npm install
 ```
 
-### Building and Testing
+**Testing and Development**:
 
 ```bash
-npm run build              # Compile TypeScript
 npm run test               # Run tests without coverage
 npm run test:coverage      # Run tests with coverage report
 npm run lint               # Run ESLint and fix issues
 npm run test:watch         # Run tests in watch mode
 ```
 
-### Local Development
+## 2. Local Deployment
+
+**Deploy to AWS for testing**:
 
 ```bash
 npm run cdk                # Full deploy (test + deploy + event + logs)
@@ -34,305 +34,129 @@ npm run deploy:logs        # Monitor Lambda logs
 npm run deploy:outputs     # Show stack outputs
 ```
 
-### Release Management
+## 3. Uploading Assets
+
+**Build and upload Lambda assets** (required before releases):
 
 ```bash
-npm run deploy:release -- --version v1.0.0  # Generate standalone package
-npm run destroy            # Full cleanup and stack destruction
+npm run deploy:upload -- --dry-run       # Show what would be uploaded (preview)
+npm run deploy:upload                    # Build and upload assets to public bucket (includes CDK synthesis)
+npm run deploy:upload --  --verify-only  # Check if assets exist in bucket
 ```
 
-## Deployment Methods
+## 4. Testing Release
 
-### Method 1: CDK Deployment 
-
-```bash
-cp env.example .env
-# Edit .env with required values
-npm run cdk
-
-# OR deploy with parameters
-npx cdk deploy \
-  --parameters AthenaDatabaseName=mydb \
-  --parameters QuiltReadPolicyArn=arn:aws:iam::123456789012:policy/QuiltReadPolicy \
-  --parameters UseS3Table=false
-```
-
-### Method 2: CloudFormation from Generated Template
+**Generate and test release packages**:
 
 ```bash
-# Generate release package
-npm run deploy:release -- --version v1.0.0
-cd dist/release-v1.0.0/
+npm run deploy:release  # Generate standalone package
+cd dist/release/
 
-# Deploy with environment file
+# Test CloudFormation deployment
 cp env.example .env
 # Edit .env with your values
 ./deploy.sh
-
-# OR deploy with parameters
-./deploy.sh --athena-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
 ```
 
-## Environment Variables
+## 5. Tagging a (Pre)Release
 
-### Required for Deployment
-```bash
-ATHENA_DATABASE_NAME=your_database_name           #  Stack Athena database with per-bucket package/object views
-QUILT_READ_POLICY_ARN=arn:aws:iam::123:policy/X  # Stack read-only policy (so we can add access to new buckets)
-```
+**Production Release**:
 
-### Optional Configuration
-```bash
-USE_S3_TABLE=false          # Table format selection
-AWS_DEFAULT_REGION=us-east-1
-AWS_PROFILE=default
-```
-
-### Lambda Environment Variables (set by CDK stack)
-```bash
-GLUE_TABLES_BUCKET_NAME     # S3 bucket name for Glue tables
-S3_TABLES_BUCKET_NAME       # S3 Tables bucket name
-ATHENA_DATABASE_NAME        # Source database (and target, for Glue tables)
-S3TABLE_DATABASE_NAME       # S3 Tables database
-AWS_ACCOUNT_ID              # AWS account ID for ARN generation
-CDK_DEFAULT_REGION          # AWS region for ARN generation
-USE_S3_TABLE                # Configuration flag (true/false)
-QUILT_READ_POLICY_ARN       # ARN of the IAM policy for reading from Quilt buckets
-```
-## Architecture Overview
-
-### Core Components
-
-**Lambda Handler** (`merge-tables.ts`)
-- EventBridge event processor and orchestrator
-- First-run table dropping using sentinel files
-- Error resilience with detailed reporting
-
-**Table Manager** (`table-manager.ts`)
-- Orchestrates table operations with format abstraction
-- Runtime table format selection via `USE_S3_TABLE`
-- Returns detailed creation/insertion statistics
-
-**Table Classes**
-- `PackageRevisionTable` - Package revision metadata
-- `PackageTagTable` - Package tag associations  
-- `PackageEntryTable` - Package file entries
-
-### Table Format Support
-
-**Glue Tables** (`USE_S3_TABLE=false` - Default)
-- ACID transactions, schema evolution, time travel
-- Single S3 bucket with Glue metadata
-- CREATE TABLE AS SELECT (CTAS) operations
-
-**S3 Tables** (`USE_S3_TABLE=true` - Experimental)
-- AWS-native optimization, built-in partitioning
-- Dual-bucket architecture (S3 Tables + Athena results)
-- Empty table creation + separate INSERT operations
-
-## Testing Strategy
-
-### Test Structure
-- **Unit Tests**: Individual table classes with both S3 and Glue modes
-- **Integration Tests**: TableManager operations with statistics validation
-- **Handler Tests**: End-to-end event processing with error scenarios
-
-### Running Tests
-```bash
-npm test                    # Quick test run
-npm run test:coverage       # Full coverage report
-npm run test:fails          # Run only failed tests
-npm run test:debug          # Debug mode with detailed output
-```
-
-### Test Patterns
-```typescript
-describe.each([
-  ['Glue', false],
-  ['S3 Tables', true]
-])('%s mode', (modeName, useS3Table) => {
-  // Test both formats with same assertions
-});
-```
-
-## Error Handling
-
-The system uses a "continue on error" approach:
-- **S3 Access Denied**: Log error, continue with other buckets
-- **Missing Tables**: Log warning, continue processing
-- **Athena Failures**: Report error, continue with remaining operations
-
-## Release Process
-
-### GitHub Releases Strategy
-- **Production releases**: `main` branch pushes or `v*` tags
-- **Pre-releases**: `release` branch pushes (with `-rc.{run_number}`)
-- **Validation only**: Pull requests (no releases)
-
-### Creating Releases
-
-**Production Release:**
 ```bash
 git checkout main
-git merge feature-branch
-git push origin main
-# OR create version tag:
-git tag v1.2.0 && git push origin v1.2.0
+npm run deploy:tag
 ```
 
-**Pre-Release for Testing:**
-```bash
-git checkout release
-git merge feature-branch
-git push origin release
-```
-
-### Release Artifacts
-Each release includes:
-- CloudFormation template (`template.json`)
-- Deployment script (`deploy.sh`)
-- Lambda function assets (in `assets/`)
-- Configuration template (`env.example`)
-- Compressed archives (`.tar.gz` and `.zip`)
-
-## Architecture Patterns
-
-### Adding New Table Types
-
-1. **Create table class**:
-```typescript
-export class NewTable {
-  createTableSQL(useS3Table: boolean): string {
-    if (useS3Table) {
-      return `CREATE TABLE ${this.tableName} (...) PARTITIONED BY (...)`;
-    } else {
-      return `CREATE TABLE ${this.tableName} WITH (...) AS SELECT ...`;
-    }
-  }
-  
-  insertSQL(registry: string): string {
-    return `INSERT INTO ${this.tableName} SELECT ...`;
-  }
-}
-```
-
-2. **Register in TableManager**:
-```typescript
-this.tables = [
-  new PackageRevisionTable(database),
-  new PackageTagTable(database),
-  new PackageEntryTable(database),
-  new NewTable(database), // Add here
-];
-```
-
-### Athena Query Execution
-
-**S3 Tables Query Structure:**
-```typescript
-{
-  QueryString: "SQL...",
-  QueryExecutionContext: {
-    Catalog: "s3tablescatalog/bucket-name",
-    Database: "database_name"
-  },
-  ResultConfiguration: {
-    OutputLocation: "s3://athena-results-bucket/athena-results/"
-  }
-}
-```
-
-**Glue Query Structure:**
-```typescript
-{
-  QueryString: "SQL...",
-  QueryExecutionContext: {
-    Database: "database_name"
-  },
-  ResultConfiguration: {
-    OutputLocation: "s3://target-bucket/athena-results/"
-  }
-}
-```
-
-## Performance & Monitoring
-
-### Diagnostic Commands
-```bash
-# Check deployment
-npm run deploy:outputs
-aws cloudformation describe-stacks --stack-name TitanicStack
-
-# Monitor resources  
-aws s3 ls | grep titanic
-aws glue get-tables --database-name $ATHENA_DATABASE_NAME
-
-# Logs and debugging
-npm run deploy:logs recent 30
-npm run deploy:logs errors
-npm run deploy:logs tail
-```
-
-### Common Development Issues
-
-**"Cannot find bucket"**: CDK stack deployment failed
-- Solution: Check `npm run deploy:outputs`, redeploy with `npm run cdk`
-
-**"Permission denied"**: IAM/credentials issue
-- Solution: Verify `QUILT_READ_POLICY_ARN`, check `aws sts get-caller-identity`
-
-**Test failures**: Environment variable mismatch
-- Solution: Ensure test environment matches deployment configuration
-
-## Best Practices
-
-- **Dual-mode testing**: Always test both Glue and S3 Tables formats
-- **Error isolation**: Continue processing when individual operations fail
-- **Resource cleanup**: Use `npm run destroy` for complete cleanup
-- **Version management**: Use semantic versioning for releases
-- **Documentation**: Update both README.md and this file for changes
-
-### Manual Setup of S3 Tables
-
-If you prefer manual setup:
-
-1. **Create a namespace** using the [AWS Console](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-tables-namespace-create.html) or AWS CLI:
+**Pre-Release for Testing**:
 
 ```bash
-aws s3tables create-namespace \
-    --table-bucket-arn arn:aws:s3tables:us-east-1:111122223333:bucket/amzn-s3-demo-bucket1 \ 
-    --namespace preview
+git checkout feature-branch
+npm run deploy:tag:prerelease
 ```
 
-2. **Create tables** using the AWS Console or AWS CLI:
+Release artifacts are available on [GitHub](https://github.com/quiltdata/titanic/releases)
+and include a README and a self-contained deployment script, along with required assets.
+
+## 6. Architecture Overview
+
+The Titanic project is a serverless AWS CDK application that compiles Quilt's per-bucket package tables into a central Iceberg catalog.
+It also exports the resulting CloudFormation template into a self-contained deployment, with assets available in a public bucket.
+
+The key concepts and classes are:
+
+### A. Merge Tables Lambda
+
+A Lambda function triggered by package-revision events on EventBrdige that merges per-bucket package tables into a unified Iceberg table. It handles reading, merging, and writing table data, and emits logs and metrics for monitoring.
+
+- [`handler`](../lib/merge-tables.ts) - Main Lambda entry point function that orchestrates the entire merge process
+- [`AthenaUtils`](../lib/shared/athena-utils.ts) - Core utility class for executing Athena queries and managing database operations
+- [`Config`](../lib/shared/config.ts) - Configuration management class that handles both Glue and S3 Tables modes
+
+### B. Table Management
+
+Classes and utilities for reading, merging, and writing package tables. This includes logic for handling schema evolution, deduplication, and efficient updates to the Iceberg catalog.
+
+- [`TableManager`](../lib/tables/table-manager.ts) - Central orchestrator for table operations (create, insert, drop)
+- [`BaseTable`](../lib/tables/base-table.ts) - Abstract base class providing common table functionality
+- [`PackageRevisionTable`](../lib/tables/package-revision.ts) - Match package names to timestamp, top_hash, and package metadata
+- [`PackageTagTable`](../lib/tables/package-tag.ts) - Manages package tags (like `latest`)
+- [`PackageEntryTable`](../lib/tables/package-entry.ts) - Tracks individual files within packages, including a multihash for the object contents and object metadata
+
+### C. CDK Stack
+
+The AWS CDK stack defines all cloud resources, including the Lambda function, IAM roles, S3 buckets, and event sources. It synthesizes the infrastructure as code and exports deployment templates and asset manifests.
+
+- [`TitanicStack`](../lib/titanic-stack.ts) - Main CDK stack class that defines all AWS resources
+- [`titanic`](../bin/titanic.ts) - Main CDK stack class that defines all AWS resources. Also writes out deployment-config for use by other scripts
+- [`titanic-external`](../bin/titanic-external.ts) - Modifies CDK stack for external deployment, including overridable parameters and use of public bucket assets
+
+### D. External Deployment
+
+The external deployment process enables packaging and distributing the Titanic application as a standalone deployment package for use outside the main repository context.
+
+#### Asset Building and Upload Process
 
 ```bash
-aws s3tables create-table --cli-input-json file://mytabledefinition.json
+npm run cdk
+npm run deploy:upload
+npm run deploy:verify-assets
 ```
 
-Example table definition:
+- The default (local) stack creates a publicly readable assets bucket
+- [`upload-assets.sh`](../bin/upload-assets.sh) runs CDK synthesis to compile TypeScript Lambda code into bundled JavaScript
+- Uploads the resulting ZIP file to that public S3 bucket
+- Verifies cross-account accessibility for external CloudFormation deployments
+- Doing this step manually avoids the need for AWS credentials in the GitHub action
 
-```json
-{
-    "tableBucketARN": "arn:aws:s3tables:us-east-1:111122223333:bucket/amzn-s3-demo-table-bucket",
-    "namespace": "your_namespace",
-    "name": "example_table",
-    "format": "ICEBERG",
-    "metadata": {
-        "iceberg": {
-            "schema": {
-                "fields": [
-                     {"name": "id", "type": "int","required": true},
-                     {"name": "name", "type": "string"},
-                     {"name": "value", "type": "int"}
-                ]
-            }
-        }
-    }
-}
+#### Release Package Generation
+
+```bash
+npm run deploy:release
 ```
 
+- [`release.sh`](../bin/release.sh) generates complete standalone deployment package in `dist`
+- Uses [`titanic-external.ts`](../bin/titanic-external.ts) to create CloudFormation template with configurable parameters
+- Includes CloudFormation template, deployment scripts, configuration examples, and documentation
+- Creates compressed archives for GitHub releases distribution
 
-⚠️ **Warning**: Switching table modes may drop all tables, losing existing data.
+#### End-User Deployment
 
+```bash
+cd dist/release
+cp ../../.env.staging .env
+sh -x deploy.sh
+```
 
+- [`deploy.sh`](../bin/deploy.sh) validates user configuration and deploys CloudFormation stack
+- Sends initialization event to populate catalog tables
+- Supports configuration via environment variables or command-line parameters
+- Requires no knowledge of underlying CDK infrastructure
+
+#### Release Tagging and GitHub Actions
+
+- Git tags trigger automated GitHub Actions workflow for release builds
+- Production releases use `npm run deploy:tag` on main branch to create and push version tags
+- Pre-releases use `npm run deploy:tag:prerelease` on feature branches for testing
+- GitHub Actions automatically synthesizes templates and generates release packages
+- Released artifacts include compressed archives with CloudFormation templates and deployment scripts
+- All releases are published to [GitHub Releases](https://github.com/quiltdata/titanic/releases) with automated versioning

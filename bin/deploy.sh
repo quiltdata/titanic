@@ -25,12 +25,15 @@ STACK_NAME="TitanicStack"
 REGION="${AWS_DEFAULT_REGION:-${CDK_DEFAULT_REGION:-us-east-1}}"
 PROFILE=""
 TEMPLATE_FILE="template.json"
+EVENT_FILE="initial-event.json"
+DEPLOYMENT_CONFIG_FILE="deployment-config.json"
 
 # Initialize parameter values (CLI args will override these later)
 # Use environment variables if set, otherwise use defaults
 ATHENA_DATABASE_NAME="${ATHENA_DATABASE_NAME:-${ATHENA_DATABASE_NAME:-${ATHENA_DATABASE_NAME:-}}}"
 QUILT_READ_POLICY_ARN="${QUILT_READ_POLICY_ARN:-}"
-USE_S3_TABLE="${USE_S3_TABLE:-false}"
+USE_S3_TABLE="false"
+PUBLIC_ASSETS_BUCKET_NAME=""
 
 # Help function
 show_help() {
@@ -48,39 +51,25 @@ OPTIONS:
     -t, --template-file FILE        CloudFormation template file (default: template.json)
     --athena-database-name NAME     Athena database name (required)
     --quilt-read-policy-arn ARN     Quilt read policy ARN (required)
-    --use-s3-table BOOL             Use S3 Tables format (true/false, default: false)
+    --public-assets-bucket-name NAME Public assets bucket name (for external deployments)
 
-EXAMPLES:
-    # Deploy with required parameters
-    $0 --athena-database-name mydb --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
-
-    # Deploy with custom template file
-    $0 --template-file my-template.json \\
-       --athena-database-name mydb \\
-       --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy
-
-    # Deploy with all parameters
-    $0 --athena-database-name mydb \\
-       --quilt-read-policy-arn arn:aws:iam::123456789012:policy/QuiltReadPolicy \\
-       --use-s3-table true
-
-    # Use .env file (automatically loaded if present)
-    cp env.example .env
-    # Edit .env with your values, then:
-    $0
-
-    # Use environment variables manually
-    ATHENA_DATABASE_NAME=mydb QUILT_READ_POLICY_ARN=arn:aws:iam::123456789012:policy/QuiltReadPolicy $0
+See README.md for more information.
 
 ENVIRONMENT VARIABLES:
     The script automatically loads variables from .env file (if present)
+    and deployment-config.json file (if present)
     
     Variables can also be set manually:
     - ATHENA_DATABASE_NAME - Athena database name
     - QUILT_READ_POLICY_ARN - Quilt read policy ARN
-    - USE_S3_TABLE - Use S3 Tables format (true/false)
+    - PUBLIC_ASSETS_BUCKET_NAME - Public assets bucket name
     - AWS_DEFAULT_REGION - AWS region
-    - AWS_PROFILE - AWS profile
+
+DEPLOYMENT CONFIG:
+    The script automatically loads deployment configuration from
+    deployment-config.json if present. This file typically contains
+    bucket names and other deployment-specific values generated
+    during the build process.
 
 NOTE:
     This script requires a pre-generated CloudFormation template. 
@@ -120,8 +109,8 @@ while [[ $# -gt 0 ]]; do
             QUILT_READ_POLICY_ARN="$2"
             shift 2
             ;;
-        --use-s3-table)
-            USE_S3_TABLE="$2"
+        --public-assets-bucket-name)
+            PUBLIC_ASSETS_BUCKET_NAME="$2"
             shift 2
             ;;
         # Backward compatibility for old parameter name
@@ -138,6 +127,24 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Load deployment config if it exists
+if [[ -f "$DEPLOYMENT_CONFIG_FILE" ]]; then
+    echo -e "${YELLOW}Loading deployment configuration from $DEPLOYMENT_CONFIG_FILE...${NC}"
+    
+    # Check if jq is available
+    if ! command -v jq &> /dev/null; then
+        echo -e "${RED}Error: jq is required to parse deployment config file but is not installed.${NC}"
+        exit 1
+    fi
+    
+    # Extract bucket names from deployment config if not already set
+    if [[ -z "$PUBLIC_ASSETS_BUCKET_NAME" ]]; then
+        PUBLIC_ASSETS_BUCKET_NAME=$(jq -r '.buckets.assetsBucket // empty' "$DEPLOYMENT_CONFIG_FILE")
+    fi
+    
+    echo -e "${GREEN}✅ Deployment configuration loaded${NC}"
+fi
+
 
 # Validate required parameters
 if [[ -z "$ATHENA_DATABASE_NAME" ]]; then
@@ -150,10 +157,17 @@ if [[ -z "$QUILT_READ_POLICY_ARN" ]]; then
     exit 1
 fi
 
-# Validate USE_S3_TABLE value
-if [[ "$USE_S3_TABLE" != "true" && "$USE_S3_TABLE" != "false" ]]; then
-    echo -e "${RED}Error: use-s3-table must be 'true' or 'false', got: $USE_S3_TABLE${NC}"
-    exit 1
+
+# Check if this is an external deployment template by looking for PublicAssetsBucketName parameter
+if [[ -f "$TEMPLATE_FILE" ]]; then
+    if grep -q "PublicAssetsBucketName" "$TEMPLATE_FILE"; then
+        echo -e "${YELLOW}Detected external deployment template${NC}"
+        if [[ -z "$PUBLIC_ASSETS_BUCKET_NAME" ]]; then
+            echo -e "${RED}Error: External deployment requires PublicAssetsBucketName parameter.${NC}"
+            echo -e "${YELLOW}Hint: Ensure deployment-config.json has buckets.assetsBucket set, or use --public-assets-bucket-name${NC}"
+            exit 1
+        fi
+    fi
 fi
 
 # Check if template exists
@@ -177,7 +191,8 @@ echo "Profile: ${PROFILE:-default}"
 echo "Template File: $TEMPLATE_FILE"
 echo "Athena Database Name: $ATHENA_DATABASE_NAME"
 echo "Quilt Read Policy ARN: $QUILT_READ_POLICY_ARN"
-echo "Use S3 Table: $USE_S3_TABLE"
+echo "Public Assets Bucket Name: ${PUBLIC_ASSETS_BUCKET_NAME:-<not set>}"
+echo "AWS CLI Options: $AWS_OPTS"
 echo ""
 
 echo -e "${YELLOW}Please verify the configuration above.${NC}"
@@ -187,19 +202,25 @@ if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
+echo -e "\n${GREEN}Starting deployment....${NC}"
+
+# Build parameter overrides
+PARAMETER_OVERRIDES="AthenaDatabaseName=$ATHENA_DATABASE_NAME QuiltReadPolicyArn=$QUILT_READ_POLICY_ARN UseS3Table=$USE_S3_TABLE"
+
+# Add optional parameters if they are set
+if [[ -n "$PUBLIC_ASSETS_BUCKET_NAME" ]]; then
+    PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES PublicAssetsBucketName=$PUBLIC_ASSETS_BUCKET_NAME"
+fi
+
 # Deploy the stack
-DEPLOY_OUTPUT=$(aws cloudformation deploy \
+aws cloudformation deploy \
     --template-file "$TEMPLATE_FILE" \
     --stack-name "$STACK_NAME" \
     --capabilities CAPABILITY_IAM \
-    --parameter-overrides \
-        AthenaDatabaseName="$ATHENA_DATABASE_NAME" \
-        QuiltReadPolicyArn="$QUILT_READ_POLICY_ARN" \
-        UseS3Table="$USE_S3_TABLE" \
-    $AWS_OPTS 2>&1)
+    --parameter-overrides $PARAMETER_OVERRIDES \
+    $AWS_OPTS
 
 DEPLOY_STATUS=$?
-echo "$DEPLOY_OUTPUT"
 
 if [[ $DEPLOY_STATUS -ne 0 ]]; then
     echo -e "${RED}❌ Stack deployment failed.${NC}"
@@ -219,6 +240,33 @@ aws cloudformation describe-stacks \
     --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue,Description]' \
     --output table \
     $AWS_OPTS
+
+# Send initialization event
+echo -e "${YELLOW}Sending initialization event to populate tables...${NC}"
+if [[ -f "$EVENT_FILE" ]]; then
+    echo "Sending event to EventBridge..."
+    EVENT_ENTRY=$(cat "$EVENT_FILE" | jq -c '.[]')
+    aws events put-events --entries "$EVENT_ENTRY" $AWS_OPTS
+    echo -e "${GREEN}✅ Initialization event sent successfully!${NC}"
+else
+    echo -e "${YELLOW}Warning: Failed to find event file: $EVENT_FILE${NC}"
+fi
+
+# Clean up temporary files
+if [[ -f "template-packaged.yaml" ]]; then
+    rm -f "template-packaged.yaml"
+fi
+
+# Send initialization event
+echo -e "${YELLOW}Sending initialization event to populate tables...${NC}"
+if [[ -f "$EVENT_FILE" ]]; then
+    echo "Sending event to EventBridge..."
+    EVENT_ENTRY=$(cat "$EVENT_FILE" | jq -c '.[]')
+    aws events put-events --entries "$EVENT_ENTRY" $AWS_OPTS
+    echo -e "${GREEN}✅ Initialization event sent successfully!${NC}"
+else
+    echo -e "${YELLOW}Warning: Failed to find event file: $EVENT_FILE${NC}"
+fi
 
 # Clean up temporary files
 if [[ -f "template-packaged.yaml" ]]; then

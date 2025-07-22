@@ -1,6 +1,6 @@
 /**
- * Centralized configuration management for the Titanic project.
- * Defaults to Glue configuration with S3Config subclass for S3 tables.
+ * Base configuration class for Lambda runtime usage.
+ * Works with environment variables and resolved string values.
  */
 export class Config {
   public static readonly S3_TABLES_PREFIX = 's3tablesbucket';
@@ -29,8 +29,9 @@ export class Config {
   }
   
   // Factory method to create appropriate config type based on environment
-  public static create(config?: Partial<Config>): Config {
-    return process.env.USE_S3_TABLE === 'true' 
+  public static create(config?: Partial<Config>, useS3Table?: boolean): Config {
+    const shouldUseS3Table = useS3Table ?? (process.env.USE_S3_TABLE === 'true');
+    return shouldUseS3Table
       ? new S3Config(config) 
       : new Config(config);
   }
@@ -40,7 +41,7 @@ export class Config {
   }
   
   /**
-   * Create config instance from CDK stack context
+   * Create config instance from resolved values (for Lambda runtime)
    */
   public static createFromStack(
     account: string, 
@@ -172,6 +173,14 @@ export class Config {
   }
 
   /**
+   * Generate standardized assets bucket name
+   * Used by CDK stack to ensure consistency with runtime config
+   */
+  public static generateAssetsBucketName(account: string, region: string): string {
+    return `titanic-assets-${account}-${region}`;
+  }
+
+  /**
    * Get the namespace for S3 tables (fully-qualified with prefix)
    */
   public getNamespace(): string {
@@ -206,11 +215,38 @@ export class Config {
   }
 
   /**
+   * Generate assets bucket name for this config instance  
+   */
+  public generateAssetsBucketName(): string {
+    return Config.generateAssetsBucketName(this.awsAccountId, this.aws_region);
+  }
+
+  /**
    * Generate S3 Tables bucket ARN for this config instance  
    */
   public generateS3TablesBucketArn(): string {
     const bucketName = this.generateS3TablesBucketName();
     return `arn:aws:s3tables:${this.aws_region}:${this.awsAccountId}:bucket/${bucketName}`;
+  }
+
+  /**
+   * Generate deployment configuration for the Titanic project.
+   */
+  public generateDeploymentConfig(): object {
+    return {
+      stackName: "TitanicStack",
+      account: this.awsAccountId,
+      region: this.aws_region,
+      athenaDatabaseName: this.athenaDatabaseName,
+      quiltReadPolicyArn: this.quiltReadPolicyArn,
+      useS3Table: this.useS3Table,
+      buckets: {
+        glueTablesBucket: this.glueTablesBucketName,
+        s3TablesBucket: this.s3TablesBucketName,
+        assetsBucket: Config.generateAssetsBucketName(this.awsAccountId, this.aws_region),
+      },
+      generatedAt: new Date().toISOString(),
+    };
   }
 }
 
@@ -260,3 +296,4 @@ export class S3Config extends Config {
     };
   }
 }
+

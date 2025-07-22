@@ -78,12 +78,12 @@ WITH (
   is_external = false
 ) AS
 SELECT
-  CAST(NULL AS STRING) AS registry,
-  CAST(NULL AS STRING) AS pkg_name,
-  CAST(NULL AS STRING) AS top_hash,
+  CAST(NULL AS VARCHAR) AS registry,
+  CAST(NULL AS VARCHAR) AS pkg_name,
+  CAST(NULL AS VARCHAR) AS top_hash,
   CAST(NULL AS TIMESTAMP) AS timestamp,
-  CAST(NULL AS STRING) AS message,
-  CAST(NULL AS STRING) AS metadata
+  CAST(NULL AS VARCHAR) AS message,
+  CAST(NULL AS VARCHAR) AS metadata
 WHERE 1=0;
 
 CREATE TABLE package_tag
@@ -95,10 +95,10 @@ WITH (
   is_external = false
 ) AS
 SELECT
-  CAST(NULL AS STRING) AS registry,
-  CAST(NULL AS STRING) AS pkg_name,
-  CAST(NULL AS STRING) AS tag_name,
-  CAST(NULL AS STRING) AS top_hash
+  CAST(NULL AS VARCHAR) AS registry,
+  CAST(NULL AS VARCHAR) AS pkg_name,
+  CAST(NULL AS VARCHAR) AS tag_name,
+  CAST(NULL AS VARCHAR) AS top_hash
 WHERE 1=0;
 
 CREATE TABLE package_entry
@@ -110,13 +110,13 @@ WITH (
   is_external = false
 ) AS
 SELECT
-  CAST(NULL AS STRING) AS registry,
-  CAST(NULL AS STRING) AS top_hash,
-  CAST(NULL AS STRING) AS logical_key,
-  CAST(NULL AS STRING) AS physical_key,
-  CAST(NULL AS STRING) AS multihash,
+  CAST(NULL AS VARCHAR) AS registry,
+  CAST(NULL AS VARCHAR) AS top_hash,
+  CAST(NULL AS VARCHAR) AS logical_key,
+  CAST(NULL AS VARCHAR) AS physical_key,
+  CAST(NULL AS VARCHAR) AS multihash,
   CAST(NULL AS BIGINT) AS size,
-  CAST(NULL AS STRING) AS metadata
+  CAST(NULL AS VARCHAR) AS metadata
 WHERE 1=0;
 
 ---
