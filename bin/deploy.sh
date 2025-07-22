@@ -256,7 +256,6 @@ fi
 if [[ -f "template-packaged.yaml" ]]; then
     rm -f "template-packaged.yaml"
 fi
-    $AWS_OPTS
 
 # Send initialization event
 echo -e "${YELLOW}Sending initialization event to populate tables...${NC}"
