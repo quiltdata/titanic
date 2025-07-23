@@ -19,7 +19,7 @@
     "deploy:outputs": "dotenv -- aws cloudformation describe-stacks --stack-name TitanicStack --query 'Stacks[0].Outputs'",
     "deploy:release": "./bin/release.sh",
     "deploy:tag": "git tag v$(node -p \"require('./package.json').version\") && git push origin v$(node -p \"require('./package.json').version\")",
-    "deploy:tag:prerelease": "git tag v$(node -p \"require('./package.json').version\")-rc.$(date +%Y%m%d.%H%M) && git push origin v$(node -p \"require('./package.json').version\")-rc.$(date +%Y%m%d.%H%M",
+    "deploy:tag:prerelease": "git tag v$(node -p \"require('./package.json').version\")-rc.$(date +%Y%m%d.%H%M) && git push origin v$(node -p \"require('./package.json').version\")-rc.$(date +%Y%m%d.%H%M)",
     "deploy:upload": "./bin/upload-assets.sh",
     "deploy:verify-assets": "./bin/release.sh --verify-assets-only",
     "destroy": "npm run destroy:buckets && npx cdk destroy --app 'npx ts-node bin/titanic.ts' --force",
