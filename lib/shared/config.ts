@@ -154,6 +154,14 @@ export class Config {
   }
 
   /**
+   * Generate standardized EventBridge rule name
+   * Used by CDK stack to ensure consistency with Lambda permissions
+   */
+  public static generateEventRuleName(account: string, region: string): string {
+    return `titanic-update-event-rule-${account}-${region}`;
+  }
+
+  /**
    * Get the namespace for S3 tables (fully-qualified with prefix)
    */
   public getNamespace(): string {

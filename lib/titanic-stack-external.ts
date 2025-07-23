@@ -2,6 +2,7 @@ import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as sqs from "aws-cdk-lib/aws-sqs";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import { TitanicStack, TitanicStackProps } from "./titanic-stack";
 
@@ -27,6 +28,19 @@ export class TitanicStackExternal extends TitanicStack {
                this.config.generateAssetsBucketNameRef() as string;
     }
 
+    protected createDeadLetterQueue(): sqs.Queue {
+        // External deployment: create DLQ using CloudFormation with fixed naming
+        return new sqs.Queue(this, "TitanicEventDLQ", {
+            queueName: `titanic-event-dlq-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+            // Retain messages for 14 days (max for SQS)
+            retentionPeriod: cdk.Duration.days(14),
+            // Enable server-side encryption
+            encryption: sqs.QueueEncryption.SQS_MANAGED,
+            // Set visibility timeout longer than Lambda timeout to prevent duplicate processing
+            visibilityTimeout: cdk.Duration.seconds(960), // 16 minutes (Lambda timeout + buffer)
+        });
+    }
+
     protected createLambdaFunction(
         assetsBucketName: string, 
         lambdaEnvironment: Record<string, string>,
@@ -50,13 +64,16 @@ export class TitanicStackExternal extends TitanicStack {
             role: lambdaRole.roleArn,
         });
         // Grant EventBridge permission to invoke this function
+        const ruleArn = cdk.Fn.join('', [
+            'arn:aws:events:', cdk.Aws.REGION, ':', cdk.Aws.ACCOUNT_ID, ':rule/',
+            this.config.generateEventRuleNameRef() as string
+        ]);
+        
         new lambda.CfnPermission(this, 'EventInvokePermission', {
             action: 'lambda:InvokeFunction',
             functionName: cfnLambda.ref,
             principal: 'events.amazonaws.com',
-            sourceArn: cdk.Fn.join(':', [
-                'arn', 'aws', 'events', cdk.Aws.REGION, cdk.Aws.ACCOUNT_ID, 'rule/TitanicUpdateEventRule'
-            ]),
+            sourceArn: ruleArn,
         });
         
         // Wrap CfnFunction as IFunction for compatibility

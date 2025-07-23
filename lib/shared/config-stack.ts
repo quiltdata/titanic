@@ -199,6 +199,20 @@ export class ConfigStack extends Config {
       { Ref: 'AWS::Region' }
     ]);
   }
+
+  /**
+   * Generate CloudFormation reference for EventBridge rule name
+   * Returns Fn::Join with AWS::AccountId and AWS::Region parameters
+   */
+  public generateEventRuleNameRef(): unknown {
+    const { Fn } = require('aws-cdk-lib');
+    return Fn.join('', [
+      'titanic-update-event-rule-',
+      { Ref: 'AWS::AccountId' },
+      '-',
+      { Ref: 'AWS::Region' }
+    ]);
+  }
 }
 
 /**
