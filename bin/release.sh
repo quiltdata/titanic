@@ -3,8 +3,6 @@
 # Titanic Stack Release Package Generator
 # This script generates a standalone deployment package from CDK code
 
-set -e
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -42,10 +40,20 @@ initialize_environment() {
         ASSETS_BUCKET=""
     else
         ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.assetsBucket" 2>/dev/null || echo "")
+        NODE_STATUS=$?
+        if [[ $NODE_STATUS -ne 0 ]]; then
+            echo -e "${RED}Error: Failed to parse deployment-config.json${NC}" >&2
+            ASSETS_BUCKET=""
+        fi
     fi
 
     # Get CDK version
     CDK_VERSION=$(npx cdk --version 2>/dev/null || echo "N/A")
+    CDK_STATUS=$?
+    if [[ $CDK_STATUS -ne 0 ]]; then
+        echo -e "${YELLOW}Warning: Failed to get CDK version${NC}" >&2
+        CDK_VERSION="N/A"
+    fi
 }
 
 # Display help information
@@ -262,6 +270,11 @@ validate_template() {
 
     # Check template size (CloudFormation limit is 460,800 bytes for direct upload)
     local template_size=$(wc -c < "$stack_template")
+    WC_STATUS=$?
+    if [[ $WC_STATUS -ne 0 ]]; then
+        echo -e "${RED}Error: Failed to get template size${NC}"
+        exit 1
+    fi
     echo "CloudFormation template size: $template_size bytes"
 
     if [[ $template_size -gt 460800 ]]; then
@@ -273,7 +286,15 @@ validate_template() {
 
     # Count resources and validate structure
     local resource_count=$(grep -c '"Type"' "$stack_template" 2>/dev/null || echo "0")
+    GREP_STATUS=$?
     local parameter_count=$(grep -c '"Parameters"' "$stack_template" 2>/dev/null || echo "0")
+    GREP2_STATUS=$?
+    
+    if [[ $GREP_STATUS -ne 0 || $GREP2_STATUS -ne 0 ]]; then
+        echo -e "${YELLOW}Warning: Failed to count template components${NC}"
+        resource_count="unknown"
+        parameter_count="unknown"
+    fi
 
     echo "Template validation results:"
     echo "- Resources: $resource_count"

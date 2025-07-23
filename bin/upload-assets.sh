@@ -3,7 +3,6 @@
 # Titanic Lambda Assets Upload Script
 # This script builds and uploads Lambda assets to the public assets bucket
 
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -101,8 +100,12 @@ check_aws_setup() {
         exit 1
     fi
 
+    # Determine AWS region with proper precedence
+    local region="${AWS_DEFAULT_REGION:-${CDK_DEFAULT_REGION:-us-east-1}}"
+    echo -e "${YELLOW}Using AWS region: $region${NC}"
+
     # Check AWS credentials
-    if ! aws sts get-caller-identity &> /dev/null; then
+    if ! aws sts get-caller-identity --region "$region" &> /dev/null; then
         echo -e "${RED}❌ AWS credentials not configured. Please run 'aws configure' or set environment variables.${NC}"
         exit 1
     fi
@@ -116,6 +119,11 @@ if [ ! -f "deployment-config.json" ]; then
     run_cdk_synth
 fi
 ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.assetsBucket")
+NODE_STATUS=$?
+if [[ $NODE_STATUS -ne 0 ]]; then
+    echo -e "${RED}❌ Failed to read assets bucket from deployment-config.json${NC}"
+    exit 1
+fi
 if [[ -z "$ASSETS_BUCKET" ]]; then
     echo -e "${RED}❌ Failed to read assets bucket from deployment-config.json${NC}"
     exit 1
@@ -241,6 +249,11 @@ echo -e "${GREEN}✅ Lambda asset found: $LAMBDA_JS ($LAMBDA_SIZE bytes)${NC}"
 # Bundle Lambda function
 echo -e "${YELLOW}Bundling Lambda function...${NC}"
 zip -j "$TEMP_ZIP" "$LAMBDA_JS"
+ZIP_STATUS=$?
+if [[ $ZIP_STATUS -ne 0 ]]; then
+    echo -e "${RED}❌ Failed to create Lambda bundle with zip${NC}"
+    exit 1
+fi
 
 if [[ ! -f "$TEMP_ZIP" ]]; then
     echo -e "${RED}❌ Failed to create Lambda bundle${NC}"

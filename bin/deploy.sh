@@ -2,8 +2,7 @@
 
 # Titanic Stack CloudFormation Deployment Script
 # This script deploys pre-generated CloudFormation templates for the Titanic stack
-
-set -e
+# set -e removed to allow manual error handling
 
 # Colors for output
 RED='\033[0;31m'
@@ -140,6 +139,11 @@ if [[ -f "$DEPLOYMENT_CONFIG_FILE" ]]; then
     # Extract bucket names from deployment config if not already set
     if [[ -z "$PUBLIC_ASSETS_BUCKET_NAME" ]]; then
         PUBLIC_ASSETS_BUCKET_NAME=$(jq -r '.buckets.assetsBucket // empty' "$DEPLOYMENT_CONFIG_FILE")
+        JQ_STATUS=$?
+        if [[ $JQ_STATUS -ne 0 ]]; then
+            echo -e "${RED}Error: Failed to parse deployment config file with jq.${NC}"
+            exit 1
+        fi
     fi
     
     echo -e "${GREEN}✅ Deployment configuration loaded${NC}"
@@ -161,6 +165,11 @@ fi
 # Check if this is an external deployment template by looking for PublicAssetsBucketName parameter
 if [[ -f "$TEMPLATE_FILE" ]]; then
     if grep -q "PublicAssetsBucketName" "$TEMPLATE_FILE"; then
+        GREP_STATUS=$?
+        if [[ $GREP_STATUS -ne 0 ]]; then
+            echo -e "${RED}Error: Failed to search template file.${NC}"
+            exit 1
+        fi
         echo -e "${YELLOW}Detected external deployment template${NC}"
         if [[ -z "$PUBLIC_ASSETS_BUCKET_NAME" ]]; then
             echo -e "${RED}Error: External deployment requires PublicAssetsBucketName parameter.${NC}"
@@ -185,7 +194,13 @@ fi
 
 # Display configuration
 echo -e "${GREEN}Titanic Stack CloudFormation Deployment Configuration:${NC}"
+echo -e "${YELLOW}Using AWS region: $REGION${NC}"
 aws sts get-caller-identity $AWS_OPTS
+STS_STATUS=$?
+if [[ $STS_STATUS -ne 0 ]]; then
+    echo -e "${RED}Error: AWS STS get-caller-identity failed.${NC}"
+    exit 1
+fi
 echo "Stack Name: $STACK_NAME"
 echo "Region: $REGION"
 echo "Profile: ${PROFILE:-default}"
@@ -228,6 +243,10 @@ if [[ $DEPLOY_STATUS -ne 0 ]]; then
     aws cloudformation describe-stack-events --stack-name "$STACK_NAME" $AWS_OPTS \
         --query 'StackEvents[].[Timestamp, LogicalResourceId, ResourceStatus, ResourceStatusReason]' \
         --output table
+    EVENTS_STATUS=$?
+    if [[ $EVENTS_STATUS -ne 0 ]]; then
+        echo -e "${RED}Error: Failed to fetch stack events.${NC}"
+    fi
     exit 1
 fi
 
@@ -240,21 +259,10 @@ aws cloudformation describe-stacks \
     --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue,Description]' \
     --output table \
     $AWS_OPTS
-
-# Send initialization event
-echo -e "${YELLOW}Sending initialization event to populate tables...${NC}"
-if [[ -f "$EVENT_FILE" ]]; then
-    echo "Sending event to EventBridge..."
-    EVENT_ENTRY=$(cat "$EVENT_FILE" | jq -c '.[]')
-    aws events put-events --entries "$EVENT_ENTRY" $AWS_OPTS
-    echo -e "${GREEN}✅ Initialization event sent successfully!${NC}"
-else
-    echo -e "${YELLOW}Warning: Failed to find event file: $EVENT_FILE${NC}"
-fi
-
-# Clean up temporary files
-if [[ -f "template-packaged.yaml" ]]; then
-    rm -f "template-packaged.yaml"
+DESCRIBE_STATUS=$?
+if [[ $DESCRIBE_STATUS -ne 0 ]]; then
+    echo -e "${RED}Error: Failed to describe stack outputs.${NC}"
+    exit 1
 fi
 
 # Send initialization event
@@ -263,6 +271,11 @@ if [[ -f "$EVENT_FILE" ]]; then
     echo "Sending event to EventBridge..."
     EVENT_ENTRY=$(cat "$EVENT_FILE" | jq -c '.[]')
     aws events put-events --entries "$EVENT_ENTRY" $AWS_OPTS
+    EVENT_STATUS=$?
+    if [[ $EVENT_STATUS -ne 0 ]]; then
+        echo -e "${RED}Error: Failed to send initialization event to EventBridge.${NC}"
+        exit 1
+    fi
     echo -e "${GREEN}✅ Initialization event sent successfully!${NC}"
 else
     echo -e "${YELLOW}Warning: Failed to find event file: $EVENT_FILE${NC}"
