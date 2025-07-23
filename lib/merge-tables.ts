@@ -9,12 +9,13 @@ export async function handler(
     event: EventBridgeEvent<string, PackageEventDetail>,
     _context: Context,
 ): Promise<HandlerResponse> {
-    console.log("Starting Titanic merge handler");
-    const { bucket: sourceBucket, handle, topHash } = event.detail;
+    console.log("Starting Titanic merge handler", event);
+    // Allow missing bucket in event.detail; default to undefined if not present
+    const { bucket: sourceBucket = undefined, handle, topHash } = event.detail || {};
     const config = Config.create();
     const athenaUtils = new AthenaUtils(config);
 
-    logContext(event, sourceBucket, handle, topHash, config);
+    logContext(event, sourceBucket || 'No bucket specified', handle, topHash, config);
 
     // Validate configuration
     if (

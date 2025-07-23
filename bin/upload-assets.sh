@@ -3,7 +3,6 @@
 # Titanic Lambda Assets Upload Script
 # This script builds and uploads Lambda assets to the public assets bucket
 
-set -e
 
 # Colors for output
 RED='\033[0;31m'
@@ -117,6 +116,10 @@ if [ ! -f "deployment-config.json" ]; then
     run_cdk_synth
 fi
 ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.assetsBucket")
+if [[ -z "$ASSETS_BUCKET" ]]; then
+    echo -e "${RED}❌ Failed to read assets bucket from deployment-config.json${NC}"
+    exit 1
+fi
 LAMBDA_ZIP_PATH="lambda/merge-tables.zip"
 TEMP_ZIP="lambda-merge-tables.zip"
 
@@ -217,16 +220,14 @@ if [[ ! -d "cdk.out" ]]; then
     run_cdk_synth
 fi
 
-# Find the Lambda asset
-LAMBDA_ASSET_DIR=$(find_lambda_asset)
-if [[ $? -ne 0 ]]; then
+# Find the Lambda asset, rebuild if not found
+if ! LAMBDA_ASSET_DIR=$(find_lambda_asset); then
     echo -e "${RED}❌ No Lambda asset found in cdk.out${NC}"
     echo -e "${YELLOW}Attempting to rebuild Lambda assets...${NC}"
-    run_cdk_synth
-    
+    run_cdk_synth || { echo -e "${RED}❌ CDK synthesis failed when rebuilding assets${NC}"; exit 1; }
+
     # Try again after synthesis
-    LAMBDA_ASSET_DIR=$(find_lambda_asset)
-    if [[ $? -ne 0 ]]; then
+    if ! LAMBDA_ASSET_DIR=$(find_lambda_asset); then
         echo -e "${RED}❌ Still no Lambda asset found after synthesis${NC}"
         echo -e "${RED}There may be an issue with the CDK build process${NC}"
         exit 1

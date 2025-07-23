@@ -49,6 +49,15 @@ export class TitanicStackExternal extends TitanicStack {
             },
             role: lambdaRole.roleArn,
         });
+        // Grant EventBridge permission to invoke this function
+        new lambda.CfnPermission(this, 'EventInvokePermission', {
+            action: 'lambda:InvokeFunction',
+            functionName: cfnLambda.ref,
+            principal: 'events.amazonaws.com',
+            sourceArn: cdk.Fn.join(':', [
+                'arn', 'aws', 'events', cdk.Aws.REGION, cdk.Aws.ACCOUNT_ID, 'rule/TitanicUpdateEventRule'
+            ]),
+        });
         
         // Wrap CfnFunction as IFunction for compatibility
         return lambda.Function.fromFunctionAttributes(this, "TitanicMergeTablesRef", {

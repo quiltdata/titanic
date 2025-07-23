@@ -10,6 +10,8 @@ import * as targets from "aws-cdk-lib/aws-events-targets";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import * as path from "path";
 import { ConfigStack, TitanicStackProps } from "./shared/config-stack";
+import { Tags } from "aws-cdk-lib";
+const VERSION = require('../package.json').version;
 
 export type { TitanicStackProps } from "./shared/config-stack";
 
@@ -18,6 +20,9 @@ export class TitanicStack extends cdk.Stack {
 
     constructor(scope: Construct, id: string, props: TitanicStackProps = {}) {
         super(scope, id, props);
+        // Embed package version
+        Tags.of(this).add('Version', VERSION);
+        this.templateOptions.description = `Titanic Stack (v${VERSION})`;
 
         // Create ConfigStack which handles parameters internally
         this.config = ConfigStack.createForStack(this, props);
@@ -316,6 +321,11 @@ export class TitanicStack extends cdk.Stack {
         new cdk.CfnOutput(this, "TargetDatabaseName", {
             value: config.useS3Table ? config.s3TableDatabaseName : config.athenaDatabaseName,
             description: "Target database name (where tables are written to)"
+        });
+        // Output the package version
+        new cdk.CfnOutput(this, 'StackVersion', {
+            value: VERSION,
+            description: 'Titanic package version deployed'
         });
     }
 }

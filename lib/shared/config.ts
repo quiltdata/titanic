@@ -40,33 +40,6 @@ export class Config {
     return new Config(config);
   }
   
-  /**
-   * Create config instance from resolved values (for Lambda runtime)
-   */
-  public static createFromStack(
-    account: string, 
-    region: string, 
-    props: {
-      athenaDatabaseName: string;
-      quiltReadPolicyArn: string;
-      useS3Table: boolean;
-    }
-  ): Config {
-    const baseConfig = {
-      awsAccountId: account,
-      aws_region: region,
-      athenaDatabaseName: props.athenaDatabaseName,
-      quiltReadPolicyArn: props.quiltReadPolicyArn,
-      // Generate bucket names based on account/region
-      glueTablesBucketName: Config.generateGlueTablesBucketName(account, region),
-      s3TablesBucketName: Config.generateS3TablesBucketName(account, region),
-    };
-
-    return props.useS3Table
-      ? new S3Config(baseConfig) 
-      : new Config(baseConfig);
-  }
-  
   // Glue defaults
   public getReadDatabaseName(): string {
     return this.athenaDatabaseName;

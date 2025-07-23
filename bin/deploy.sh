@@ -185,6 +185,7 @@ fi
 
 # Display configuration
 echo -e "${GREEN}Titanic Stack CloudFormation Deployment Configuration:${NC}"
+aws sts get-caller-identity $AWS_OPTS
 echo "Stack Name: $STACK_NAME"
 echo "Region: $REGION"
 echo "Profile: ${PROFILE:-default}"
@@ -195,8 +196,7 @@ echo "Public Assets Bucket Name: ${PUBLIC_ASSETS_BUCKET_NAME:-<not set>}"
 echo "AWS CLI Options: $AWS_OPTS"
 echo ""
 
-echo -e "${YELLOW}Please verify the configuration above.${NC}"
-read -p "Proceed with deployment? (y/N): " CONFIRM
+read -p "Deploy using the configuration above? (y/N):" CONFIRM
 if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
     echo -e "${RED}Deployment cancelled by user.${NC}"
     exit 0
