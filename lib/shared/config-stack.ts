@@ -5,7 +5,7 @@ export interface TitanicStackParameters {
   athenaDatabaseName: cdk.CfnParameter;
   quiltReadPolicyArn: cdk.CfnParameter;
   useS3Table: cdk.CfnParameter;
-  publicAssetsBucketName?: cdk.CfnParameter; // Optional for external deployments
+  publicAssetsBucketRoot?: cdk.CfnParameter; // Optional for external deployments
 }
 
 export interface TitanicStackProps extends cdk.StackProps {
@@ -77,9 +77,9 @@ export class ConfigStack extends Config {
     if (includePublicAssetsBucket) {
       this.parameters = {
         ...baseParameters,
-        publicAssetsBucketName: new cdk.CfnParameter(stack, "PublicAssetsBucketName", {
+        publicAssetsBucketRoot: new cdk.CfnParameter(stack, "PublicAssetsBucketRoot", {
           type: "String",
-          description: "Name of the public S3 bucket containing pre-built Lambda deployment assets",
+          description: "Root name of the public S3 bucket containing pre-built Lambda deployment assets (without region suffix)",
           default: "",
         }),
       };
@@ -126,10 +126,10 @@ export class ConfigStack extends Config {
   }
 
   /**
-   * Get the public assets bucket name parameter value (for external deployments)
+   * Get the public assets bucket root parameter value (for external deployments)
    */
-  public getPublicAssetsBucketName(): string | undefined {
-    return this.parameters.publicAssetsBucketName?.valueAsString;
+  public getPublicAssetsBucketRoot(): string | undefined {
+    return this.parameters.publicAssetsBucketRoot?.valueAsString;
   }
 
   /**
@@ -196,6 +196,21 @@ export class ConfigStack extends Config {
       'titanic-assets-',
       { Ref: 'AWS::AccountId' },
       '-',
+      { Ref: 'AWS::Region' }
+    ]);
+  }
+
+  /**
+   * Generate CloudFormation reference for assets bucket name from root parameter
+   * Returns Fn::Join with PublicAssetsBucketRoot parameter and AWS::Region
+   */
+  public generateAssetsBucketNameFromRootRef(): unknown {
+    if (!this.parameters.publicAssetsBucketRoot) {
+      throw new Error('PublicAssetsBucketRoot parameter not available - this method is only for external deployments');
+    }
+    const { Fn } = require('aws-cdk-lib');
+    return Fn.join('-', [
+      { Ref: 'PublicAssetsBucketRoot' },
       { Ref: 'AWS::Region' }
     ]);
   }

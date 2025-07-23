@@ -154,6 +154,14 @@ export class Config {
   }
 
   /**
+   * Generate standardized assets bucket root name (account but not region)
+   * Used by CDK stack to ensure consistency with runtime config
+   */
+  public static generateAssetsBucketRoot(account: string): string {
+    return `titanic-assets-${account}`;
+  }
+
+  /**
    * Generate standardized EventBridge rule name
    * Used by CDK stack to ensure consistency with Lambda permissions
    */
@@ -203,6 +211,13 @@ export class Config {
   }
 
   /**
+   * Generate assets bucket root name for this config instance  
+   */
+  public generateAssetsBucketRoot(): string {
+    return Config.generateAssetsBucketRoot(this.awsAccountId);
+  }
+
+  /**
    * Generate S3 Tables bucket ARN for this config instance  
    */
   public generateS3TablesBucketArn(): string {
@@ -225,6 +240,7 @@ export class Config {
         glueTablesBucket: this.glueTablesBucketName,
         s3TablesBucket: this.s3TablesBucketName,
         assetsBucket: Config.generateAssetsBucketName(this.awsAccountId, this.aws_region),
+        assetsBucketRoot: Config.generateAssetsBucketRoot(this.awsAccountId),
       },
       generatedAt: new Date().toISOString(),
     };

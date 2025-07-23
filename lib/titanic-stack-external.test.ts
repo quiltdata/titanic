@@ -104,10 +104,10 @@ describe("TitanicStackExternal", () => {
                 AllowedValues: ["true", "false"]
             });
 
-            // Check PublicAssetsBucketName parameter (external deployment only)
-            template.hasParameter("PublicAssetsBucketName", {
+            // Check PublicAssetsBucketRoot parameter (external deployment only)
+            template.hasParameter("PublicAssetsBucketRoot", {
                 Type: "String",
-                Description: "Name of the public S3 bucket containing pre-built Lambda deployment assets",
+                Description: "Root name of the public S3 bucket containing pre-built Lambda deployment assets (without region suffix)",
                 Default: ""
             });
         });
@@ -121,7 +121,7 @@ describe("TitanicStackExternal", () => {
             expect(parameterNames).toContain("AthenaDatabaseName");
             expect(parameterNames).toContain("QuiltReadPolicyArn");
             expect(parameterNames).toContain("UseS3Table");
-            expect(parameterNames).toContain("PublicAssetsBucketName");
+            expect(parameterNames).toContain("PublicAssetsBucketRoot");
         });
     });
 

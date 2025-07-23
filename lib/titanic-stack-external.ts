@@ -23,8 +23,9 @@ export class TitanicStackExternal extends TitanicStack {
     }
 
     protected createOrReferenceAssetsBucket(): string {
-        // External deployment: use public assets bucket parameter
-        return this.config.getPublicAssetsBucketName() || 
+        // External deployment: use public assets bucket root parameter with region suffix
+        return this.config.getPublicAssetsBucketRoot() ? 
+               this.config.generateAssetsBucketNameFromRootRef() as string :
                this.config.generateAssetsBucketNameRef() as string;
     }
 
@@ -47,7 +48,9 @@ export class TitanicStackExternal extends TitanicStack {
         lambdaRole: iam.IRole
     ): lambda.IFunction {
         // Use the public assets bucket parameter for Lambda code location
-        const publicAssetsBucketName = this.config.getPublicAssetsBucketName() || assetsBucketName;
+        const publicAssetsBucketName = this.config.getPublicAssetsBucketRoot() ? 
+                                      this.config.generateAssetsBucketNameFromRootRef() as string :
+                                      assetsBucketName;
 
         // Create Lambda using CfnFunction with parameter references
         const cfnLambda = new lambda.CfnFunction(this, "TitanicMergeTables", {
