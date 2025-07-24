@@ -35,24 +35,22 @@ initialize_environment() {
         echo -e "${GREEN}✅ Environment variables loaded from .env${NC}"
     fi
 
-    # Get the assets bucket name from deployment config for pre-built assets mode
-    if [ ! -f "doc/deployment-config.json" ]; then
-        echo -e "${RED}❌ Error: doc/deployment-config.json not found${NC}" >&2
-        echo -e "${RED}   This file is required for release generation${NC}" >&2
-        echo -e "${RED}   Please ensure doc/deployment-config.json exists in the repository${NC}" >&2
+    # Validate required environment variables
+    if [[ -z "$CDK_DEFAULT_ACCOUNT" ]]; then
+        echo -e "${RED}❌ Error: CDK_DEFAULT_ACCOUNT environment variable is required${NC}" >&2
+        echo -e "${RED}   Please set CDK_DEFAULT_ACCOUNT to your AWS account ID${NC}" >&2
         exit 1
-    else
-        ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).buckets.assetsBucket" 2>/dev/null || echo "")
-        NODE_STATUS=$?
-        if [[ $NODE_STATUS -ne 0 ]]; then
-            echo -e "${RED}Error: Failed to parse doc/deployment-config.json${NC}" >&2
-            exit 1
-        fi
-        if [[ -z "$ASSETS_BUCKET" ]]; then
-            echo -e "${RED}Error: assets bucket not found in doc/deployment-config.json${NC}" >&2
-            exit 1
-        fi
     fi
+
+    if [[ -z "$CDK_DEFAULT_REGION" ]]; then
+        echo -e "${RED}❌ Error: CDK_DEFAULT_REGION environment variable is required${NC}" >&2
+        echo -e "${RED}   Please set CDK_DEFAULT_REGION to your target AWS region${NC}" >&2
+        exit 1
+    fi
+
+    # Construct the assets bucket name using the standard pattern
+    ASSETS_BUCKET="titanic-assets-${CDK_DEFAULT_ACCOUNT}-${CDK_DEFAULT_REGION}"
+    echo -e "${GREEN}✅ Constructed assets bucket name: ${ASSETS_BUCKET}${NC}"
 
     # Get CDK version
     CDK_VERSION=$(npx cdk --version 2>/dev/null || echo "N/A")
@@ -90,17 +88,25 @@ DIRECTORY STRUCTURE:
         └── release-v1.0.0.zip
 
 EXAMPLES:
-    # Generate release package
-    $0
+    # Generate release package (requires CDK_DEFAULT_ACCOUNT and CDK_DEFAULT_REGION)
+    CDK_DEFAULT_ACCOUNT=123456789012 CDK_DEFAULT_REGION=us-east-1 $0
 
     # Generate with version tag
-    $0 --version v1.2.0
+    CDK_DEFAULT_ACCOUNT=123456789012 CDK_DEFAULT_REGION=us-east-1 $0 --version v1.2.0
 
     # Verify assets are available (no release generation)
-    $0 --verify-assets-only
+    CDK_DEFAULT_ACCOUNT=123456789012 CDK_DEFAULT_REGION=us-east-1 $0 --verify-assets-only
 
     # Verify assets with warnings only (continue with release even if missing)
-    $0 --verify-assets-warn
+    CDK_DEFAULT_ACCOUNT=123456789012 CDK_DEFAULT_REGION=us-east-1 $0 --verify-assets-warn
+
+ENVIRONMENT VARIABLES:
+    CDK_DEFAULT_ACCOUNT     AWS Account ID (required)
+    CDK_DEFAULT_REGION      AWS Region (required)
+
+ASSETS BUCKET:
+    The script constructs the assets bucket name using the standard CDK pattern:
+    cdk-hnb659fds-assets-{ACCOUNT}-{REGION}
 
 WORKFLOW:
     1. Cleans output directory and validates environment
@@ -162,9 +168,10 @@ setup_directories() {
     mkdir -p "$BASE_DIST_DIR"
     mkdir -p "$ARCHIVE_DIR"
 
-    # Ensure we're in the project root
+    # Ensure we're in the project root (package.json and cdk.json are required for CDK operations)
     if [[ ! -f "package.json" || ! -f "cdk.json" ]]; then
         echo -e "${RED}Error: Must be run from the project root directory${NC}"
+        echo -e "${RED}   Both package.json and cdk.json are required${NC}"
         exit 1
     fi
     
@@ -177,6 +184,8 @@ display_config() {
     echo "Base Directory: $BASE_DIST_DIR"
     echo "Release Directory: $RELEASE_DIR"
     echo "Archive Directory: $ARCHIVE_DIR"
+    echo "CDK Account: $CDK_DEFAULT_ACCOUNT"
+    echo "CDK Region: $CDK_DEFAULT_REGION"
     echo "Assets Bucket: $ASSETS_BUCKET"
     if [[ -n "$VERSION" ]]; then
         echo "Version: $VERSION"
@@ -344,17 +353,25 @@ copy_template() {
 
 # Copy deployment configuration
 copy_deployment_config() {
-    echo "Copying deployment configuration..."
-    if [[ -f "doc/deployment-config.json" ]]; then
-        cp "doc/deployment-config.json" "$RELEASE_DIR/deployment-config.json"
-        echo "✅ Deployment configuration copied successfully"
-    else
-        echo -e "${RED}❌ Error: doc/deployment-config.json not found${NC}"
-        echo -e "${RED}   This should not happen - config was verified earlier${NC}"
-        exit 1
-    fi
+    echo "Creating deployment configuration..."
     
-    echo -e "${BLUE}[copy_deployment_config] Deployment config copied - Source: doc/deployment-config.json, Destination: ${RELEASE_DIR}/deployment-config.json${NC}"
+    # Create a minimal deployment config with the current account and region
+    cat > "$RELEASE_DIR/deployment-config.json" << EOF
+{
+  "account": "$CDK_DEFAULT_ACCOUNT",
+  "region": "$CDK_DEFAULT_REGION",
+  "buckets": {
+    "assetsBucket": "$ASSETS_BUCKET"
+  }
+}
+EOF
+    
+    echo "✅ Deployment configuration created with current environment settings"
+    echo "   Account: $CDK_DEFAULT_ACCOUNT"
+    echo "   Region: $CDK_DEFAULT_REGION" 
+    echo "   Assets Bucket: $ASSETS_BUCKET"
+    
+    echo -e "${BLUE}[copy_deployment_config] Deployment config created - Account: ${CDK_DEFAULT_ACCOUNT}, Region: ${CDK_DEFAULT_REGION}, Bucket: ${ASSETS_BUCKET}${NC}"
 }
 
 # Copy Lambda assets

@@ -43,23 +43,17 @@ jobs:
             echo "Error: AWS_ACCOUNT_ID or AWS_REGION is not set"
             exit 1
           fi
-          echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID"
-          echo "AWS_REGION=$AWS_REGION"
+          echo "CDK_DEFAULT_ACCOUNT=$AWS_ACCOUNT_ID"
+          echo "CDK_DEFAULT_REGION=$AWS_REGION"
         env:
-          AWS_ACCOUNT_ID: ${{ env.AWS_ACCOUNT_ID }}
-          AWS_REGION: ${{ env.AWS_REGION }}
+          CDK_DEFAULT_ACCOUNT: ${{ env.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
       - name: Run tests
         run: npm test
-        env:
-          CDK_DEFAULT_ACCOUNT: ${{ env.AWS_ACCOUNT_ID }}
-          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
       - name: Run linter
         run: npm run lint
-        env:
-          CDK_DEFAULT_ACCOUNT: ${{ env.AWS_ACCOUNT_ID }}
-          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
       - name: Print debug info
         run: |
