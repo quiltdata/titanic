@@ -114,18 +114,18 @@ check_aws_setup() {
 }
 
 # Configuration
-if [ ! -f "deployment-config.json" ]; then
-    echo -e "${YELLOW}⚠️  deployment-config.json not found. Running CDK synthesis first...${NC}"
-    run_cdk_synth
+if [ ! -f "doc/deployment-config.json" ]; then
+    echo -e "${YELLOW}⚠️  doc/deployment-config.json not found. This file should exist in the doc/ directory.${NC}"
+    exit 1
 fi
-ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.assetsBucket")
+ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).buckets.assetsBucket")
 NODE_STATUS=$?
 if [[ $NODE_STATUS -ne 0 ]]; then
-    echo -e "${RED}❌ Failed to read assets bucket from deployment-config.json${NC}"
+    echo -e "${RED}❌ Failed to read assets bucket from doc/deployment-config.json${NC}"
     exit 1
 fi
 if [[ -z "$ASSETS_BUCKET" ]]; then
-    echo -e "${RED}❌ Failed to read assets bucket from deployment-config.json${NC}"
+    echo -e "${RED}❌ Failed to read assets bucket from doc/deployment-config.json${NC}"
     exit 1
 fi
 LAMBDA_ZIP_PATH="lambda/merge-tables.zip"

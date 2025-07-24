@@ -25,7 +25,7 @@ REGION="${AWS_DEFAULT_REGION:-${CDK_DEFAULT_REGION:-us-east-1}}"
 PROFILE=""
 TEMPLATE_FILE="template.json"
 EVENT_FILE="initial-event.json"
-DEPLOYMENT_CONFIG_FILE="deployment-config.json"
+DEPLOYMENT_CONFIG_FILE="doc/deployment-config.json"
 
 # Initialize parameter values (CLI args will override these later)
 # Use environment variables if set, otherwise use defaults

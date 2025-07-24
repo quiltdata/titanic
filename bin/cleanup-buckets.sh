@@ -50,8 +50,8 @@ show_usage() {
     echo "  --help                  Show this help message"
     echo
     echo "Configuration:"
-    echo "  Uses deployment-config.json for bucket names and AWS configuration"
-    echo "  Run 'npm run cdk:synth' first to generate deployment-config.json"
+    echo "  Uses doc/deployment-config.json for bucket names and AWS configuration"
+    echo "  This file should exist in the doc/ directory"
     echo
     echo "By default, this script cleans up:"
     echo "  - S3 Tables bucket (titanic-s3-tables-*)"
@@ -98,30 +98,30 @@ done
 echo -e "${BLUE}🗑️  Titanic Bucket Cleanup Script${NC}"
 
 # Check for deployment-config.json
-if [ ! -f "deployment-config.json" ]; then
-    handle_error 1 "deployment-config.json not found" "Please run 'npm run cdk:synth' first to generate deployment-config.json"
+if [ ! -f "doc/deployment-config.json" ]; then
+    handle_error 1 "doc/deployment-config.json not found" "This file should exist in the doc/ directory"
 fi
 
 # Load configuration from deployment-config.json
-ACCOUNT=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).account" 2>/dev/null)
+ACCOUNT=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).account" 2>/dev/null)
 if [ $? -ne 0 ] || [ -z "$ACCOUNT" ]; then
-    handle_error 1 "Failed to read account from deployment-config.json" "Check if the file is valid JSON and contains the account field"
+    handle_error 1 "Failed to read account from doc/deployment-config.json" "Check if the file is valid JSON and contains the account field"
 fi
 
-REGION=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).region" 2>/dev/null)
+REGION=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).region" 2>/dev/null)
 if [ $? -ne 0 ] || [ -z "$REGION" ]; then
-    handle_error 1 "Failed to read region from deployment-config.json" "Check if the file is valid JSON and contains the region field"
+    handle_error 1 "Failed to read region from doc/deployment-config.json" "Check if the file is valid JSON and contains the region field"
 fi
 
-GLUE_TABLES_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.glueTablesBucket || ''" 2>/dev/null)
-S3_TABLES_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.s3TablesBucket || ''" 2>/dev/null)
-ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.assetsBucket || ''" 2>/dev/null)
-DATABASE_NAME=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).athenaDatabaseName || ''" 2>/dev/null)
-RESULTS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.assetsBucket || ''" 2>/dev/null)  # Use assets bucket for Athena results
+GLUE_TABLES_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).buckets.glueTablesBucket || ''" 2>/dev/null)
+S3_TABLES_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).buckets.s3TablesBucket || ''" 2>/dev/null)
+ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).buckets.assetsBucket || ''" 2>/dev/null)
+DATABASE_NAME=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).athenaDatabaseName || ''" 2>/dev/null)
+RESULTS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).buckets.assetsBucket || ''" 2>/dev/null)  # Use assets bucket for Athena results
 
 # Validate required configuration
 if [ -z "$ACCOUNT" ] || [ -z "$REGION" ]; then
-    handle_error 1 "Invalid deployment-config.json - missing account or region" "Account: '$ACCOUNT', Region: '$REGION'"
+    handle_error 1 "Invalid doc/deployment-config.json - missing account or region" "Account: '$ACCOUNT', Region: '$REGION'"
 fi
 
 # Generate bucket names if not provided in config

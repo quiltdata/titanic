@@ -24,30 +24,30 @@ if ! command -v uuidgen &> /dev/null; then
 fi
 
 # Check for deployment-config.json
-if [ ! -f "deployment-config.json" ]; then
-    echo "Error: deployment-config.json not found" >&2
-    echo "Please run 'npm run cdk:synth' first to generate deployment-config.json" >&2
+if [ ! -f "doc/deployment-config.json" ]; then
+    echo "Error: doc/deployment-config.json not found" >&2
+    echo "This file should exist in the doc/ directory" >&2
     exit 1
 fi
 
 # Load configuration from deployment-config.json
-ACCOUNT=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).account")
+ACCOUNT=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).account")
 NODE_STATUS=$?
 if [[ $NODE_STATUS -ne 0 ]]; then
-    echo "Error: Failed to read account from deployment-config.json" >&2
+    echo "Error: Failed to read account from doc/deployment-config.json" >&2
     exit 1
 fi
 
-REGION=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).region")
+REGION=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).region")
 NODE_STATUS=$?
 if [[ $NODE_STATUS -ne 0 ]]; then
-    echo "Error: Failed to read region from deployment-config.json" >&2
+    echo "Error: Failed to read region from doc/deployment-config.json" >&2
     exit 1
 fi
 
 # Validate required configuration
 if [ -z "$ACCOUNT" ] || [ -z "$REGION" ]; then
-    echo "Error: Invalid deployment-config.json - missing account or region" >&2
+    echo "Error: Invalid doc/deployment-config.json - missing account or region" >&2
     exit 1
 fi
 

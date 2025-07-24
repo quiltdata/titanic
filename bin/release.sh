@@ -36,13 +36,13 @@ initialize_environment() {
     fi
 
     # Get the assets bucket name from deployment config for pre-built assets mode
-    if [ ! -f "deployment-config.json" ]; then
+    if [ ! -f "doc/deployment-config.json" ]; then
         ASSETS_BUCKET=""
     else
-        ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.assetsBucket" 2>/dev/null || echo "")
+        ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).buckets.assetsBucket" 2>/dev/null || echo "")
         NODE_STATUS=$?
         if [[ $NODE_STATUS -ne 0 ]]; then
-            echo -e "${RED}Error: Failed to parse deployment-config.json${NC}" >&2
+            echo -e "${RED}Error: Failed to parse doc/deployment-config.json${NC}" >&2
             ASSETS_BUCKET=""
         fi
     fi
@@ -175,7 +175,7 @@ verify_assets() {
     echo -e "${YELLOW}Verifying Lambda assets are available in assets bucket...${NC}"
     
     if [ -z "$ASSETS_BUCKET" ]; then
-        echo -e "${RED}❌ deployment-config.json not found or invalid. Run 'npm run cdk:synth' first.${NC}"
+        echo -e "${RED}❌ doc/deployment-config.json not found or invalid. Check doc/deployment-config.json exists.${NC}"
         if [[ "$VERIFY_ASSETS_WARN" == "true" ]]; then
             echo -e "${YELLOW}⚠️  Continuing with release despite missing deployment config...${NC}"
             return 0
@@ -328,10 +328,10 @@ copy_template() {
 # Copy deployment configuration
 copy_deployment_config() {
     echo "Copying deployment configuration..."
-    if [[ -f "deployment-config.json" ]]; then
-        cp "deployment-config.json" "$RELEASE_DIR/"
+    if [[ -f "doc/deployment-config.json" ]]; then
+        cp "doc/deployment-config.json" "$RELEASE_DIR/"
     else
-        echo -e "${YELLOW}Warning: deployment-config.json not found${NC}"
+        echo -e "${YELLOW}Warning: doc/deployment-config.json not found${NC}"
     fi
 }
 
