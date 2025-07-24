@@ -39,9 +39,15 @@ jobs:
       
     - name: Run tests
       run: npm test
+      env:
+        CDK_DEFAULT_ACCOUNT: ${{ env.AWS_ACCOUNT_ID }}
+        CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
       
     - name: Run linter
       run: npm run lint
+      env:
+        CDK_DEFAULT_ACCOUNT: ${{ env.AWS_ACCOUNT_ID }}
+        CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
     - name: Print debug info
       run: |
