@@ -35,24 +35,22 @@ initialize_environment() {
         echo -e "${GREEN}✅ Environment variables loaded from .env${NC}"
     fi
 
-    # Get the assets bucket name from deployment config for pre-built assets mode
-    if [ ! -f "doc/deployment-config.json" ]; then
-        echo -e "${RED}❌ Error: doc/deployment-config.json not found${NC}" >&2
-        echo -e "${RED}   This file is required for release generation${NC}" >&2
-        echo -e "${RED}   Please ensure doc/deployment-config.json exists in the repository${NC}" >&2
+    # Validate required environment variables
+    if [[ -z "$CDK_DEFAULT_ACCOUNT" ]]; then
+        echo -e "${RED}❌ Error: CDK_DEFAULT_ACCOUNT environment variable is required${NC}" >&2
+        echo -e "${RED}   Please set CDK_DEFAULT_ACCOUNT to your AWS account ID${NC}" >&2
         exit 1
-    else
-        ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).buckets.assetsBucket" 2>/dev/null || echo "")
-        NODE_STATUS=$?
-        if [[ $NODE_STATUS -ne 0 ]]; then
-            echo -e "${RED}Error: Failed to parse doc/deployment-config.json${NC}" >&2
-            exit 1
-        fi
-        if [[ -z "$ASSETS_BUCKET" ]]; then
-            echo -e "${RED}Error: assets bucket not found in doc/deployment-config.json${NC}" >&2
-            exit 1
-        fi
     fi
+
+    if [[ -z "$CDK_DEFAULT_REGION" ]]; then
+        echo -e "${RED}❌ Error: CDK_DEFAULT_REGION environment variable is required${NC}" >&2
+        echo -e "${RED}   Please set CDK_DEFAULT_REGION to your target AWS region${NC}" >&2
+        exit 1
+    fi
+
+    # Construct the assets bucket name using the standard pattern
+    ASSETS_BUCKET="titanic-assets-${CDK_DEFAULT_ACCOUNT}-${CDK_DEFAULT_REGION}"
+    echo -e "${GREEN}✅ Constructed assets bucket name: ${ASSETS_BUCKET}${NC}"
 
     # Get CDK version
     CDK_VERSION=$(npx cdk --version 2>/dev/null || echo "N/A")
@@ -61,6 +59,8 @@ initialize_environment() {
         echo -e "${YELLOW}Warning: Failed to get CDK version${NC}" >&2
         CDK_VERSION="N/A"
     fi
+    
+    echo -e "${BLUE}[initialize_environment] Environment initialized - Assets bucket: ${ASSETS_BUCKET}, CDK version: ${CDK_VERSION}${NC}"
 }
 
 # Display help information
@@ -88,17 +88,25 @@ DIRECTORY STRUCTURE:
         └── release-v1.0.0.zip
 
 EXAMPLES:
-    # Generate release package
-    $0
+    # Generate release package (requires CDK_DEFAULT_ACCOUNT and CDK_DEFAULT_REGION)
+    CDK_DEFAULT_ACCOUNT=123456789012 CDK_DEFAULT_REGION=us-east-1 $0
 
     # Generate with version tag
-    $0 --version v1.2.0
+    CDK_DEFAULT_ACCOUNT=123456789012 CDK_DEFAULT_REGION=us-east-1 $0 --version v1.2.0
 
     # Verify assets are available (no release generation)
-    $0 --verify-assets-only
+    CDK_DEFAULT_ACCOUNT=123456789012 CDK_DEFAULT_REGION=us-east-1 $0 --verify-assets-only
 
     # Verify assets with warnings only (continue with release even if missing)
-    $0 --verify-assets-warn
+    CDK_DEFAULT_ACCOUNT=123456789012 CDK_DEFAULT_REGION=us-east-1 $0 --verify-assets-warn
+
+ENVIRONMENT VARIABLES:
+    CDK_DEFAULT_ACCOUNT     AWS Account ID (required)
+    CDK_DEFAULT_REGION      AWS Region (required)
+
+ASSETS BUCKET:
+    The script constructs the assets bucket name using the standard CDK pattern:
+    cdk-hnb659fds-assets-{ACCOUNT}-{REGION}
 
 WORKFLOW:
     1. Cleans output directory and validates environment
@@ -136,6 +144,8 @@ parse_arguments() {
                 ;;
         esac
     done
+    
+    echo -e "${BLUE}[parse_arguments] Parsed arguments - Version: ${VERSION:-"unset"}, Verify assets only: ${VERIFY_ASSETS_ONLY}, Verify assets warn: ${VERIFY_ASSETS_WARN}${NC}"
 }
 
 # Setup directories and validate environment
@@ -158,11 +168,14 @@ setup_directories() {
     mkdir -p "$BASE_DIST_DIR"
     mkdir -p "$ARCHIVE_DIR"
 
-    # Ensure we're in the project root
+    # Ensure we're in the project root (package.json and cdk.json are required for CDK operations)
     if [[ ! -f "package.json" || ! -f "cdk.json" ]]; then
         echo -e "${RED}Error: Must be run from the project root directory${NC}"
+        echo -e "${RED}   Both package.json and cdk.json are required${NC}"
         exit 1
     fi
+    
+    echo -e "${BLUE}[setup_directories] Directories configured - Release: ${RELEASE_DIR}, Archive: ${ARCHIVE_DIR}${NC}"
 }
 
 # Display configuration information
@@ -171,10 +184,15 @@ display_config() {
     echo "Base Directory: $BASE_DIST_DIR"
     echo "Release Directory: $RELEASE_DIR"
     echo "Archive Directory: $ARCHIVE_DIR"
+    echo "CDK Account: $CDK_DEFAULT_ACCOUNT"
+    echo "CDK Region: $CDK_DEFAULT_REGION"
+    echo "Assets Bucket: $ASSETS_BUCKET"
     if [[ -n "$VERSION" ]]; then
         echo "Version: $VERSION"
     fi
     echo ""
+    
+    echo -e "${BLUE}[display_config] Configuration displayed - Base: ${BASE_DIST_DIR}, Release: ${RELEASE_DIR}, Assets bucket: ${ASSETS_BUCKET}${NC}"
 }
 
 # Verify Lambda assets are available in S3
@@ -219,6 +237,8 @@ verify_assets() {
         echo -e "${GREEN}✅ Asset verification complete - assets are available for release${NC}"
         exit 0
     fi
+    
+    echo -e "${BLUE}[verify_assets] Asset verification completed - Bucket: ${ASSETS_BUCKET}, Assets found: $(if curl -f -s -I "https://$ASSETS_BUCKET.s3.amazonaws.com/lambda/merge-tables.zip" > /dev/null; then echo "yes"; else echo "no"; fi)${NC}"
 }
 
 # Generate and validate CloudFormation template
@@ -243,6 +263,8 @@ generate_template() {
     fi
 
     validate_template "$stack_template"
+    
+    echo -e "${BLUE}[generate_template] Template generation completed - Template: ${stack_template}, CDK synthesis: successful${NC}"
 }
 
 # Validate CloudFormation template
@@ -300,6 +322,8 @@ validate_template() {
     echo "- Size: $template_size bytes"
 
     echo -e "${GREEN}✅ CloudFormation template validation passed${NC}"
+    
+    echo -e "${BLUE}[validate_template] Template validation completed - Size: ${template_size} bytes, Resources: ${resource_count}, Parameters: ${parameter_count}${NC}"
 }
 
 # Create release package with all necessary files
@@ -314,6 +338,8 @@ create_release_package() {
 
     echo -e "${GREEN}Release package created successfully!${NC}"
     echo ""
+    
+    echo -e "${BLUE}[create_release_package] Release package creation completed - Directory: ${RELEASE_DIR}${NC}"
 }
 
 # Copy CloudFormation template
@@ -321,25 +347,39 @@ copy_template() {
     local stack_template="cdk.out/TitanicStack.template.json"
     echo "Copying CloudFormation template..."
     cp "$stack_template" "$RELEASE_DIR/template.json"
+    
+    echo -e "${BLUE}[copy_template] Template copied - Source: ${stack_template}, Destination: ${RELEASE_DIR}/template.json${NC}"
 }
 
 # Copy deployment configuration
 copy_deployment_config() {
-    echo "Copying deployment configuration..."
-    if [[ -f "doc/deployment-config.json" ]]; then
-        cp "doc/deployment-config.json" "$RELEASE_DIR/deployment-config.json"
-        echo "✅ Deployment configuration copied successfully"
-    else
-        echo -e "${RED}❌ Error: doc/deployment-config.json not found${NC}"
-        echo -e "${RED}   This should not happen - config was verified earlier${NC}"
-        exit 1
-    fi
+    echo "Creating deployment configuration..."
+    
+    # Create a minimal deployment config with the current account and region
+    cat > "$RELEASE_DIR/deployment-config.json" << EOF
+{
+  "account": "$CDK_DEFAULT_ACCOUNT",
+  "region": "$CDK_DEFAULT_REGION",
+  "buckets": {
+    "assetsBucket": "$ASSETS_BUCKET"
+  }
+}
+EOF
+    
+    echo "✅ Deployment configuration created with current environment settings"
+    echo "   Account: $CDK_DEFAULT_ACCOUNT"
+    echo "   Region: $CDK_DEFAULT_REGION" 
+    echo "   Assets Bucket: $ASSETS_BUCKET"
+    
+    echo -e "${BLUE}[copy_deployment_config] Deployment config created - Account: ${CDK_DEFAULT_ACCOUNT}, Region: ${CDK_DEFAULT_REGION}, Bucket: ${ASSETS_BUCKET}${NC}"
 }
 
 # Copy Lambda assets
 copy_lambda_assets() {
     echo "Skipping asset copying - using pre-built assets from assets bucket"
     echo "Lambda code will be loaded from: s3://$ASSETS_BUCKET/lambda/merge-tables.zip"
+    
+    echo -e "${BLUE}[copy_lambda_assets] Assets configuration completed - Using pre-built assets from bucket: ${ASSETS_BUCKET}${NC}"
 }
 
 # Copy scripts and documentation
@@ -371,6 +411,8 @@ copy_scripts_and_docs() {
     else
         echo -e "${YELLOW}Warning: env.example not found${NC}"
     fi
+    
+    echo -e "${BLUE}[copy_scripts_and_docs] Scripts and docs copied - Deploy script, README, and example env copied to ${RELEASE_DIR}${NC}"
 }
 
 # Create compressed archives
@@ -399,6 +441,8 @@ create_archives() {
     else
         echo -e "${YELLOW}⚠️  Warning: zip command not found, skipping .zip archive${NC}"
     fi
+    
+    echo -e "${BLUE}[create_archives] Archive creation completed - Created: ${ARCHIVE_DIR}/${release_name}.tar.gz$(if command -v zip >/dev/null 2>&1; then echo " and ${ARCHIVE_DIR}/${release_name}.zip"; fi)${NC}"
 }
 
 # Display final summary
@@ -414,6 +458,8 @@ display_summary() {
     # For more details about the release process, refer to the release README.
     echo -e "${BLUE}For release details, see: $RELEASE_DIR/README.md${NC}"
     echo -e "${GREEN}Release package is ready!${NC}"
+    
+    echo -e "${BLUE}[display_summary] Summary displayed - Release: ${release_name}, Archives in: ${ARCHIVE_DIR}${NC}"
 }
 
 # Main execution flow
@@ -430,6 +476,8 @@ main() {
     create_release_package
     create_archives
     display_summary
+    
+    echo -e "${BLUE}[main] Release process completed successfully - Package ready in: ${RELEASE_DIR}, Archives in: ${ARCHIVE_DIR}${NC}"
 }
 
 # Run main function with all arguments

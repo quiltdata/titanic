@@ -2,111 +2,123 @@ name: Test and Build
 
 on:
   push:
-    branches: [ '**' ]  # Run on pushes to any branch
+    branches: ["**"] # Run on pushes to any branch
     tags:
-      - 'v*'  # Run on version tags
+      - "v*" # Run on version tags
 
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         node-version: [18.x]
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-        
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Run tests
-      run: npm test
-      
-    - name: Run linter
-      run: npm run lint
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Print debug info
-      run: |
-        echo "GITHUB_REF=${GITHUB_REF}"
-        echo "GITHUB_EVENT_NAME=${GITHUB_EVENT_NAME}"
-      
-    # Generate release package only for tags
-    - name: Generate release package
-      if: startsWith(github.ref, 'refs/tags/v')
-      run: |
-        VERSION=${GITHUB_REF#refs/tags/}
-        echo "Building release package version: $VERSION"
-        npm run deploy:release -- --version "$VERSION"
-      env:
-        CDK_DEFAULT_ACCOUNT: "123456789012"
-        CDK_DEFAULT_REGION: "us-east-1"
-        ATHENA_DATABASE_NAME: "release-database"
-        QUILT_READ_POLICY_ARN: "arn:aws:iam::123456789012:policy/ReleasePolicy"
-        
-    - name: Upload release archives
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: actions/upload-artifact@v4
-      with:
-        name: release-archives-${{ github.run_number }}
-        path: dist/artifacts/
-        retention-days: 90
-        
-    - name: Upload release directory
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: actions/upload-artifact@v4
-      with:
-        name: release-directory-${{ github.run_number }}
-        path: dist/release-*/
-        retention-days: 90
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
 
-    # Create GitHub Release for tags onlycd
-    - name: Create GitHub Release
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ github.ref_name }}
-        name: Release ${{ github.ref_name }}
-        body_path: bin/README.md
-        files: |
-          dist/artifacts/*.tar.gz
-          dist/artifacts/*.zip
-        prerelease: ${{ contains(github.ref_name, '-') }}  # Pre-release if tag contains hyphen (e.g., v1.0.0-beta)
-        generate_release_notes: true
-        append_body: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Build summary
-      if: always()
-      run: |
-        echo "## 🏗️ Build Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "- **Tests**: ✅ Passed" >> $GITHUB_STEP_SUMMARY
-        echo "- **Linting**: ✅ Passed" >> $GITHUB_STEP_SUMMARY
-        
-        if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-          echo "- **Asset Verification**: ✅ Verified during release build" >> $GITHUB_STEP_SUMMARY
-          echo "- **GitHub Release**: ✅ Created from tag (${GITHUB_REF_NAME})" >> $GITHUB_STEP_SUMMARY
+      # Parse deployment config and export AWS environment variables
+      - name: Parse deployment config and export AWS env vars
+        run: |
+          export AWS_ACCOUNT_ID=$(jq -r .account doc/deployment-config.json)
+          export AWS_REGION=$(jq -r .region doc/deployment-config.json)
+          echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> $GITHUB_ENV
+          echo "AWS_REGION=$AWS_REGION" >> $GITHUB_ENV
+          echo "AWS_DEFAULT_REGION=$AWS_REGION" >> $GITHUB_ENV
+          echo "Parsed from config: Account=$AWS_ACCOUNT_ID, Region=$AWS_REGION"
+
+      - name: Validate envars
+        run: |
+          if [ -z "$AWS_ACCOUNT_ID" ] || [ -z "$AWS_REGION" ]; then
+            echo "Error: AWS_ACCOUNT_ID or AWS_REGION is not set"
+            exit 1
+          fi
+          echo "CDK_DEFAULT_ACCOUNT=$AWS_ACCOUNT_ID"
+          echo "CDK_DEFAULT_REGION=$AWS_REGION"
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ env.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Print debug info
+        run: |
+          echo "GITHUB_REF=${GITHUB_REF}"
+          echo "GITHUB_EVENT_NAME=${GITHUB_EVENT_NAME}"
+
+      # Generate release package only for tags
+      - name: Generate release package
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "Building release package version: $VERSION"
+          npm run deploy:release -- --version "$VERSION"
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ env.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+
+      - name: Upload release archives
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-archives-${{ github.run_number }}
+          path: dist/artifacts/
+          retention-days: 90
+
+      - name: Upload release directory
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-directory-${{ github.run_number }}
+          path: dist/release-*/
+          retention-days: 90
+
+      # Create GitHub Release for tags onlycd
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body_path: bin/README.md
+          files: |
+            dist/artifacts/*.tar.gz
+            dist/artifacts/*.zip
+          prerelease: ${{ contains(github.ref_name, '-') }} # Pre-release if tag contains hyphen (e.g., v1.0.0-beta)
+          generate_release_notes: true
+          append_body: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build summary
+        if: always()
+        run: |
+          echo "## 🏗️ Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Asset Details" >> $GITHUB_STEP_SUMMARY
-          echo "- **Assets Bucket**: Generated deterministically based on account/region" >> $GITHUB_STEP_SUMMARY
-          echo "- **Lambda Code**: \`lambda/merge-tables.zip\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Asset Management**: Lambda assets are uploaded manually using \`npm run deploy:upload\`" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "- **Release**: ⏭️ Skipped (only created for version tags)" >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📋 Release Strategy" >> $GITHUB_STEP_SUMMARY
-        echo "- **Branch pushes** → Tests + Linting only" >> $GITHUB_STEP_SUMMARY
-        echo "- **Version tags (v*)** → Tests + Linting + Asset Verification + GitHub Release" >> $GITHUB_STEP_SUMMARY
-        echo "- **Pre-release tags** → Use hyphen in tag (e.g., v1.0.0-beta)" >> $GITHUB_STEP_SUMMARY
-        echo "- **Asset Upload** → Manual process using \`npm run deploy:upload\` before releasing" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tests**: ✅ Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- **Linting**: ✅ Passed" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "- **Release**: ✅ Created for tag (${GITHUB_REF_NAME})" >> $GITHUB_STEP_SUMMARY
+            echo "- **Assets**: Lambda code (\`lambda/merge-tables.zip\`) uploaded manually" >> $GITHUB_STEP_SUMMARY
+            else
+            echo "- **Release**: ⏭️ Skipped (only for version tags)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch pushes**: Tests + Linting only" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version tags (v*)**: Full release workflow" >> $GITHUB_STEP_SUMMARY
