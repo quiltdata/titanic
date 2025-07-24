@@ -37,13 +37,20 @@ initialize_environment() {
 
     # Get the assets bucket name from deployment config for pre-built assets mode
     if [ ! -f "doc/deployment-config.json" ]; then
-        ASSETS_BUCKET=""
+        echo -e "${RED}❌ Error: doc/deployment-config.json not found${NC}" >&2
+        echo -e "${RED}   This file is required for release generation${NC}" >&2
+        echo -e "${RED}   Please ensure doc/deployment-config.json exists in the repository${NC}" >&2
+        exit 1
     else
         ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).buckets.assetsBucket" 2>/dev/null || echo "")
         NODE_STATUS=$?
         if [[ $NODE_STATUS -ne 0 ]]; then
             echo -e "${RED}Error: Failed to parse doc/deployment-config.json${NC}" >&2
-            ASSETS_BUCKET=""
+            exit 1
+        fi
+        if [[ -z "$ASSETS_BUCKET" ]]; then
+            echo -e "${RED}Error: assets bucket not found in doc/deployment-config.json${NC}" >&2
+            exit 1
         fi
     fi
 
@@ -173,15 +180,6 @@ display_config() {
 # Verify Lambda assets are available in S3
 verify_assets() {
     echo -e "${YELLOW}Verifying Lambda assets are available in assets bucket...${NC}"
-    
-    if [ -z "$ASSETS_BUCKET" ]; then
-        echo -e "${RED}❌ doc/deployment-config.json not found or invalid. Check doc/deployment-config.json exists.${NC}"
-        if [[ "$VERIFY_ASSETS_WARN" == "true" ]]; then
-            echo -e "${YELLOW}⚠️  Continuing with release despite missing deployment config...${NC}"
-            return 0
-        fi
-        exit 1
-    fi
     echo -e "${GREEN}📦 Using assets bucket: ${ASSETS_BUCKET}${NC}"
     
     local lambda_zip_path="lambda/merge-tables.zip"
@@ -329,9 +327,12 @@ copy_template() {
 copy_deployment_config() {
     echo "Copying deployment configuration..."
     if [[ -f "doc/deployment-config.json" ]]; then
-        cp "doc/deployment-config.json" "$RELEASE_DIR/"
+        cp "doc/deployment-config.json" "$RELEASE_DIR/deployment-config.json"
+        echo "✅ Deployment configuration copied successfully"
     else
-        echo -e "${YELLOW}Warning: doc/deployment-config.json not found${NC}"
+        echo -e "${RED}❌ Error: doc/deployment-config.json not found${NC}"
+        echo -e "${RED}   This should not happen - config was verified earlier${NC}"
+        exit 1
     fi
 }
 
