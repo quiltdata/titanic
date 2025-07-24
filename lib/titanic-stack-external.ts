@@ -32,7 +32,7 @@ export class TitanicStackExternal extends TitanicStack {
     protected createDeadLetterQueue(): sqs.Queue {
         // External deployment: create DLQ using CloudFormation with fixed naming
         return new sqs.Queue(this, "TitanicEventDLQ", {
-            queueName: `titanic-event-dlq-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+            queueName: this.config.generateDeadLetterQueueNameRef() as string,
             // Retain messages for 14 days (max for SQS)
             retentionPeriod: cdk.Duration.days(14),
             // Enable server-side encryption

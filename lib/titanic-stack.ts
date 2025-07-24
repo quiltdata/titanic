@@ -36,9 +36,6 @@ export class TitanicStack extends cdk.Stack {
             externalDeployment: props.externalDeployment ?? false
         });
 
-        // Get standardized names using ConfigStack class
-        const s3DatabaseName = this.config.s3TableDatabaseName;
-
         // Create Lambda role first to make dependencies explicit
         const lambdaRole = this.createLambdaRole();
 
@@ -78,7 +75,7 @@ export class TitanicStack extends cdk.Stack {
         }));
 
         // Grant non-bucket Lambda permissions (bucket permissions handled during bucket creation)
-        this.grantNonBucketLambdaPermissions(lambdaRole, this.config, s3DatabaseName);
+        this.grantNonBucketLambdaPermissions(lambdaRole, this.config);
 
         // Add stack outputs
         this.addStackOutputs(mergeLambda, glueTablesBucket, s3TablesBucketName, assetsBucketName, deadLetterQueue, this.config);
@@ -95,7 +92,7 @@ export class TitanicStack extends cdk.Stack {
 
     protected createDeadLetterQueue(): sqs.Queue {
         return new sqs.Queue(this, "TitanicEventDLQ", {
-            queueName: `titanic-event-dlq-${this.account}-${this.region}`,
+            queueName: this.config.generateDeadLetterQueueNameRef() as string,
             // Retain messages for 14 days (max for SQS)
             retentionPeriod: cdk.Duration.days(14),
             // Enable server-side encryption
@@ -237,8 +234,7 @@ export class TitanicStack extends cdk.Stack {
 
     private grantNonBucketLambdaPermissions(
         lambdaRole: iam.IRole, 
-        config: ConfigStack, 
-        s3DatabaseName: string
+        config: ConfigStack
     ) {
         // Grant Glue permissions
         lambdaRole.addToPrincipalPolicy(
@@ -256,10 +252,10 @@ export class TitanicStack extends cdk.Stack {
                 ],
                 resources: [
                     this.localPolicy("glue", "catalog"),
-                    this.localPolicy("glue", `database/${config.athenaDatabaseName}`),
-                    this.localPolicy("glue", `database/${s3DatabaseName}`),
-                    this.localPolicy("glue", `table/${config.athenaDatabaseName}/*`),
-                    this.localPolicy("glue", `table/${s3DatabaseName}/*`),
+                    config.generateAthenaDatabaseArnRef() as string,
+                    config.generateS3TablesDatabaseArnRef() as string,
+                    config.generateAthenaTableArnRef() as string,
+                    config.generateS3TablesTableArnRef() as string,
                 ],
             }),
         );
@@ -274,7 +270,7 @@ export class TitanicStack extends cdk.Stack {
                     "athena:BatchGetQueryExecution"
                 ],
                 resources: [
-                    this.localPolicy("athena", "workgroup/primary"),
+                    config.generateAthenaWorkgroupArnRef() as string,
                 ],
             }),
         );

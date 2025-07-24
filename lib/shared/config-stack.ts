@@ -228,6 +228,104 @@ export class ConfigStack extends Config {
       { Ref: 'AWS::Region' }
     ]);
   }
+
+  /**
+   * Generate CloudFormation reference for Dead Letter Queue name
+   * Returns Fn::Join with AWS::AccountId and AWS::Region parameters
+   */
+  public generateDeadLetterQueueNameRef(): unknown {
+    const { Fn } = require('aws-cdk-lib');
+    return Fn.join('', [
+      'titanic-event-dlq-',
+      { Ref: 'AWS::AccountId' },
+      '-',
+      { Ref: 'AWS::Region' }
+    ]);
+  }
+
+  /**
+   * Generate CloudFormation reference for Athena database ARN
+   * Returns Fn::Join with AWS::Region, AWS::AccountId and AthenaDatabaseName parameter
+   */
+  public generateAthenaDatabaseArnRef(): unknown {
+    const { Fn } = require('aws-cdk-lib');
+    return Fn.join(':', [
+      'arn:aws:glue',
+      { Ref: 'AWS::Region' },
+      { Ref: 'AWS::AccountId' },
+      'database',
+      { Ref: 'AthenaDatabaseName' }
+    ]);
+  }
+
+  /**
+   * Generate CloudFormation reference for S3 Tables database ARN
+   * Returns Fn::Join with AWS::Region, AWS::AccountId and computed S3 database name
+   */
+  public generateS3TablesDatabaseArnRef(): unknown {
+    const { Fn } = require('aws-cdk-lib');
+    return Fn.join(':', [
+      'arn:aws:glue',
+      { Ref: 'AWS::Region' },
+      { Ref: 'AWS::AccountId' },
+      'database',
+      Fn.join('', [
+        'user',
+        { Ref: 'AthenaDatabaseName' },
+        's3tables'
+      ])
+    ]);
+  }
+
+  /**
+   * Generate CloudFormation reference for Athena table ARNs (wildcard)
+   * Returns Fn::Join with AWS::Region, AWS::AccountId and AthenaDatabaseName parameter
+   */
+  public generateAthenaTableArnRef(): unknown {
+    const { Fn } = require('aws-cdk-lib');
+    return Fn.join(':', [
+      'arn:aws:glue',
+      { Ref: 'AWS::Region' },
+      { Ref: 'AWS::AccountId' },
+      'table',
+      { Ref: 'AthenaDatabaseName' },
+      '*'
+    ]);
+  }
+
+  /**
+   * Generate CloudFormation reference for S3 Tables table ARNs (wildcard)
+   * Returns Fn::Join with AWS::Region, AWS::AccountId and computed S3 database name
+   */
+  public generateS3TablesTableArnRef(): unknown {
+    const { Fn } = require('aws-cdk-lib');
+    return Fn.join(':', [
+      'arn:aws:glue',
+      { Ref: 'AWS::Region' },
+      { Ref: 'AWS::AccountId' },
+      'table',
+      Fn.join('', [
+        'user',
+        { Ref: 'AthenaDatabaseName' },
+        's3tables'
+      ]),
+      '*'
+    ]);
+  }
+
+  /**
+   * Generate CloudFormation reference for Athena workgroup ARN
+   * Returns Fn::Join with AWS::Region, AWS::AccountId and workgroup name (defaults to primary)
+   */
+  public generateAthenaWorkgroupArnRef(): unknown {
+    const { Fn } = require('aws-cdk-lib');
+    return Fn.join(':', [
+      'arn:aws:athena',
+      { Ref: 'AWS::Region' },
+      { Ref: 'AWS::AccountId' },
+      'workgroup/primary'
+    ]);
+  }
 }
 
 /**
