@@ -252,10 +252,8 @@ export class TitanicStack extends cdk.Stack {
                 ],
                 resources: [
                     this.localPolicy("glue", "catalog"),
-                    config.generateAthenaDatabaseArnRef() as string,
-                    config.generateS3TablesDatabaseArnRef() as string,
-                    config.generateAthenaTableArnRef() as string,
-                    config.generateS3TablesTableArnRef() as string,
+                    this.localPolicy("glue", config.generateAthenaDatabaseArnRef()),
+                    this.localPolicy("glue", config.generateAthenaTableArnRef()),
                 ],
             }),
         );

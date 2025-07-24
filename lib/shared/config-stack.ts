@@ -163,12 +163,10 @@ export class ConfigStack extends Config {
    * Returns Fn::Join with AWS::AccountId and AWS::Region parameters
    */
   public generateGlueTablesBucketNameRef(): unknown {
-    const { Fn } = require('aws-cdk-lib');
-    return Fn.join('', [
-      'titanic-glue-tables-',
-      { Ref: 'AWS::AccountId' },
-      '-',
-      { Ref: 'AWS::Region' }
+    return cdk.Fn.join('-', [
+      'titanic-glue-tables',
+      cdk.Aws.ACCOUNT_ID,
+      cdk.Aws.REGION
     ]);
   }
 
@@ -177,12 +175,10 @@ export class ConfigStack extends Config {
    * Returns Fn::Join with AWS::AccountId and AWS::Region parameters
    */
   public generateS3TablesBucketNameRef(): unknown {
-    const { Fn } = require('aws-cdk-lib');
-    return Fn.join('', [
-      'titanic-s3-tables-',
-      { Ref: 'AWS::AccountId' },
-      '-',
-      { Ref: 'AWS::Region' }
+    return cdk.Fn.join('-', [
+      'titanic-s3-tables',
+      cdk.Aws.ACCOUNT_ID,
+      cdk.Aws.REGION
     ]);
   }
 
@@ -191,12 +187,10 @@ export class ConfigStack extends Config {
    * Returns Fn::Join with AWS::AccountId and AWS::Region parameters
    */
   public generateAssetsBucketNameRef(): unknown {
-    const { Fn } = require('aws-cdk-lib');
-    return Fn.join('', [
-      'titanic-assets-',
-      { Ref: 'AWS::AccountId' },
-      '-',
-      { Ref: 'AWS::Region' }
+    return cdk.Fn.join('-', [
+      'titanic-assets',
+      cdk.Aws.ACCOUNT_ID,
+      cdk.Aws.REGION
     ]);
   }
 
@@ -208,10 +202,9 @@ export class ConfigStack extends Config {
     if (!this.parameters.publicAssetsBucketRoot) {
       throw new Error('PublicAssetsBucketRoot parameter not available - this method is only for external deployments');
     }
-    const { Fn } = require('aws-cdk-lib');
-    return Fn.join('-', [
-      { Ref: 'PublicAssetsBucketRoot' },
-      { Ref: 'AWS::Region' }
+    return cdk.Fn.join('-', [
+      this.parameters.publicAssetsBucketRoot.valueAsString,
+      cdk.Aws.REGION
     ]);
   }
 
@@ -220,12 +213,10 @@ export class ConfigStack extends Config {
    * Returns Fn::Join with AWS::AccountId and AWS::Region parameters
    */
   public generateEventRuleNameRef(): unknown {
-    const { Fn } = require('aws-cdk-lib');
-    return Fn.join('', [
-      'titanic-update-event-rule-',
-      { Ref: 'AWS::AccountId' },
-      '-',
-      { Ref: 'AWS::Region' }
+    return cdk.Fn.join('-', [
+      'titanic-update-event-rule',
+      cdk.Aws.ACCOUNT_ID,
+      cdk.Aws.REGION
     ]);
   }
 
@@ -234,12 +225,10 @@ export class ConfigStack extends Config {
    * Returns Fn::Join with AWS::AccountId and AWS::Region parameters
    */
   public generateDeadLetterQueueNameRef(): unknown {
-    const { Fn } = require('aws-cdk-lib');
-    return Fn.join('', [
-      'titanic-event-dlq-',
-      { Ref: 'AWS::AccountId' },
-      '-',
-      { Ref: 'AWS::Region' }
+    return cdk.Fn.join('-', [
+      'titanic-event-dlq',
+      cdk.Aws.ACCOUNT_ID,
+      cdk.Aws.REGION
     ]);
   }
 
@@ -247,33 +236,10 @@ export class ConfigStack extends Config {
    * Generate CloudFormation reference for Athena database ARN
    * Returns Fn::Join with AWS::Region, AWS::AccountId and AthenaDatabaseName parameter
    */
-  public generateAthenaDatabaseArnRef(): unknown {
-    const { Fn } = require('aws-cdk-lib');
-    return Fn.join(':', [
-      'arn:aws:glue',
-      { Ref: 'AWS::Region' },
-      { Ref: 'AWS::AccountId' },
+  public generateAthenaDatabaseArnRef(): string {
+    return cdk.Fn.join('/', [
       'database',
-      { Ref: 'AthenaDatabaseName' }
-    ]);
-  }
-
-  /**
-   * Generate CloudFormation reference for S3 Tables database ARN
-   * Returns Fn::Join with AWS::Region, AWS::AccountId and computed S3 database name
-   */
-  public generateS3TablesDatabaseArnRef(): unknown {
-    const { Fn } = require('aws-cdk-lib');
-    return Fn.join(':', [
-      'arn:aws:glue',
-      { Ref: 'AWS::Region' },
-      { Ref: 'AWS::AccountId' },
-      'database',
-      Fn.join('', [
-        'user',
-        { Ref: 'AthenaDatabaseName' },
-        's3tables'
-      ])
+      this.parameters.athenaDatabaseName.valueAsString
     ]);
   }
 
@@ -281,34 +247,10 @@ export class ConfigStack extends Config {
    * Generate CloudFormation reference for Athena table ARNs (wildcard)
    * Returns Fn::Join with AWS::Region, AWS::AccountId and AthenaDatabaseName parameter
    */
-  public generateAthenaTableArnRef(): unknown {
-    const { Fn } = require('aws-cdk-lib');
-    return Fn.join(':', [
-      'arn:aws:glue',
-      { Ref: 'AWS::Region' },
-      { Ref: 'AWS::AccountId' },
+  public generateAthenaTableArnRef(): string {
+    return cdk.Fn.join('/', [
       'table',
-      { Ref: 'AthenaDatabaseName' },
-      '*'
-    ]);
-  }
-
-  /**
-   * Generate CloudFormation reference for S3 Tables table ARNs (wildcard)
-   * Returns Fn::Join with AWS::Region, AWS::AccountId and computed S3 database name
-   */
-  public generateS3TablesTableArnRef(): unknown {
-    const { Fn } = require('aws-cdk-lib');
-    return Fn.join(':', [
-      'arn:aws:glue',
-      { Ref: 'AWS::Region' },
-      { Ref: 'AWS::AccountId' },
-      'table',
-      Fn.join('', [
-        'user',
-        { Ref: 'AthenaDatabaseName' },
-        's3tables'
-      ]),
+      this.parameters.athenaDatabaseName.valueAsString,
       '*'
     ]);
   }
@@ -318,11 +260,10 @@ export class ConfigStack extends Config {
    * Returns Fn::Join with AWS::Region, AWS::AccountId and workgroup name (defaults to primary)
    */
   public generateAthenaWorkgroupArnRef(): unknown {
-    const { Fn } = require('aws-cdk-lib');
-    return Fn.join(':', [
+    return cdk.Fn.join(':', [
       'arn:aws:athena',
-      { Ref: 'AWS::Region' },
-      { Ref: 'AWS::AccountId' },
+      cdk.Aws.REGION,
+      cdk.Aws.ACCOUNT_ID,
       'workgroup/primary'
     ]);
   }

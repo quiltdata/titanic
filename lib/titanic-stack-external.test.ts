@@ -139,7 +139,7 @@ describe("TitanicStackExternal", () => {
 
             template.hasResourceProperties("AWS::S3::Bucket", {
                 BucketName: {
-                    "Fn::Join": ["", ["titanic-glue-tables-", { "Ref": "AWS::AccountId" }, "-", { "Ref": "AWS::Region" }]]
+                    "Fn::Join": ["-", ["titanic-glue-tables", { "Ref": "AWS::AccountId" }, { "Ref": "AWS::Region" }]]
                 }
             });
         });
@@ -160,7 +160,7 @@ describe("TitanicStackExternal", () => {
             // Should only have the Glue tables bucket
             expect(bucketNames).toHaveLength(1);
             expect(bucketNames[0]).toEqual({
-                "Fn::Join": ["", ["titanic-glue-tables-", { "Ref": "AWS::AccountId" }, "-", { "Ref": "AWS::Region" }]]
+                "Fn::Join": ["-", ["titanic-glue-tables", { "Ref": "AWS::AccountId" }, { "Ref": "AWS::Region" }]]
             });
         });
 
