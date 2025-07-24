@@ -113,20 +113,12 @@ jobs:
           echo "- **Linting**: ✅ Passed" >> $GITHUB_STEP_SUMMARY
 
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            echo "- **Asset Verification**: ✅ Verified during release build" >> $GITHUB_STEP_SUMMARY
-            echo "- **GitHub Release**: ✅ Created from tag (${GITHUB_REF_NAME})" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### 📦 Asset Details" >> $GITHUB_STEP_SUMMARY
-            echo "- **Assets Bucket**: Generated deterministically based on account/region" >> $GITHUB_STEP_SUMMARY
-            echo "- **Lambda Code**: \`lambda/merge-tables.zip\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **Asset Management**: Lambda assets are uploaded manually using \`npm run deploy:upload\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- **Release**: ⏭️ Skipped (only created for version tags)" >> $GITHUB_STEP_SUMMARY
+            echo "- **Release**: ✅ Created for tag (${GITHUB_REF_NAME})" >> $GITHUB_STEP_SUMMARY
+            echo "- **Assets**: Lambda code (\`lambda/merge-tables.zip\`) uploaded manually" >> $GITHUB_STEP_SUMMARY
+            else
+            echo "- **Release**: ⏭️ Skipped (only for version tags)" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📋 Release Strategy" >> $GITHUB_STEP_SUMMARY
-          echo "- **Branch pushes** → Tests + Linting only" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version tags (v*)** → Tests + Linting + Asset Verification + GitHub Release" >> $GITHUB_STEP_SUMMARY
-          echo "- **Pre-release tags** → Use hyphen in tag (e.g., v1.0.0-beta)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Asset Upload** → Manual process using \`npm run deploy:upload\` before releasing" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch pushes**: Tests + Linting only" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version tags (v*)**: Full release workflow" >> $GITHUB_STEP_SUMMARY
