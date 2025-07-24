@@ -3,7 +3,12 @@
 # Monitor CloudWatch logs for TitanicMergeTables Lambda function
 # This script uses stack outputs to get the log group name
 
-set -e
+# Auto-load .env file if it exists
+if [[ -f ".env" ]]; then
+    set -a  # automatically export all variables
+    source .env
+    set +a  # stop automatically exporting
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -12,15 +17,26 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Determine AWS region with proper precedence
+REGION="${AWS_DEFAULT_REGION:-${CDK_DEFAULT_REGION:-us-east-1}}"
 STACK_NAME="TitanicStack"
 
 echo -e "${BLUE}🔍 Getting Lambda log group from CDK stack outputs...${NC}"
+echo -e "${YELLOW}Using AWS region: $REGION${NC}"
 
 # Get the log group name from stack outputs
 LOG_GROUP=$(aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
+    --region "$REGION" \
     --query 'Stacks[0].Outputs[?OutputKey==`LambdaLogGroupName`].OutputValue' \
     --output text 2>/dev/null)
+AWS_STATUS=$?
+
+if [[ $AWS_STATUS -ne 0 ]]; then
+    echo -e "${RED}❌ Failed to query CloudFormation stack outputs${NC}"
+    echo -e "${YELLOW}💡 Check if AWS CLI is configured and you have permissions${NC}"
+    exit 1
+fi
 
 if [ -z "$LOG_GROUP" ] || [ "$LOG_GROUP" = "None" ]; then
     echo -e "${RED}❌ Could not find log group name in stack outputs${NC}"
@@ -39,6 +55,7 @@ show_recent_logs() {
     aws logs filter-log-events \
         --log-group-name "$LOG_GROUP" \
         --start-time "$start_time" \
+        --region "$REGION" \
         --query 'events[*].[timestamp,message]' \
         --output text | \
     while IFS=$'\t' read -r timestamp message; do
@@ -58,6 +75,12 @@ show_recent_logs() {
             fi
         fi
     done
+    
+    # Check if the aws logs command failed
+    if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+        echo -e "${RED}❌ Failed to fetch logs from CloudWatch${NC}"
+        return 1
+    fi
 }
 
 # Function to show errors
@@ -69,6 +92,7 @@ show_errors() {
     local error_count=$(aws logs filter-log-events \
         --log-group-name "$LOG_GROUP" \
         --start-time "$start_time" \
+        --region "$REGION" \
         --filter-pattern "ERROR" \
         --query 'length(events)' \
         --output text)
@@ -79,6 +103,7 @@ show_errors() {
         aws logs filter-log-events \
             --log-group-name "$LOG_GROUP" \
             --start-time "$start_time" \
+            --region "$REGION" \
             --filter-pattern "ERROR" \
             --query 'events[*].[timestamp,message]' \
             --output text | \
@@ -94,7 +119,12 @@ show_errors() {
 # Function to tail logs
 tail_logs() {
     echo -e "\n${BLUE}📡 Tailing logs (press Ctrl+C to stop)...${NC}"
-    aws logs tail "$LOG_GROUP" --follow
+    aws logs tail "$LOG_GROUP" --region "$REGION" --follow
+    TAIL_STATUS=$?
+    if [[ $TAIL_STATUS -ne 0 ]]; then
+        echo -e "${RED}❌ Failed to tail logs from CloudWatch${NC}"
+        exit 1
+    fi
 }
 
 # Function to show Athena-related logs
@@ -106,6 +136,7 @@ show_athena_logs() {
     aws logs filter-log-events \
         --log-group-name "$LOG_GROUP" \
         --start-time "$start_time" \
+        --region "$REGION" \
         --filter-pattern "Athena" \
         --query 'events[*].[timestamp,message]' \
         --output text | \
@@ -126,6 +157,7 @@ show_s3_logs() {
     aws logs filter-log-events \
         --log-group-name "$LOG_GROUP" \
         --start-time "$start_time" \
+        --region "$REGION" \
         --filter-pattern "bucket" \
         --query 'events[*].[timestamp,message]' \
         --output text | \

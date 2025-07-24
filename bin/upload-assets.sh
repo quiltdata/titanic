@@ -3,8 +3,6 @@
 # Titanic Lambda Assets Upload Script
 # This script builds and uploads Lambda assets to the public assets bucket
 
-set -e
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -102,8 +100,12 @@ check_aws_setup() {
         exit 1
     fi
 
+    # Determine AWS region with proper precedence
+    local region="${AWS_DEFAULT_REGION:-${CDK_DEFAULT_REGION:-us-east-1}}"
+    echo -e "${YELLOW}Using AWS region: $region${NC}"
+
     # Check AWS credentials
-    if ! aws sts get-caller-identity &> /dev/null; then
+    if ! aws sts get-caller-identity --region "$region" &> /dev/null; then
         echo -e "${RED}❌ AWS credentials not configured. Please run 'aws configure' or set environment variables.${NC}"
         exit 1
     fi
@@ -112,11 +114,20 @@ check_aws_setup() {
 }
 
 # Configuration
-if [ ! -f "deployment-config.json" ]; then
-    echo -e "${YELLOW}⚠️  deployment-config.json not found. Running CDK synthesis first...${NC}"
-    run_cdk_synth
+if [ ! -f "doc/deployment-config.json" ]; then
+    echo -e "${YELLOW}⚠️  doc/deployment-config.json not found. This file should exist in the doc/ directory.${NC}"
+    exit 1
 fi
-ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.assetsBucket")
+ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).buckets.assetsBucket")
+NODE_STATUS=$?
+if [[ $NODE_STATUS -ne 0 ]]; then
+    echo -e "${RED}❌ Failed to read assets bucket from doc/deployment-config.json${NC}"
+    exit 1
+fi
+if [[ -z "$ASSETS_BUCKET" ]]; then
+    echo -e "${RED}❌ Failed to read assets bucket from doc/deployment-config.json${NC}"
+    exit 1
+fi
 LAMBDA_ZIP_PATH="lambda/merge-tables.zip"
 TEMP_ZIP="lambda-merge-tables.zip"
 
@@ -217,16 +228,14 @@ if [[ ! -d "cdk.out" ]]; then
     run_cdk_synth
 fi
 
-# Find the Lambda asset
-LAMBDA_ASSET_DIR=$(find_lambda_asset)
-if [[ $? -ne 0 ]]; then
+# Find the Lambda asset, rebuild if not found
+if ! LAMBDA_ASSET_DIR=$(find_lambda_asset); then
     echo -e "${RED}❌ No Lambda asset found in cdk.out${NC}"
     echo -e "${YELLOW}Attempting to rebuild Lambda assets...${NC}"
-    run_cdk_synth
-    
+    run_cdk_synth || { echo -e "${RED}❌ CDK synthesis failed when rebuilding assets${NC}"; exit 1; }
+
     # Try again after synthesis
-    LAMBDA_ASSET_DIR=$(find_lambda_asset)
-    if [[ $? -ne 0 ]]; then
+    if ! LAMBDA_ASSET_DIR=$(find_lambda_asset); then
         echo -e "${RED}❌ Still no Lambda asset found after synthesis${NC}"
         echo -e "${RED}There may be an issue with the CDK build process${NC}"
         exit 1
@@ -240,6 +249,11 @@ echo -e "${GREEN}✅ Lambda asset found: $LAMBDA_JS ($LAMBDA_SIZE bytes)${NC}"
 # Bundle Lambda function
 echo -e "${YELLOW}Bundling Lambda function...${NC}"
 zip -j "$TEMP_ZIP" "$LAMBDA_JS"
+ZIP_STATUS=$?
+if [[ $ZIP_STATUS -ne 0 ]]; then
+    echo -e "${RED}❌ Failed to create Lambda bundle with zip${NC}"
+    exit 1
+fi
 
 if [[ ! -f "$TEMP_ZIP" ]]; then
     echo -e "${RED}❌ Failed to create Lambda bundle${NC}"

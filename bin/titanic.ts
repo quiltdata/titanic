@@ -46,7 +46,7 @@ const config = new Config({
 });
 
 const deploymentConfig = config.generateDeploymentConfig();
-const configPath = path.join(process.cwd(), 'deployment-config.json');
+const configPath = path.join(process.cwd(), 'doc', 'deployment-config.json');
 fs.writeFileSync(configPath, JSON.stringify(deploymentConfig, null, 2));
 console.log(`📄 Deployment configuration written to: ${configPath}`);
 

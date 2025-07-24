@@ -194,6 +194,55 @@ describe('Config', () => {
     });
   });
 
+  describe('Static bucket name generators', () => {
+    it('should generate standardized Glue tables bucket names', () => {
+      expect(Config.generateGlueTablesBucketName('123456789012', 'us-west-2')).toBe('titanic-glue-tables-123456789012-us-west-2');
+    });
+
+    it('should generate standardized S3 tables bucket names', () => {
+      expect(Config.generateS3TablesBucketName('123456789012', 'us-east-1')).toBe('titanic-s3-tables-123456789012-us-east-1');
+    });
+
+    it('should generate standardized assets bucket names', () => {
+      expect(Config.generateAssetsBucketName('123456789012', 'us-west-2')).toBe('titanic-assets-123456789012-us-west-2');
+    });
+
+    it('should generate standardized assets bucket root names', () => {
+      expect(Config.generateAssetsBucketRoot('123456789012')).toBe('titanic-assets-123456789012');
+    });
+
+    it('should generate standardized EventBridge rule names', () => {
+      expect(Config.generateEventRuleName('123456789012', 'us-west-2')).toBe('titanic-update-event-rule-123456789012-us-west-2');
+    });
+  });
+
+  describe('Instance bucket name generators', () => {
+    const config = Config.createTestInstance({
+      awsAccountId: '123456789012',
+      aws_region: 'us-west-2',
+    });
+
+    it('should generate Glue tables bucket name for instance', () => {
+      expect(config.generateGlueTablesBucketName()).toBe('titanic-glue-tables-123456789012-us-west-2');
+    });
+
+    it('should generate S3 tables bucket name for instance', () => {
+      expect(config.generateS3TablesBucketName()).toBe('titanic-s3-tables-123456789012-us-west-2');
+    });
+
+    it('should generate assets bucket name for instance', () => {
+      expect(config.generateAssetsBucketName()).toBe('titanic-assets-123456789012-us-west-2');
+    });
+
+    it('should generate assets bucket root name for instance', () => {
+      expect(config.generateAssetsBucketRoot()).toBe('titanic-assets-123456789012');
+    });
+
+    it('should generate S3 tables bucket ARN for instance', () => {
+      expect(config.generateS3TablesBucketArn()).toBe('arn:aws:s3tables:us-west-2:123456789012:bucket/titanic-s3-tables-123456789012-us-west-2');
+    });
+  });
+
   // NOTE: This should render actual bucket names for testing,
   // NOT parameter references
   describe('generateDeploymentConfig', () => {
@@ -221,6 +270,7 @@ describe('Config', () => {
           glueTablesBucket: 'glue-bucket',
           s3TablesBucket: 's3-bucket',
           assetsBucket: Config.generateAssetsBucketName('123456789012', 'us-west-2'),
+          assetsBucketRoot: Config.generateAssetsBucketRoot('123456789012'),
         },
         generatedAt: expect.any(String),
       });

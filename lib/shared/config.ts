@@ -40,33 +40,6 @@ export class Config {
     return new Config(config);
   }
   
-  /**
-   * Create config instance from resolved values (for Lambda runtime)
-   */
-  public static createFromStack(
-    account: string, 
-    region: string, 
-    props: {
-      athenaDatabaseName: string;
-      quiltReadPolicyArn: string;
-      useS3Table: boolean;
-    }
-  ): Config {
-    const baseConfig = {
-      awsAccountId: account,
-      aws_region: region,
-      athenaDatabaseName: props.athenaDatabaseName,
-      quiltReadPolicyArn: props.quiltReadPolicyArn,
-      // Generate bucket names based on account/region
-      glueTablesBucketName: Config.generateGlueTablesBucketName(account, region),
-      s3TablesBucketName: Config.generateS3TablesBucketName(account, region),
-    };
-
-    return props.useS3Table
-      ? new S3Config(baseConfig) 
-      : new Config(baseConfig);
-  }
-  
   // Glue defaults
   public getReadDatabaseName(): string {
     return this.athenaDatabaseName;
@@ -181,6 +154,22 @@ export class Config {
   }
 
   /**
+   * Generate standardized assets bucket root name (account but not region)
+   * Used by CDK stack to ensure consistency with runtime config
+   */
+  public static generateAssetsBucketRoot(account: string): string {
+    return `titanic-assets-${account}`;
+  }
+
+  /**
+   * Generate standardized EventBridge rule name
+   * Used by CDK stack to ensure consistency with Lambda permissions
+   */
+  public static generateEventRuleName(account: string, region: string): string {
+    return `titanic-update-event-rule-${account}-${region}`;
+  }
+
+  /**
    * Get the namespace for S3 tables (fully-qualified with prefix)
    */
   public getNamespace(): string {
@@ -222,6 +211,13 @@ export class Config {
   }
 
   /**
+   * Generate assets bucket root name for this config instance  
+   */
+  public generateAssetsBucketRoot(): string {
+    return Config.generateAssetsBucketRoot(this.awsAccountId);
+  }
+
+  /**
    * Generate S3 Tables bucket ARN for this config instance  
    */
   public generateS3TablesBucketArn(): string {
@@ -244,6 +240,7 @@ export class Config {
         glueTablesBucket: this.glueTablesBucketName,
         s3TablesBucket: this.s3TablesBucketName,
         assetsBucket: Config.generateAssetsBucketName(this.awsAccountId, this.aws_region),
+        assetsBucketRoot: Config.generateAssetsBucketRoot(this.awsAccountId),
       },
       generatedAt: new Date().toISOString(),
     };

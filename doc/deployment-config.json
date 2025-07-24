@@ -1,0 +1,15 @@
+{
+  "stackName": "TitanicStack",
+  "account": "712023778557",
+  "region": "us-east-1",
+  "athenaDatabaseName": "test-database",
+  "quiltReadPolicyArn": "test-policy-arn",
+  "useS3Table": false,
+  "buckets": {
+    "glueTablesBucket": "",
+    "s3TablesBucket": "",
+    "assetsBucket": "titanic-assets-712023778557-us-east-1",
+    "assetsBucketRoot": "titanic-assets-712023778557"
+  },
+  "generatedAt": "2025-07-24T01:13:53.066Z"
+}

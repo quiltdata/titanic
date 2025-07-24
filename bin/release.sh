@@ -3,8 +3,6 @@
 # Titanic Stack Release Package Generator
 # This script generates a standalone deployment package from CDK code
 
-set -e
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -38,14 +36,31 @@ initialize_environment() {
     fi
 
     # Get the assets bucket name from deployment config for pre-built assets mode
-    if [ ! -f "deployment-config.json" ]; then
-        ASSETS_BUCKET=""
+    if [ ! -f "doc/deployment-config.json" ]; then
+        echo -e "${RED}❌ Error: doc/deployment-config.json not found${NC}" >&2
+        echo -e "${RED}   This file is required for release generation${NC}" >&2
+        echo -e "${RED}   Please ensure doc/deployment-config.json exists in the repository${NC}" >&2
+        exit 1
     else
-        ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).buckets.assetsBucket" 2>/dev/null || echo "")
+        ASSETS_BUCKET=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).buckets.assetsBucket" 2>/dev/null || echo "")
+        NODE_STATUS=$?
+        if [[ $NODE_STATUS -ne 0 ]]; then
+            echo -e "${RED}Error: Failed to parse doc/deployment-config.json${NC}" >&2
+            exit 1
+        fi
+        if [[ -z "$ASSETS_BUCKET" ]]; then
+            echo -e "${RED}Error: assets bucket not found in doc/deployment-config.json${NC}" >&2
+            exit 1
+        fi
     fi
 
     # Get CDK version
     CDK_VERSION=$(npx cdk --version 2>/dev/null || echo "N/A")
+    CDK_STATUS=$?
+    if [[ $CDK_STATUS -ne 0 ]]; then
+        echo -e "${YELLOW}Warning: Failed to get CDK version${NC}" >&2
+        CDK_VERSION="N/A"
+    fi
 }
 
 # Display help information
@@ -165,15 +180,6 @@ display_config() {
 # Verify Lambda assets are available in S3
 verify_assets() {
     echo -e "${YELLOW}Verifying Lambda assets are available in assets bucket...${NC}"
-    
-    if [ -z "$ASSETS_BUCKET" ]; then
-        echo -e "${RED}❌ deployment-config.json not found or invalid. Run 'npm run cdk:synth' first.${NC}"
-        if [[ "$VERIFY_ASSETS_WARN" == "true" ]]; then
-            echo -e "${YELLOW}⚠️  Continuing with release despite missing deployment config...${NC}"
-            return 0
-        fi
-        exit 1
-    fi
     echo -e "${GREEN}📦 Using assets bucket: ${ASSETS_BUCKET}${NC}"
     
     local lambda_zip_path="lambda/merge-tables.zip"
@@ -262,6 +268,11 @@ validate_template() {
 
     # Check template size (CloudFormation limit is 460,800 bytes for direct upload)
     local template_size=$(wc -c < "$stack_template")
+    WC_STATUS=$?
+    if [[ $WC_STATUS -ne 0 ]]; then
+        echo -e "${RED}Error: Failed to get template size${NC}"
+        exit 1
+    fi
     echo "CloudFormation template size: $template_size bytes"
 
     if [[ $template_size -gt 460800 ]]; then
@@ -273,7 +284,15 @@ validate_template() {
 
     # Count resources and validate structure
     local resource_count=$(grep -c '"Type"' "$stack_template" 2>/dev/null || echo "0")
+    GREP_STATUS=$?
     local parameter_count=$(grep -c '"Parameters"' "$stack_template" 2>/dev/null || echo "0")
+    GREP2_STATUS=$?
+    
+    if [[ $GREP_STATUS -ne 0 || $GREP2_STATUS -ne 0 ]]; then
+        echo -e "${YELLOW}Warning: Failed to count template components${NC}"
+        resource_count="unknown"
+        parameter_count="unknown"
+    fi
 
     echo "Template validation results:"
     echo "- Resources: $resource_count"
@@ -307,10 +326,13 @@ copy_template() {
 # Copy deployment configuration
 copy_deployment_config() {
     echo "Copying deployment configuration..."
-    if [[ -f "deployment-config.json" ]]; then
-        cp "deployment-config.json" "$RELEASE_DIR/"
+    if [[ -f "doc/deployment-config.json" ]]; then
+        cp "doc/deployment-config.json" "$RELEASE_DIR/deployment-config.json"
+        echo "✅ Deployment configuration copied successfully"
     else
-        echo -e "${YELLOW}Warning: deployment-config.json not found${NC}"
+        echo -e "${RED}❌ Error: doc/deployment-config.json not found${NC}"
+        echo -e "${RED}   This should not happen - config was verified earlier${NC}"
+        exit 1
     fi
 }
 

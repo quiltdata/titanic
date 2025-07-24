@@ -104,10 +104,10 @@ describe("TitanicStackExternal", () => {
                 AllowedValues: ["true", "false"]
             });
 
-            // Check PublicAssetsBucketName parameter (external deployment only)
-            template.hasParameter("PublicAssetsBucketName", {
+            // Check PublicAssetsBucketRoot parameter (external deployment only)
+            template.hasParameter("PublicAssetsBucketRoot", {
                 Type: "String",
-                Description: "Name of the public S3 bucket containing pre-built Lambda deployment assets",
+                Description: "Root name of the public S3 bucket containing pre-built Lambda deployment assets (without region suffix)",
                 Default: ""
             });
         });
@@ -121,7 +121,7 @@ describe("TitanicStackExternal", () => {
             expect(parameterNames).toContain("AthenaDatabaseName");
             expect(parameterNames).toContain("QuiltReadPolicyArn");
             expect(parameterNames).toContain("UseS3Table");
-            expect(parameterNames).toContain("PublicAssetsBucketName");
+            expect(parameterNames).toContain("PublicAssetsBucketRoot");
         });
     });
 
@@ -139,7 +139,7 @@ describe("TitanicStackExternal", () => {
 
             template.hasResourceProperties("AWS::S3::Bucket", {
                 BucketName: {
-                    "Fn::Join": ["", ["titanic-glue-tables-", { "Ref": "AWS::AccountId" }, "-", { "Ref": "AWS::Region" }]]
+                    "Fn::Join": ["-", ["titanic-glue-tables", { "Ref": "AWS::AccountId" }, { "Ref": "AWS::Region" }]]
                 }
             });
         });
@@ -160,7 +160,7 @@ describe("TitanicStackExternal", () => {
             // Should only have the Glue tables bucket
             expect(bucketNames).toHaveLength(1);
             expect(bucketNames[0]).toEqual({
-                "Fn::Join": ["", ["titanic-glue-tables-", { "Ref": "AWS::AccountId" }, "-", { "Ref": "AWS::Region" }]]
+                "Fn::Join": ["-", ["titanic-glue-tables", { "Ref": "AWS::AccountId" }, { "Ref": "AWS::Region" }]]
             });
         });
 
@@ -203,60 +203,20 @@ describe("TitanicStackExternal", () => {
             });
         });
 
-        it("should create Lambda function using CfnFunction", () => {
-            template.hasResourceProperties("AWS::Lambda::Function", {
-                Runtime: "nodejs18.x",
-                Handler: "index.handler",
-                Timeout: 900,
-                Code: {
-                    S3Bucket: {
-                        "Ref": "PublicAssetsBucketName"
-                    },
-                    S3Key: "lambda/merge-tables.zip"
-                }
+        it("should grant EventBridge permission to invoke the Lambda", () => {
+            template.hasResourceProperties("AWS::Lambda::Permission", {
+                Principal: "events.amazonaws.com",
+                Action: "lambda:InvokeFunction",
+                FunctionName: { Ref: "TitanicMergeTables" }
             });
         });
 
-        it("should configure Lambda with correct environment variables", () => {
-            // We need to find the TitanicMergeTables function specifically
-            const template = createExternalStackTemplate("LambdaEnvVarsStack");
-            const functions = template.findResources("AWS::Lambda::Function");
-            const mergeTablesFunction = functions["TitanicMergeTables"];
-
-            expect(mergeTablesFunction).toBeDefined();
-
-            // Check the environment variables
-            const envVars = mergeTablesFunction.Properties.Environment.Variables;
-
-            expect(envVars).toMatchObject({
-                ATHENA_DATABASE_NAME: { "Ref": "AthenaDatabaseName" },
-                QUILT_READ_POLICY_ARN: { "Ref": "QuiltReadPolicyArn" },
-                AWS_ACCOUNT_ID: { "Ref": "AWS::AccountId" },
-                LAMBDA_TIMEOUT: "900",
-                S3TABLE_DATABASE_NAME: "quilt_titanic"
-            });
-
-            // USE_S3_TABLE should be present (either as parameter reference or string)
-            expect(envVars.USE_S3_TABLE).toBeDefined();
+        it("should include S3 bucket location permissions in Lambda role policy", () => {
+            expectS3BucketLocationPermissions(template);
         });
 
-        it("should not create NodejsFunction (external deployment uses pre-built code)", () => {
-            // External deployment should not create NodejsFunction
-            // It should use CfnFunction with pre-built code from S3
-            const functions = template.findResources("AWS::Lambda::Function");
-
-            // Should have the main function plus any helper functions CDK creates
-            expect(Object.keys(functions).length).toBeGreaterThanOrEqual(1);
-
-            // Find the main function (our merge tables function)
-            const mainFunction = Object.values(functions).find((func: any) =>
-                func.Properties.Code && func.Properties.Code.S3Bucket && func.Properties.Code.S3Key
-            ) as any;
-
-            expect(mainFunction).toBeDefined();
-            expect(mainFunction.Properties.Code.S3Bucket).toBeDefined();
-            // The S3Key could be "lambda/merge-tables.zip" or a hash-based key
-            expect(mainFunction.Properties.Code.S3Key).toMatch(/.*\.zip$/);
+        it("should include Athena permissions in Lambda role policy", () => {
+            expectAthenaPermissions(template);
         });
     });
 

@@ -125,11 +125,10 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::S3::Bucket", {
                 BucketName: {
                     "Fn::Join": [
-                        "",
+                        "-",
                         [
-                            "titanic-glue-tables-",
+                            "titanic-glue-tables",
                             { "Ref": "AWS::AccountId" },
-                            "-",
                             { "Ref": "AWS::Region" }
                         ]
                     ]
@@ -140,11 +139,10 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::S3::Bucket", {
                 BucketName: {
                     "Fn::Join": [
-                        "",
+                        "-",
                         [
-                            "titanic-assets-",
+                            "titanic-assets",
                             { "Ref": "AWS::AccountId" },
-                            "-",
                             { "Ref": "AWS::Region" }
                         ]
                     ]
@@ -214,11 +212,10 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::S3Tables::TableBucket", {
                 TableBucketName: {
                     "Fn::Join": [
-                        "",
+                        "-",
                         [
-                            "titanic-s3-tables-",
+                            "titanic-s3-tables",
                             { "Ref": "AWS::AccountId" },
-                            "-",
                             { "Ref": "AWS::Region" }
                         ]
                     ]
@@ -231,11 +228,10 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::S3::Bucket", {
                 BucketName: {
                     "Fn::Join": [
-                        "",
+                        "-",
                         [
-                            "titanic-glue-tables-",
+                            "titanic-glue-tables",
                             { "Ref": "AWS::AccountId" },
-                            "-",
                             { "Ref": "AWS::Region" }
                         ]
                     ]
@@ -246,11 +242,10 @@ describe("TitanicStack", () => {
             template.hasResourceProperties("AWS::S3::Bucket", {
                 BucketName: {
                     "Fn::Join": [
-                        "",
+                        "-",
                         [
-                            "titanic-assets-",
+                            "titanic-assets",
                             { "Ref": "AWS::AccountId" },
-                            "-",
                             { "Ref": "AWS::Region" }
                         ]
                     ]

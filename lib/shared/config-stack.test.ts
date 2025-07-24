@@ -58,11 +58,10 @@ describe('ConfigStack', () => {
             template.hasOutput('TestRef', {
                 Value: {
                     "Fn::Join": [
-                        "",
+                        "-",
                         [
-                            "titanic-glue-tables-",
+                            "titanic-glue-tables",
                             { "Ref": "AWS::AccountId" },
-                            "-",
                             { "Ref": "AWS::Region" }
                         ]
                     ]
@@ -81,11 +80,10 @@ describe('ConfigStack', () => {
             template.hasOutput('TestRef', {
                 Value: {
                     "Fn::Join": [
-                        "",
+                        "-",
                         [
-                            "titanic-s3-tables-",
+                            "titanic-s3-tables",
                             { "Ref": "AWS::AccountId" },
-                            "-",
                             { "Ref": "AWS::Region" }
                         ]
                     ]
@@ -104,11 +102,10 @@ describe('ConfigStack', () => {
             template.hasOutput('TestRef', {
                 Value: {
                     "Fn::Join": [
-                        "",
+                        "-",
                         [
-                            "titanic-assets-",
+                            "titanic-assets",
                             { "Ref": "AWS::AccountId" },
-                            "-",
                             { "Ref": "AWS::Region" }
                         ]
                     ]

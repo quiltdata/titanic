@@ -5,7 +5,12 @@
 # If bucket_name is provided, it will be included in the event detail
 # If --write is provided, saves event to file instead of sending
 
-set -e
+# Auto-load .env file if it exists
+if [[ -f ".env" ]]; then
+    set -a  # automatically export all variables
+    source .env
+    set +a  # stop automatically exporting
+fi
 
 # Check for required tools
 if ! command -v jq &> /dev/null; then
@@ -19,21 +24,38 @@ if ! command -v uuidgen &> /dev/null; then
 fi
 
 # Check for deployment-config.json
-if [ ! -f "deployment-config.json" ]; then
-    echo "Error: deployment-config.json not found" >&2
-    echo "Please run 'npm run cdk:synth' first to generate deployment-config.json" >&2
+if [ ! -f "doc/deployment-config.json" ]; then
+    echo "Error: doc/deployment-config.json not found" >&2
+    echo "This file should exist in the doc/ directory" >&2
     exit 1
 fi
 
 # Load configuration from deployment-config.json
-ACCOUNT=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).account")
-REGION=$(node -p "JSON.parse(require('fs').readFileSync('deployment-config.json', 'utf8')).region")
+ACCOUNT=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).account")
+NODE_STATUS=$?
+if [[ $NODE_STATUS -ne 0 ]]; then
+    echo "Error: Failed to read account from doc/deployment-config.json" >&2
+    exit 1
+fi
+
+REGION=$(node -p "JSON.parse(require('fs').readFileSync('doc/deployment-config.json', 'utf8')).region")
+NODE_STATUS=$?
+if [[ $NODE_STATUS -ne 0 ]]; then
+    echo "Error: Failed to read region from doc/deployment-config.json" >&2
+    exit 1
+fi
 
 # Validate required configuration
 if [ -z "$ACCOUNT" ] || [ -z "$REGION" ]; then
-    echo "Error: Invalid deployment-config.json - missing account or region" >&2
+    echo "Error: Invalid doc/deployment-config.json - missing account or region" >&2
     exit 1
 fi
+
+# Use region precedence: AWS_DEFAULT_REGION > CDK_DEFAULT_REGION > config file region > us-east-1
+EFFECTIVE_REGION="${AWS_DEFAULT_REGION:-${CDK_DEFAULT_REGION:-${REGION:-us-east-1}}}"
+
+echo "Using AWS Account: $ACCOUNT"
+echo "Using AWS Region: $EFFECTIVE_REGION"
 
 # Parse options
 OUTPUT_DIR=""
@@ -94,6 +116,11 @@ EVENTBRIDGE_JSON=$(jq -n \
 if [[ -n "$OUTPUT_DIR" ]]; then
     OUTPUT_PATH="$OUTPUT_DIR/initial-event.json"
     echo "$EVENTBRIDGE_JSON" > "$OUTPUT_PATH"
+    WRITE_STATUS=$?
+    if [[ $WRITE_STATUS -ne 0 ]]; then
+        echo "Error: Failed to write event to $OUTPUT_PATH" >&2
+        exit 1
+    fi
     echo "Event written to $OUTPUT_PATH"
     exit 0
 fi
@@ -112,7 +139,12 @@ if command -v aws &> /dev/null; then
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "Sending event to EventBridge..."
     echo "$EVENTBRIDGE_JSON" | jq -c '.[]' | while read -r event; do
-      aws events put-events --entries "$event"
+      aws events put-events --entries "$event" --region "$EFFECTIVE_REGION"
+      AWS_STATUS=$?
+      if [[ $AWS_STATUS -ne 0 ]]; then
+        echo "Error: Failed to send event to EventBridge" >&2
+        exit 1
+      fi
     done
     echo "Event sent successfully!"
   else
@@ -120,5 +152,5 @@ if command -v aws &> /dev/null; then
   fi
 else
   echo "AWS CLI not found. Event generated but not sent."
-  echo "To send manually, use: aws events put-events --entries '<eventbridge_json>'"
+  echo "To send manually, use: aws events put-events --entries '<eventbridge_json>' --region \"$EFFECTIVE_REGION\""
 fi

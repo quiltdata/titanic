@@ -7,9 +7,12 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as lambdaNodejs from "aws-cdk-lib/aws-lambda-nodejs";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
+import * as sqs from "aws-cdk-lib/aws-sqs";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import * as path from "path";
 import { ConfigStack, TitanicStackProps } from "./shared/config-stack";
+import { Tags } from "aws-cdk-lib";
+const VERSION = require('../package.json').version;
 
 export type { TitanicStackProps } from "./shared/config-stack";
 
@@ -18,6 +21,9 @@ export class TitanicStack extends cdk.Stack {
 
     constructor(scope: Construct, id: string, props: TitanicStackProps = {}) {
         super(scope, id, props);
+        // Embed package version
+        Tags.of(this).add('Version', VERSION);
+        this.templateOptions.description = `Titanic Stack (v${VERSION})`;
 
         // Create ConfigStack which handles parameters internally
         this.config = ConfigStack.createForStack(this, props);
@@ -29,9 +35,6 @@ export class TitanicStack extends cdk.Stack {
             useS3Table: this.config.useS3Table,
             externalDeployment: props.externalDeployment ?? false
         });
-
-        // Get standardized names using ConfigStack class
-        const s3DatabaseName = this.config.s3TableDatabaseName;
 
         // Create Lambda role first to make dependencies explicit
         const lambdaRole = this.createLambdaRole();
@@ -48,8 +51,12 @@ export class TitanicStack extends cdk.Stack {
         // Create Lambda function with existing role (passing role explicitly)
         const mergeLambda = this.createLambdaFunction(assetsBucketName, lambdaEnvironment, lambdaRole);
 
+        // Create Dead Letter Queue for failed EventBridge invocations
+        const deadLetterQueue = this.createDeadLetterQueue();
+
         // Create EventBridge rule to route package events to Lambda
         const packageEventRule = new events.Rule(this, "TitanicUpdateEventRule", {
+            ruleName: this.config.generateEventRuleNameRef() as string,
             description: "Route package revision events to merge tables Lambda",
             eventPattern: {
                 source: ["com.quiltdata"],
@@ -60,14 +67,18 @@ export class TitanicStack extends cdk.Stack {
             },
         });
 
-        // Add Lambda as target for EventBridge rule
-        packageEventRule.addTarget(new targets.LambdaFunction(mergeLambda));
+        // Add Lambda as target for EventBridge rule with DLQ and retry configuration
+        packageEventRule.addTarget(new targets.LambdaFunction(mergeLambda, {
+            deadLetterQueue: deadLetterQueue,
+            maxEventAge: cdk.Duration.hours(24), // Keep events for 24 hours before sending to DLQ
+            retryAttempts: 3, // Retry failed invocations 3 times (EventBridge default)
+        }));
 
         // Grant non-bucket Lambda permissions (bucket permissions handled during bucket creation)
-        this.grantNonBucketLambdaPermissions(lambdaRole, this.config, s3DatabaseName);
+        this.grantNonBucketLambdaPermissions(lambdaRole, this.config);
 
         // Add stack outputs
-        this.addStackOutputs(mergeLambda, glueTablesBucket, s3TablesBucketName, assetsBucketName, this.config);
+        this.addStackOutputs(mergeLambda, glueTablesBucket, s3TablesBucketName, assetsBucketName, deadLetterQueue, this.config);
     }
 
     protected createLambdaRole(): iam.Role {
@@ -76,6 +87,18 @@ export class TitanicStack extends cdk.Stack {
             managedPolicies: [
                 iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
             ],
+        });
+    }
+
+    protected createDeadLetterQueue(): sqs.Queue {
+        return new sqs.Queue(this, "TitanicEventDLQ", {
+            queueName: this.config.generateDeadLetterQueueNameRef() as string,
+            // Retain messages for 14 days (max for SQS)
+            retentionPeriod: cdk.Duration.days(14),
+            // Enable server-side encryption
+            encryption: sqs.QueueEncryption.SQS_MANAGED,
+            // Set visibility timeout longer than Lambda timeout to prevent duplicate processing
+            visibilityTimeout: cdk.Duration.seconds(960), // 16 minutes (Lambda timeout + buffer)
         });
     }
 
@@ -211,8 +234,7 @@ export class TitanicStack extends cdk.Stack {
 
     private grantNonBucketLambdaPermissions(
         lambdaRole: iam.IRole, 
-        config: ConfigStack, 
-        s3DatabaseName: string
+        config: ConfigStack
     ) {
         // Grant Glue permissions
         lambdaRole.addToPrincipalPolicy(
@@ -230,10 +252,8 @@ export class TitanicStack extends cdk.Stack {
                 ],
                 resources: [
                     this.localPolicy("glue", "catalog"),
-                    this.localPolicy("glue", `database/${config.athenaDatabaseName}`),
-                    this.localPolicy("glue", `database/${s3DatabaseName}`),
-                    this.localPolicy("glue", `table/${config.athenaDatabaseName}/*`),
-                    this.localPolicy("glue", `table/${s3DatabaseName}/*`),
+                    this.localPolicy("glue", config.generateAthenaDatabaseArnRef()),
+                    this.localPolicy("glue", config.generateAthenaTableArnRef()),
                 ],
             }),
         );
@@ -248,7 +268,7 @@ export class TitanicStack extends cdk.Stack {
                     "athena:BatchGetQueryExecution"
                 ],
                 resources: [
-                    this.localPolicy("athena", "workgroup/primary"),
+                    config.generateAthenaWorkgroupArnRef() as string,
                 ],
             }),
         );
@@ -276,6 +296,7 @@ export class TitanicStack extends cdk.Stack {
         glueTablesBucket: s3.Bucket, 
         s3TablesBucketName: string, 
         assetsBucketName: string, 
+        deadLetterQueue: sqs.Queue,
         config: ConfigStack
     ) {
         new cdk.CfnOutput(this, "LambdaFunctionName", {
@@ -316,6 +337,22 @@ export class TitanicStack extends cdk.Stack {
         new cdk.CfnOutput(this, "TargetDatabaseName", {
             value: config.useS3Table ? config.s3TableDatabaseName : config.athenaDatabaseName,
             description: "Target database name (where tables are written to)"
+        });
+
+        new cdk.CfnOutput(this, "DeadLetterQueue", {
+            value: deadLetterQueue.queueName,
+            description: "Dead Letter Queue for failed EventBridge -> Lambda invocations"
+        });
+
+        new cdk.CfnOutput(this, "DeadLetterQueueUrl", {
+            value: deadLetterQueue.queueUrl,
+            description: "URL of the Dead Letter Queue for monitoring failed events"
+        });
+
+        // Output the package version
+        new cdk.CfnOutput(this, 'StackVersion', {
+            value: VERSION,
+            description: 'Titanic package version deployed'
         });
     }
 }

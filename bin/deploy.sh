@@ -2,8 +2,7 @@
 
 # Titanic Stack CloudFormation Deployment Script
 # This script deploys pre-generated CloudFormation templates for the Titanic stack
-
-set -e
+# set -e removed to allow manual error handling
 
 # Colors for output
 RED='\033[0;31m'
@@ -30,10 +29,34 @@ DEPLOYMENT_CONFIG_FILE="deployment-config.json"
 
 # Initialize parameter values (CLI args will override these later)
 # Use environment variables if set, otherwise use defaults
-ATHENA_DATABASE_NAME="${ATHENA_DATABASE_NAME:-${ATHENA_DATABASE_NAME:-${ATHENA_DATABASE_NAME:-}}}"
+ATHENA_DATABASE_NAME="${ATHENA_DATABASE_NAME:-}"
 QUILT_READ_POLICY_ARN="${QUILT_READ_POLICY_ARN:-}"
+PUBLIC_ASSETS_BUCKET_ROOT="${PUBLIC_ASSETS_BUCKET_ROOT:-}"
 USE_S3_TABLE="false"
-PUBLIC_ASSETS_BUCKET_NAME=""
+
+# Load deployment config if it exists
+if [[ -f "$DEPLOYMENT_CONFIG_FILE" ]]; then
+    echo -e "${YELLOW}Loading deployment configuration from $DEPLOYMENT_CONFIG_FILE...${NC}"
+    
+    # Check if jq is available
+    if ! command -v jq &> /dev/null; then
+        echo -e "${RED}Error: jq is required to parse deployment config file but is not installed.${NC}"
+        exit 1
+    fi
+    
+    # Extract bucket names from deployment config
+    PUBLIC_ASSETS_BUCKET_ROOT=$(jq -r '.buckets.assetsBucketRoot // empty' "$DEPLOYMENT_CONFIG_FILE")
+    JQ_STATUS=$?
+    if [[ $JQ_STATUS -ne 0 ]]; then
+        echo -e "${RED}Error: Failed to parse deployment config file with jq.${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✅ Deployment configuration loaded${NC}"
+else
+    echo -e "${YELLOW}⚠️  Warning: Deployment configuration file ($DEPLOYMENT_CONFIG_FILE) not found${NC}"
+    echo -e "${YELLOW}    You may need to provide parameters via command line arguments${NC}"
+fi
 
 # Help function
 show_help() {
@@ -51,7 +74,7 @@ OPTIONS:
     -t, --template-file FILE        CloudFormation template file (default: template.json)
     --athena-database-name NAME     Athena database name (required)
     --quilt-read-policy-arn ARN     Quilt read policy ARN (required)
-    --public-assets-bucket-name NAME Public assets bucket name (for external deployments)
+    --public-assets-bucket-root NAME Public assets bucket root name (for external deployments)
 
 See README.md for more information.
 
@@ -62,7 +85,7 @@ ENVIRONMENT VARIABLES:
     Variables can also be set manually:
     - ATHENA_DATABASE_NAME - Athena database name
     - QUILT_READ_POLICY_ARN - Quilt read policy ARN
-    - PUBLIC_ASSETS_BUCKET_NAME - Public assets bucket name
+    - PUBLIC_ASSETS_BUCKET_ROOT - Public assets bucket root name
     - AWS_DEFAULT_REGION - AWS region
 
 DEPLOYMENT CONFIG:
@@ -109,14 +132,8 @@ while [[ $# -gt 0 ]]; do
             QUILT_READ_POLICY_ARN="$2"
             shift 2
             ;;
-        --public-assets-bucket-name)
-            PUBLIC_ASSETS_BUCKET_NAME="$2"
-            shift 2
-            ;;
-        # Backward compatibility for old parameter name
-        --glue-database-name)
-            echo -e "${YELLOW}Warning: --glue-database-name is deprecated, use --athena-database-name instead${NC}"
-            ATHENA_DATABASE_NAME="$2"
+        --public-assets-bucket-root)
+            PUBLIC_ASSETS_BUCKET_ROOT="$2"
             shift 2
             ;;
         *)
@@ -126,24 +143,6 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
-
-# Load deployment config if it exists
-if [[ -f "$DEPLOYMENT_CONFIG_FILE" ]]; then
-    echo -e "${YELLOW}Loading deployment configuration from $DEPLOYMENT_CONFIG_FILE...${NC}"
-    
-    # Check if jq is available
-    if ! command -v jq &> /dev/null; then
-        echo -e "${RED}Error: jq is required to parse deployment config file but is not installed.${NC}"
-        exit 1
-    fi
-    
-    # Extract bucket names from deployment config if not already set
-    if [[ -z "$PUBLIC_ASSETS_BUCKET_NAME" ]]; then
-        PUBLIC_ASSETS_BUCKET_NAME=$(jq -r '.buckets.assetsBucket // empty' "$DEPLOYMENT_CONFIG_FILE")
-    fi
-    
-    echo -e "${GREEN}✅ Deployment configuration loaded${NC}"
-fi
 
 
 # Validate required parameters
@@ -157,21 +156,22 @@ if [[ -z "$QUILT_READ_POLICY_ARN" ]]; then
     exit 1
 fi
 
-
-# Check if this is an external deployment template by looking for PublicAssetsBucketName parameter
-if [[ -f "$TEMPLATE_FILE" ]]; then
-    if grep -q "PublicAssetsBucketName" "$TEMPLATE_FILE"; then
-        echo -e "${YELLOW}Detected external deployment template${NC}"
-        if [[ -z "$PUBLIC_ASSETS_BUCKET_NAME" ]]; then
-            echo -e "${RED}Error: External deployment requires PublicAssetsBucketName parameter.${NC}"
-            echo -e "${YELLOW}Hint: Ensure deployment-config.json has buckets.assetsBucket set, or use --public-assets-bucket-name${NC}"
-            exit 1
-        fi
-    fi
+if [[ -z "$PUBLIC_ASSETS_BUCKET_ROOT" ]]; then
+        echo -e "${RED}Error: Public Assets Bucket Root is required. Use --public-assets-bucket-root or set PUBLIC_ASSETS_BUCKET_ROOT environment variable.${NC}"
+    exit 1
 fi
 
-# Check if template exists
-if [[ ! -f "$TEMPLATE_FILE" ]]; then
+# Verify this is an external deployment template by looking for PublicAssetsBucketRoot parameter
+if [[ -f "$TEMPLATE_FILE" ]]; then
+    if grep -q "PublicAssetsBucketRoot" "$TEMPLATE_FILE"; then
+        GREP_STATUS=$?
+        if [[ $GREP_STATUS -ne 0 ]]; then
+            echo -e "${RED}Error: Failed to search template file.${NC}"
+            exit 1
+        fi
+        echo -e "${YELLOW}Verified external deployment template${NC}"
+    fi
+else
     echo -e "${RED}Error: CloudFormation template not found: $TEMPLATE_FILE${NC}"
     echo -e "${YELLOW}Hint: Use release.sh to generate CloudFormation templates from CDK code.${NC}"
     exit 1
@@ -185,18 +185,25 @@ fi
 
 # Display configuration
 echo -e "${GREEN}Titanic Stack CloudFormation Deployment Configuration:${NC}"
+echo -e "${YELLOW}Using AWS region: $REGION${NC}"
+aws sts get-caller-identity $AWS_OPTS
+STS_STATUS=$?
+if [[ $STS_STATUS -ne 0 ]]; then
+    echo -e "${RED}Error: AWS STS get-caller-identity failed.${NC}"
+    exit 1
+fi
 echo "Stack Name: $STACK_NAME"
 echo "Region: $REGION"
 echo "Profile: ${PROFILE:-default}"
 echo "Template File: $TEMPLATE_FILE"
 echo "Athena Database Name: $ATHENA_DATABASE_NAME"
 echo "Quilt Read Policy ARN: $QUILT_READ_POLICY_ARN"
-echo "Public Assets Bucket Name: ${PUBLIC_ASSETS_BUCKET_NAME:-<not set>}"
+echo "Public Assets Bucket Root: ${PUBLIC_ASSETS_BUCKET_ROOT:-<not set>}"
+echo "Public Assets Bucket Name: ${PUBLIC_ASSETS_BUCKET_ROOT}-${REGION}"
 echo "AWS CLI Options: $AWS_OPTS"
 echo ""
 
-echo -e "${YELLOW}Please verify the configuration above.${NC}"
-read -p "Proceed with deployment? (y/N): " CONFIRM
+read -p "Deploy using the configuration above? (y/N):" CONFIRM
 if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
     echo -e "${RED}Deployment cancelled by user.${NC}"
     exit 0
@@ -208,8 +215,8 @@ echo -e "\n${GREEN}Starting deployment....${NC}"
 PARAMETER_OVERRIDES="AthenaDatabaseName=$ATHENA_DATABASE_NAME QuiltReadPolicyArn=$QUILT_READ_POLICY_ARN UseS3Table=$USE_S3_TABLE"
 
 # Add optional parameters if they are set
-if [[ -n "$PUBLIC_ASSETS_BUCKET_NAME" ]]; then
-    PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES PublicAssetsBucketName=$PUBLIC_ASSETS_BUCKET_NAME"
+if [[ -n "$PUBLIC_ASSETS_BUCKET_ROOT" ]]; then
+    PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES PublicAssetsBucketRoot=$PUBLIC_ASSETS_BUCKET_ROOT"
 fi
 
 # Deploy the stack
@@ -228,6 +235,10 @@ if [[ $DEPLOY_STATUS -ne 0 ]]; then
     aws cloudformation describe-stack-events --stack-name "$STACK_NAME" $AWS_OPTS \
         --query 'StackEvents[].[Timestamp, LogicalResourceId, ResourceStatus, ResourceStatusReason]' \
         --output table
+    EVENTS_STATUS=$?
+    if [[ $EVENTS_STATUS -ne 0 ]]; then
+        echo -e "${RED}Error: Failed to fetch stack events.${NC}"
+    fi
     exit 1
 fi
 
@@ -240,29 +251,24 @@ aws cloudformation describe-stacks \
     --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue,Description]' \
     --output table \
     $AWS_OPTS
-
-# Send initialization event
-echo -e "${YELLOW}Sending initialization event to populate tables...${NC}"
-if [[ -f "$EVENT_FILE" ]]; then
-    echo "Sending event to EventBridge..."
-    EVENT_ENTRY=$(cat "$EVENT_FILE" | jq -c '.[]')
-    aws events put-events --entries "$EVENT_ENTRY" $AWS_OPTS
-    echo -e "${GREEN}✅ Initialization event sent successfully!${NC}"
-else
-    echo -e "${YELLOW}Warning: Failed to find event file: $EVENT_FILE${NC}"
-fi
-
-# Clean up temporary files
-if [[ -f "template-packaged.yaml" ]]; then
-    rm -f "template-packaged.yaml"
+DESCRIBE_STATUS=$?
+if [[ $DESCRIBE_STATUS -ne 0 ]]; then
+    echo -e "${RED}Error: Failed to describe stack outputs.${NC}"
+    exit 1
 fi
 
 # Send initialization event
 echo -e "${YELLOW}Sending initialization event to populate tables...${NC}"
 if [[ -f "$EVENT_FILE" ]]; then
     echo "Sending event to EventBridge..."
+    aws sts get-caller-identity $AWS_OPTS
     EVENT_ENTRY=$(cat "$EVENT_FILE" | jq -c '.[]')
     aws events put-events --entries "$EVENT_ENTRY" $AWS_OPTS
+    EVENT_STATUS=$?
+    if [[ $EVENT_STATUS -ne 0 ]]; then
+        echo -e "${RED}Error: Failed to send initialization event to EventBridge.${NC}"
+        exit 1
+    fi
     echo -e "${GREEN}✅ Initialization event sent successfully!${NC}"
 else
     echo -e "${YELLOW}Warning: Failed to find event file: $EVENT_FILE${NC}"
