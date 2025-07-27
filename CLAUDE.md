@@ -78,6 +78,27 @@ Environment variables loaded from `.env` file (copy from `env.example`):
 - `USE_S3_TABLE` - Enable S3 Tables mode (vs Glue tables)
 - AWS region and account settings
 
+## Code Quality
+
+**Always run linting before committing**: Use `npm run lint` to check and fix ESLint issues. The project uses TypeScript ESLint with strict rules.
+
+**Address all diagnostic warnings**: Pay attention to TypeScript compiler warnings and ESLint diagnostics in your editor. Resolve all issues before considering code complete.
+
+**ESLint Configuration**: 
+- Strict TypeScript rules with some relaxations for test files
+- Unused variables allowed if prefixed with underscore (`_`)
+- Special rules for `create-s3-tables.ts` utility script
+
+## Git and Commits
+
+**Always ask to create a commit** after implementing a significant change, and (if there are uncommitted changes) before doing something new.
+
+**When creating commits** (if requested):
+- Use descriptive commit messages that explain the "why" not just the "what"
+- Run `npm run test` before committing to ensure all tests pass
+- Include `🤖 Generated with [Claude Code](https://claude.ai/code)` footer
+- Follow the existing commit message style (check `git log` for examples)
+
 ## Testing
 
 Jest configuration in `jest.config.js` with TypeScript support. Test files use `*.test.ts` pattern. Coverage reports generated in `coverage/` directory.
