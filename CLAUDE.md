@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ### Development
+
 - `npm run test` - Run tests without coverage
 - `npm run test:coverage` - Run tests with coverage report  
 - `npm run test:watch` - Run tests in watch mode
@@ -13,9 +14,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run lint` - Run ESLint and fix issues
 
 ### Single Test Execution
+
 Use Jest directly: `npx jest path/to/test.test.ts` or `npx jest --testNamePattern="specific test name"`
 
 ### Build and Deployment
+
 - `npm run cdk` - Full deploy pipeline (test + deploy + event + logs)
 - `npm run cdk:synth` - Generate CloudFormation template for local stack
 - `npm run cdk:external` - Generate CloudFormation template for external deployment
@@ -24,11 +27,13 @@ Use Jest directly: `npx jest path/to/test.test.ts` or `npx jest --testNamePatter
 - `npm run deploy:outputs` - Show CloudFormation stack outputs
 
 ### Asset Management
+
 - `npm run deploy:upload` - Build and upload Lambda assets to public S3 bucket
 - `npm run deploy:release` - Generate standalone deployment package in dist/
 - `npm run deploy:verify-assets` - Check if assets exist in public bucket
 
 ### S3 Tables Management
+
 - `npm run s3tables:create` - Create all S3 Tables resources
 - `npm run s3tables:namespace` - Create S3 Tables namespace only
 - `npm run s3tables:tables` - Create S3 Tables tables only
@@ -42,6 +47,7 @@ Titanic is a serverless AWS data lake table merger that consolidates Quilt packa
 **Lambda Function** (`lib/merge-tables.ts`): Event-driven processor that merges per-bucket package tables into centralized Iceberg catalog. Triggered by EventBridge package-revision events.
 
 **Table Management System**:
+
 - `TableManager` (`lib/tables/table-manager.ts`) - Central orchestrator for all table operations
 - `BaseTable` (`lib/tables/base-table.ts`) - Abstract base providing common functionality
 - `PackageRevisionTable` - Maps package names to timestamps, top_hash, and metadata
@@ -49,6 +55,7 @@ Titanic is a serverless AWS data lake table merger that consolidates Quilt packa
 - `PackageEntryTable` - Tracks individual files within packages with content hashes
 
 **CDK Infrastructure**:
+
 - `TitanicStack` (`lib/titanic-stack.ts`) - Main stack defining all AWS resources
 - `bin/titanic.ts` - Local development stack with deployment config generation
 - `bin/titanic-external.ts` - External deployment stack with configurable parameters
@@ -64,6 +71,7 @@ Titanic is a serverless AWS data lake table merger that consolidates Quilt packa
 ### Table Schema
 
 Creates three normalized Iceberg tables:
+
 - **Package Revisions**: Specific package versions with metadata
 - **Package Tags**: Named versions pointing to revisions  
 - **Package Entries**: Individual files within packages with content hashes
@@ -73,6 +81,7 @@ See `doc/schema.md` for detailed schema design.
 ## Configuration
 
 Environment variables loaded from `.env` file (copy from `env.example`):
+
 - `QUILT_READ_POLICY_ARN` - IAM policy for cross-bucket access
 - `ATHENA_DATABASE_NAME` - Target database name
 - `USE_S3_TABLE` - Enable S3 Tables mode (vs Glue tables)
@@ -84,7 +93,8 @@ Environment variables loaded from `.env` file (copy from `env.example`):
 
 **Address all diagnostic warnings**: Pay attention to TypeScript compiler warnings and ESLint diagnostics in your editor. Resolve all issues before considering code complete.
 
-**ESLint Configuration**: 
+**ESLint Configuration**:
+
 - Strict TypeScript rules with some relaxations for test files
 - Unused variables allowed if prefixed with underscore (`_`)
 - Special rules for `create-s3-tables.ts` utility script
@@ -94,6 +104,7 @@ Environment variables loaded from `.env` file (copy from `env.example`):
 **Always ask to create a commit** after implementing a significant change, and (if there are uncommitted changes) before doing something new.
 
 **When creating commits** (if requested):
+
 - Use descriptive commit messages that explain the "why" not just the "what"
 - Run `npm run test` before committing to ensure all tests pass
 - Include `🤖 Generated with [Claude Code](https://claude.ai/code)` footer
