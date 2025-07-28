@@ -7,5 +7,8 @@
         "revealWithFocus": "none",
         "clearOnRun": "terminal"
     },
-    "testing.automaticallyOpenTestResults": "neverOpen"
+    "testing.automaticallyOpenTestResults": "neverOpen",
+    "files.exclude": {
+        "**/.claude": true
+    }
 }

@@ -1,0 +1,21 @@
+{
+  "tools": {
+    "Edit": { "enabled": true },
+    "Write": { "enabled": true },
+    "Bash": { "enabled": true },
+    "MultiEdit": { "enabled": true }
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit.*\\.ts$|Write.*\\.ts$|MultiEdit.*\\.ts$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npm run lint && npm run test"
+          }
+        ]
+      }
+    ]
+  }
+}
