@@ -107,7 +107,7 @@ Environment variables loaded from `.env` file (copy from `env.example`):
 
 - Use descriptive commit messages that explain the "why" not just the "what"
 - Run `npm run test` before committing to ensure all tests pass
-- Include `🤖 Generated with [Claude Code](https://claude.ai/code)` footer
+- Optionally include `🤖 Generated with [Claude Code](https://claude.ai/code)` footer for commits with significant AI-generated contributions
 - Follow the existing commit message style (check `git log` for examples)
 
 ## Testing
