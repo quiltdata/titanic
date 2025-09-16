@@ -24,7 +24,7 @@ The system creates three normalized Iceberg tables:
 - **Package Tags** (`package_tag`): Named versions (like `latest`)
 - **Package Entries** (`package_entry`): Individual files within packages
 
-See [doc/SCHEMA.md](doc/SCHEMA.md) for detailed schema design.
+See [doc/schema.md](doc/schema.md) for detailed schema design.
 
 ## Architecture
 
